@@ -187,6 +187,17 @@ body{font-family:var(--f-txt)}
 .cycle>.btn{min-height:3.8em;font-size:1.15em;letter-spacing:.07em;white-space:normal;line-height:1.05;text-align:center}
 .canvas-wrap{position:relative;flex:1;min-height:0}
 .canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ax small.dm{font-size:.5em;vertical-align:top;margin-left:.05em;color:var(--acc)}
+.lz,.pl{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.panel.portrait .lz,.panel.portrait .pl{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.big{display:flex;flex-direction:column;gap:.15em;padding:.3em 0 .5em}
+.big b{font:500 3.2em/1 var(--f-num);font-variant-numeric:tabular-nums;white-space:pre}
+.big small{font:400 .85em var(--f-num);color:var(--dim)}
+.il{display:flex;flex-direction:column}
+.il div{display:flex;gap:.55em;align-items:center;padding:.35em 0;border-bottom:1px solid var(--line);font:500 .9em var(--f-txt)}
+.il span{flex:1;min-width:0}
+.il code{font:400 .85em var(--f-num);color:var(--dim)}
+p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .cv-leg{position:absolute;left:.5em;top:.45em;display:flex;flex-direction:column;gap:.2em;font:500 .74em var(--f-txt);color:var(--dim);background:color-mix(in srgb,var(--surf) 82%,transparent);padding:.35em .55em;border-radius:.25em;pointer-events:none;max-width:62%}
 .cv-leg span{display:flex;align-items:center;gap:.45em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cv-leg i{width:1.2em;height:.28em;border-radius:.1em;flex:none}
@@ -399,6 +410,7 @@ body{font-family:var(--f-txt)}
           <span class="brand">CNC</span>
           <span class="pill idle" id="sbState">ГОТОВ</span>
           <span class="chip" id="sbMode">АВТО</span>
+          <span class="chip" id="sbMach">Фреза / рутер</span>
           <span class="chip"><b>G54</b> G17 G21 G90</span>
           <span class="chip" id="sbTool">T5</span>
           <span class="chip"><i class="led on" id="sbLinkLed"></i>MCU 1 kHz</span>
@@ -442,7 +454,7 @@ body{font-family:var(--f-txt)}
               <div class="ovrow"><button class="btn" data-act="fov" data-v="-10" type="button">−</button><button class="btn pct" data-act="fov" data-v="0" id="fOv" type="button">100%</button><button class="btn" data-act="fov" data-v="10" type="button">+</button></div>
             </div></div>
             <div class="card ov"><div class="card-b">
-              <div class="ovtop"><span class="lab">Шпиндел</span><span class="ovs" id="sProg">S0 · спрян</span></div>
+              <div class="ovtop"><span class="lab" id="sLab">Шпиндел</span><span class="ovs" id="sProg">S0 · спрян</span></div>
               <div class="ovv" id="sAct">0</div>
               <div class="ovrow"><button class="btn" data-act="sov" data-v="-10" type="button">−</button><button class="btn pct" data-act="sov" data-v="0" id="sOv" type="button">100%</button><button class="btn" data-act="sov" data-v="10" type="button">+</button></div>
             </div></div>
@@ -539,7 +551,7 @@ body{font-family:var(--f-txt)}
         <section class="screen tools" data-screen="tools" hidden>
           <div class="card">
             <div class="card-h"><span>Таблица на инструментите</span><span class="r" id="toolCnt">12 гнезда</span></div>
-            <div class="tbl-wrap"><table class="tt"><thead><tr><th>T</th><th>Описание</th><th class="n">Дължина</th><th class="n">Ø</th><th class="n">Износв.</th></tr></thead><tbody id="toolBody"></tbody></table></div>
+            <div class="tbl-wrap"><table class="tt"><thead><tr><th>T</th><th>Описание</th><th class="n" id="thL">Дължина</th><th class="n" id="thD">Ø</th><th class="n" id="thW">Износв.</th></tr></thead><tbody id="toolBody"></tbody></table></div>
           </div>
           <div class="card">
             <div class="card-h"><span id="magTitle">Магазин · карусел</span><span class="r" id="magPos">гнездо 5</span></div>
@@ -601,6 +613,55 @@ body{font-family:var(--f-txt)}
             <div class="card"><div class="card-b"><span>Буфер сегменти</span><b id="lkBuf">0 %</b></div></div>
             <div class="card"><div class="card-b"><span>CRC грешки</span><b>0</b></div></div>
             <div class="card"><div class="card-b"><span>Watchdog</span><b id="lkWd">ОК · 1 ms</b></div></div>
+          </div>
+        </section>
+
+        <!-- ЛАЗЕР -->
+        <section class="screen lz" data-screen="laser" hidden>
+          <div class="card">
+            <div class="card-h"><span>Лазер</span><span class="r" id="lzState">изключен</span></div>
+            <div class="card-b">
+              <div class="big"><span class="lab">Мощност</span><b id="lzPow">0 %</b><small id="lzMode">M4 динамична</small></div>
+              <div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn" data-act="lz-test" type="button">Тест импулс</button><button class="btn" data-act="lz-air" id="lzAirBtn" type="button">Обдухване</button></div>
+              <span class="lab">Блокировки</span>
+              <div class="il" id="lzIl"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Рамкиране и фокус</span><span class="r" id="lzBox"></span></div>
+            <div class="card-b">
+              <p class="txt">Главата обикаля правоъгълника около заредената програма, за да проверите дали материалът е на правилното място.</p>
+              <div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn" data-act="lz-frame" data-v="off" type="button">Рамкиране без лъч</button><button class="btn" data-act="lz-frame" data-v="low" type="button">Рамкиране с 1 %</button></div>
+              <span class="lab">Фокус</span>
+              <div class="kv">Z на фокуса (маш.)<b id="lzFz">не е зададен</b></div>
+              <div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn" data-act="lz-fz" data-v="set" type="button">Запиши текущата Z</button><button class="btn" data-act="lz-fz" data-v="go" type="button">Отиди на фокуса</button></div>
+              <button class="btn" data-act="go-set-mach" type="button">Параметри в Настройки → Машина</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ПЛАЗМА -->
+        <section class="screen pl" data-screen="plasma" hidden>
+          <div class="card">
+            <div class="card-h"><span>Дъга и THC</span><span class="r" id="plArcOk">няма дъга</span></div>
+            <div class="card-b">
+              <div class="big"><span class="lab">Напрежение на дъгата</span><b id="plVact">0 V</b><small id="plVset">цел 115 V</small></div>
+              <div class="ovrow"><button class="btn" data-act="pl-v" data-v="-1" type="button">−1 V</button><button class="btn" data-act="pl-thc" id="plThcBtn" type="button">THC</button><button class="btn" data-act="pl-v" data-v="1" type="button">+1 V</button></div>
+              <div class="kv">Състояние на THC<b id="plThcSt">—</b></div>
+              <div class="kv">Корекция по Z от THC<b id="plZc">0.00 мм</b></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Пробиване и рязане</span></div>
+            <div class="card-b">
+              <div class="kv">Намиране на листа (IHS)<b id="plIh"></b></div>
+              <div class="kv">Височина на пробиване<b id="plPh"></b></div>
+              <div class="kv">Забавяне при пробиване<b id="plPd"></b></div>
+              <div class="kv">Височина на рязане<b id="plCh"></b></div>
+              <div class="kv">Anti-dive (заключване на THC)<b id="plAdv"></b></div>
+              <button class="btn" data-act="pl-ihs" type="button">Тест IHS: намери листа</button>
+              <button class="btn" data-act="go-set-mach" type="button">Параметри в Настройки → Машина</button>
+            </div>
           </div>
         </section>
 
@@ -694,15 +755,7 @@ body{font-family:var(--f-txt)}
         </div>
       </div>
 
-      <nav class="navbar" id="nav">
-        <button class="btn on" data-act="go" data-v="run" type="button">Работа</button>
-        <button class="btn" data-act="go" data-v="jog" type="button">Ръчно</button>
-        <button class="btn" data-act="go" data-v="mdi" type="button">MDI</button>
-        <button class="btn" data-act="go" data-v="tools" type="button">Инструменти</button>
-        <button class="btn" data-act="go" data-v="probe" type="button">Пробинг</button>
-        <button class="btn" data-act="go" data-v="diag" type="button">Диагностика</button>
-        <button class="btn" data-act="go" data-v="set" type="button">Настройки</button>
-      </nav>
+      <nav class="navbar" id="nav"></nav>
     </div>
   </div>
 
@@ -759,9 +812,16 @@ const TOOLS=[
  {t:11,d:'Фаска 45°',dia:12,len:80.310,w:0},
  {t:12,d:'Фреза 4Z',dia:16,len:99.015,w:0.006},
 ];
+const MT=()=>S.cfg.mach.type;
+const LTOOLS=[
+ {t:1,d:'Външен стружкар 80°',dia:0,len:0,w:.8},{t:2,d:'Довършващ 35°',dia:-.412,len:1.205,w:.4},{t:3,d:'Отрезен 3 мм',dia:.318,len:-2.540,w:.2},
+ {t:4,d:'Резбови 60°',dia:-.150,len:.880,w:.1},{t:5,d:'Вътрешен стружкар Ø16',dia:1.020,len:-.355,w:.4},{t:6,d:'Свредло Ø10',dia:0,len:-12.400,w:0},
+ {t:7,d:'Центрово Ø3.15',dia:0,len:-6.100,w:0},{t:8,d:'Канален 2 мм',dia:.270,len:-1.930,w:.2}];
+const magCfg=()=>MT()==='lathe'?{mtype:'carousel',mn:S.cfg.mach.ltTur,msp:.25,mor:0,mz:0}:S.cfg.mag;
 const toolOf=t=>{
- if(!(t>=1&&t<=S.cfg.mag.mn))return undefined;
- let x=TOOLS.find(o=>o.t===t);if(!x){x={t,d:'Празно гнездо',dia:0,len:0,w:0,empty:1};TOOLS.push(x)}
+ const lt=MT()==='lathe',L=lt?LTOOLS:TOOLS;
+ if(!(t>=1&&t<=magCfg().mn))return undefined;
+ let x=L.find(o=>o.t===t);if(!x){x={t,d:lt?'Празна позиция':'Празно гнездо',dia:0,len:0,w:0,empty:1};L.push(x)}
  return x};
 
 const S={
@@ -770,7 +830,7 @@ const S={
  vel:{X:0,Y:0,Z:0,A:0,B:0,C:0}, ferr:{X:0,Y:0,Z:0,A:0,B:0,C:0},
  homed:{X:false,Y:false,Z:false,A:false,B:false,C:false}, refMode:'sensor',
  active:{X:true,Y:true,Z:true,A:true,B:true,C:true},
- corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'ax', setHelp:null, nd:{a:'X',k:'spm',txt:''},
+ corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'mach', setHelp:null, nd:{a:'X',k:'spm',txt:''},
  dlg:{ax:'X',tgt:'work',txt:''},
  feedOv:100, spOv:100, rapOv:100, F:0, progF:0,
  sp:{cmd:0,act:0,on:false,dir:'CW'}, coolant:false, airBlast:false,
@@ -801,11 +861,17 @@ function buildProgram(){
  return L;
 }
 function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
-  const M=S.cfg.mag,x=toolOf(T);
+  if(MT()==='laser'||MT()==='plasma')return;
+  const M=magCfg(),x=toolOf(T);
   if(T===S.tool){toast('T'+T+' вече е в шпиндела');return}
   if(!x){toast('Няма гнездо '+T+'. Магазинът има '+M.mn+' гнезда.');return}
   if(x.empty){toast('Гнездо '+T+' е празно');return}
   const old=S.tool,L='Смяна на инструмент T'+T+': ',ops=[];
+  if(MT()==='lathe'){const N=M.mn,dd=Math.abs((S.magPos||1)-T)%N,dist=Math.min(dd,N-dd),tp='T'+String(T).padStart(2,'0')+String(T).padStart(2,'0');
+   ops.push({type:'act',line,dur:.3,label:L+'отключване на револвера',fn:()=>{S.magMoving=true}},
+            {type:'act',line,dur:Math.max(.3,dist*M.msp),label:L+'револверът се завърта до позиция '+T,fn:()=>{S.magPos=T}},
+            {type:'act',line,dur:.3,label:L+'заключване, корекции '+tp,fn:()=>{S.magMoving=false;S.tool=T}});
+   S.queue.unshift(...ops);return}
   const act=(l,d,f)=>ops.push({type:'act',line,dur:d,fn:f,label:l?L+l:undefined});
   const mv=(l,fn,rapid=true)=>ops.push({type:'line',line,tgtFn:fn,rapid,feed:2000,label:L+l});
   const toW=o=>{const r={};for(const k in o)r[k]=o[k]-S.off[k];return r};
@@ -837,7 +903,7 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
   S.queue.unshift(...ops);
 }}}
 function parse(lines){
- const out=[];let mode=0,F=1000,T=null,inc=false,u=1,cyc=0,cR=0,cZ=0,cP=0,cInit=25,ret=98;
+ const out=[],mt=MT();let mode=0,F=1000,T=null,fpr=false,css=false,inc=false,u=1,cyc=0,cR=0,cZ=0,cP=0,cInit=25,ret=98;
  const pos={X:0,Y:0,Z:25,A:0,B:0,C:0};
  lines.forEach((raw,li)=>{
   const code=raw.replace(/\(.*?\)/g,'').replace(/;.*/,'').toUpperCase().trim();if(!code||code[0]==='%'||code[0]==='O')return;
@@ -846,13 +912,17 @@ function parse(lines){
   if(gs.includes(20))u=25.4;if(gs.includes(21))u=1;
   if(gs.includes(90))inc=false;if(gs.includes(91))inc=true;
   if(gs.includes(98))ret=98;if(gs.includes(99))ret=99;
+  if(gs.includes(95))fpr=true;if(gs.includes(94))fpr=false;if(gs.includes(96))css=true;if(gs.includes(97))css=false;
   gs.forEach(g=>{if(g===0||g===1||g===2||g===3){mode=g;cyc=0}if(g===81||g===82||g===83){cyc=g;cInit=pos.Z}if(g===80)cyc=0});
   for(const k of['X','Y','Z','I','J','K','R'])if(w[k]!==undefined)w[k]*=u;
   if(w.F!==undefined)F=w.F*u;
   if(w.T!==undefined)T=w.T;
-  if(w.S!==undefined){const s=w.S;out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.cmd=s}})}
-  if(ms.includes(6)&&T!=null)out.push(atcOp(T,li));
-  if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
+  if(w.S!==undefined&&!gs.includes(50)){const s=w.S,c=css;out.push({type:'act',line:li,dur:0,fn:()=>{if(c)S.sp.css=s;else{S.sp.css=0;S.sp.cmd=s}}})}
+  if(mt==='lathe'&&w.T!==undefined)out.push(atcOp(w.T>=100?Math.floor(w.T/100):w.T,li));
+  else if(ms.includes(6)&&T!=null)out.push(atcOp(T,li));
+  if((ms.includes(3)||ms.includes(4))&&mt==='laser'){const m4=ms.includes(4);out.push({type:'act',line:li,dur:0,label:'Лазер вкл. ('+(m4?'M4 динамична':'M3 постоянна')+')',fn:()=>{S.sp.on=true;S.sp.dir=m4?'M4':'M3';if(S.cfg.mach.lzAir)S.airBlast=true}})}
+  else if((ms.includes(3)||ms.includes(4))&&mt==='plasma'){const P=S.cfg.mach;out.push({type:'act',line:li,dur:.6,label:'Плазма: намиране на листа ('+(P.plIhs==='ohm'?'омичен контакт':'плаващ датчик')+')'},{type:'act',line:li,dur:P.plDelay+.2,label:'Плазма: пробиване на '+P.plPierce.toFixed(1)+' мм, забавяне '+P.plDelay.toFixed(2)+' s',fn:()=>{S.sp.on=true}},{type:'act',line:li,dur:.2,label:'Плазма: височина на рязане '+P.plCut.toFixed(1)+' мм'})}
+  else if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
   if(ms.includes(8))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=true}});
   if(ms.includes(9))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=false}});
   if(gs.includes(4)){const d=w.P!==undefined?(w.P>=100?w.P/1000:w.P):0;out.push({type:'act',line:li,dur:d,label:'Пауза G4 '+d.toFixed(2)+' s'})}
@@ -869,11 +939,12 @@ function parse(lines){
     Object.assign(pos,xy);pos.Z=zr;}
   }else if(has){
    const k=inc?'rel':'tgt';
-   if(mode<=1)out.push({type:'line',line:li,[k]:tgt,rapid:mode===0,feed:F});
-   else out.push({type:'arc',line:li,[k]:tgt,cw:mode===2,I:w.I||0,J:w.J||0,R:w.I===undefined&&w.J===undefined?w.R:undefined,feed:F});
+   const fp=fpr&&mode!==0?F:undefined,FF=fp?F*1200:F;
+   if(mode<=1)out.push({type:'line',line:li,[k]:tgt,rapid:mode===0,feed:FF,fpr:fp});
+   else out.push({type:'arc',line:li,[k]:tgt,cw:mode===2,I:w.I||0,J:w.J||0,R:w.I===undefined&&w.J===undefined?w.R:undefined,feed:FF,fpr:fp});
    for(const a in tgt)pos[a]=inc?pos[a]+tgt[a]:tgt[a];
   }
-  if(ms.includes(5))out.push({type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
+  if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
   if(ms.includes(30)||ms.includes(2))out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});
  });
  return out;
@@ -957,7 +1028,7 @@ function stepQueue(dt){
   if(!S.cur){if(!S.queue.length){finishRun();return}S.cur=S.queue.shift();begin(S.cur);if(S.state!=='run')return}
   const m=S.cur;
   if(m.type==='act'){m.el=(m.el||0)+b;if(m.el<m.dur)return;b=m.el-m.dur;S.cur=null;continue}
-  const feed=m.rapid?RAPID*S.rapOv/100:m.feed*S.feedOv/100;S.F=feed;if(m.prog||S.runKind==='mdi')S.progF=m.rapid?0:m.feed;
+  const feed=m.rapid?RAPID*S.rapOv/100:(m.fpr?m.fpr*Math.max(50,S.sp.act):m.feed)*S.feedOv/100;S.F=feed;if(m.prog||S.runKind==='mdi')S.progF=m.rapid?0:m.feed;
   const v=Math.max(feed,1)/60*SIMX;
   if(m.type==='probe'&&m.s+v*b>=m.trig){m.s=m.trig;setWork(posAt(m,m.s/m.len));trigger(m);S.cur=null;b=0;return}
   const need=(m.len-m.s)/v;
@@ -981,7 +1052,11 @@ function tick(dt){
   const tgt=v*0.11+(Math.random()-.5)*(ROT[a]?0.5:0.7);
   S.ferr[a]+=(tgt-S.ferr[a])*Math.min(1,dt*8);
  });
- const tsp=(S.sp.on&&S.state!=='estop')?S.sp.cmd*S.spOv/100:0;
+ if(S.sp.css&&MT()==='lathe')S.sp.cmd=Math.round(Math.min(S.cfg.mach.ltMax,S.sp.css*1000/(Math.PI*Math.max(1,Math.abs(work().X)))));
+ if(MT()==='plasma'){const c=S.cur,cut=S.sp.on&&S.state==='run'&&c&&c.type!=='act'&&!c.rapid,tv=cut?S.cfg.mach.plV+(Math.random()-.5)*3:0;
+  S.arcV=(S.arcV||0)+(tv-(S.arcV||0))*Math.min(1,dt*6);
+  if(cut&&S.cfg.mach.plThc&&!thcLocked())S.thcZ=Math.max(-1.5,Math.min(1.5,(S.thcZ||0)+(Math.random()-.5)*.08));}
+ const tsp=(S.sp.on&&S.state!=='estop'&&MT()!=='plasma')?S.sp.cmd*S.spOv/100:0;
  const d=tsp-S.sp.act,st=9000*dt;S.sp.act+=Math.abs(d)<st?d:Math.sign(d)*st;
  if(S.state!=='run'&&!S.jogHold)S.F=0;
 }
@@ -992,12 +1067,12 @@ function buildDro(el,kind){
  const compact=kind!=='full',zero=kind==='zero';const rows={};
  AX.forEach(a=>{
   const r=document.createElement('div');r.className='dro-row'+(compact?' compact':'');
-  r.innerHTML=`<div class="ax">${a}<i class="hm"></i></div><div class="val">0.000</div><div class="unit">${ROT[a]?'°':'мм'}</div>`+
+  r.innerHTML=`<div class="ax">${a}<small class="dm"></small><i class="hm"></i></div><div class="val">0.000</div><div class="unit">${ROT[a]?'°':'мм'}</div>`+
    (compact?(zero?`<div class="zb"><button class="btn sm" data-act="zero" data-v="${a}" type="button">${a} = 0</button><button class="btn sm" data-act="setv" data-v="${a}" type="button">Задай</button></div>`:''):
    `<div class="sub"><span class="s-m"></span><span class="s-d"></span><span class="ferr"><i><b></b></i><em></em></span></div>`);
   if(!compact){r.dataset.act='setv';r.dataset.v=a}
   el.appendChild(r);
-  rows[a]={row:r,val:$('.val',r),sm:$('.s-m',r),sd:$('.s-d',r),fb:$('.ferr b',r),fe:$('.ferr em',r),hm:$('.hm',r)};
+  rows[a]={dm:$('.dm',r),row:r,val:$('.val',r),sm:$('.s-m',r),sd:$('.s-d',r),fb:$('.ferr b',r),fe:$('.ferr em',r),hm:$('.hm',r)};
  });
  DROS.push({compact,rows});
 }
@@ -1011,6 +1086,7 @@ function updDro(){
    const e=Math.abs(S.ferr[a]);r.fb.style.width=Math.min(100,e/FERR_LIM*100)+'%';
    r.fb.style.background=e>40?C.bad:e>25?C.warn:C.ok;set(r.fe,e.toFixed(1)+(ROT[a]?' ″':' µm'))}
   r.row.hidden=!S.active[a];
+  set(r.dm,a==='X'&&MT()==='lathe'&&S.cfg.mach.ltDia?'Ø':'');
   r.hm.classList.toggle('on',S.homed[a]==='sensor');r.hm.classList.toggle('man',S.homed[a]==='manual');
  }});
 }
@@ -1128,22 +1204,27 @@ const PAL=['#59aee6','#3dbb7e','#e47ab3','#ff9447','#a78bfa','#4fd1c5','#d9e45a'
 let PINFO={segs:[],bounds:{x0:-10,x1:10,y0:-10,y1:10},z0:0,z1:0,tools:[]},TCOL=new Map();
 const toolColors=tools=>{const m=new Map();tools.forEach((t,i)=>m.set(t,PAL[i%PAL.length]));return m};
 const colOf=(m,t)=>m.get(t)||C.acc;
-const VIEWS={iso:{yaw:-Math.PI/6,pitch:Math.PI/3},top:{yaw:0,pitch:0},front:{yaw:0,pitch:Math.PI/2},side:{yaw:-Math.PI/2,pitch:Math.PI/2}};
+const VIEWS={iso:{yaw:-Math.PI/6,pitch:Math.PI/3,lathe:false},top:{yaw:0,pitch:0,lathe:false},front:{yaw:0,pitch:Math.PI/2,lathe:false},side:{yaw:-Math.PI/2,pitch:Math.PI/2,lathe:false},lathe:{yaw:0,pitch:0,lathe:true}};
 S.view={...VIEWS.iso,zoom:1,name:'iso'};
 function makeProj(W,H,info,vw){
  const b=info.bounds,z0=info.z0,z1=info.z1,cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,cz=(z0+z1)/2;
  const cyw=Math.cos(vw.yaw),syw=Math.sin(vw.yaw),cp=Math.cos(vw.pitch),sp=Math.sin(vw.pitch);
- const raw=(x,y,z)=>{const dx=x-cx,dy=y-cy,dz=z-cz,x1=dx*cyw-dy*syw,y1=dx*syw+dy*cyw;return[x1,-(y1*cp+dz*sp)]};
+ const raw=vw.lathe?(x,y,z)=>[z-cz,-(x-cx)]:(x,y,z)=>{const dx=x-cx,dy=y-cy,dz=z-cz,x1=dx*cyw-dy*syw,y1=dx*syw+dy*cyw;return[x1,-(y1*cp+dz*sp)]};
  let mx=1e-6,my=1e-6;for(const x of[b.x0,b.x1])for(const y of[b.y0,b.y1])for(const z of[z0,z1]){const[a,c]=raw(x,y,z);mx=Math.max(mx,Math.abs(a));my=Math.max(my,Math.abs(c))}
  const sc=Math.min(W/2/mx,H/2/my)*.84*(vw.zoom||1);
- return{sc,P:(x,y,z)=>{const[a,c]=raw(x,y,z);return[W/2+a*sc,H/2+c*sc]}};
+ return{sc,lathe:!!vw.lathe,P:(x,y,z)=>{const[a,c]=raw(x,y,z);return[W/2+a*sc,H/2+c*sc]}};
 }
 function pathSeg3(ctx,P,pts,k){for(let i=0;i<k;i++){const q=pts[i],[px,py]=P(q[0],q[1],q[2]);i?ctx.lineTo(px,py):ctx.moveTo(px,py)}}
 function paintScene(ctx,W,H,PR,info,em,tc,dim){
  ctx.fillStyle=C.surf;ctx.fillRect(0,0,W,H);
  const b=info.bounds,step=[1,2,5,10,20,50,100,200,500].find(v=>v*PR.sc>=14*em)||1000;
  const gx0=Math.floor(Math.min(b.x0,0)/step)*step,gx1=Math.ceil(Math.max(b.x1,0)/step)*step,gy0=Math.floor(Math.min(b.y0,0)/step)*step,gy1=Math.ceil(Math.max(b.y1,0)/step)*step;
- if((gx1-gx0)/step<160&&(gy1-gy0)/step<160){
+ if(PR.lathe){const gz0=Math.floor(Math.min(info.z0,0)/step)*step,gz1=Math.ceil(Math.max(info.z1,0)/step)*step;
+  if((gx1-gx0)/step<160&&(gz1-gz0)/step<160){ctx.lineWidth=1;ctx.strokeStyle=C.line;ctx.beginPath();
+   for(let x=gx0;x<=gx1;x+=step){const[a,c]=PR.P(x,0,gz0),[d,e]=PR.P(x,0,gz1);ctx.moveTo(a,c);ctx.lineTo(d,e)}
+   for(let z=gz0;z<=gz1;z+=step){const[a,c]=PR.P(gx0,0,z),[d,e]=PR.P(gx1,0,z);ctx.moveTo(a,c);ctx.lineTo(d,e)}
+   ctx.stroke()}}
+ else if((gx1-gx0)/step<160&&(gy1-gy0)/step<160){
   ctx.lineWidth=1;ctx.strokeStyle=C.line;ctx.beginPath();
   for(let x=gx0;x<=gx1;x+=step){const[a,c]=PR.P(x,gy0,0),[d,e]=PR.P(x,gy1,0);ctx.moveTo(a,c);ctx.lineTo(d,e)}
   for(let y=gy0;y<=gy1;y+=step){const[a,c]=PR.P(gx0,y,0),[d,e]=PR.P(gx1,y,0);ctx.moveTo(a,c);ctx.lineTo(d,e)}
@@ -1172,7 +1253,7 @@ function draw(){
  if(!W||!H)return;
  if(W!==cvW||H!==cvH){cv.width=W;cv.height=H;cvW=W;cvH=H}
  const ctx=cv.getContext('2d'),em=parseFloat(panel.style.fontSize)/16*dpr,vw=S.view,PR=makeProj(W,H,PINFO,vw);
- const key=PROG_ID+'|'+W+'|'+H+'|'+vw.yaw.toFixed(4)+'|'+vw.pitch.toFixed(4)+'|'+vw.zoom.toFixed(4);
+ const key=PROG_ID+'|'+W+'|'+H+'|'+vw.yaw.toFixed(4)+'|'+vw.pitch.toFixed(4)+'|'+vw.zoom.toFixed(4)+'|'+(vw.lathe?1:0);
  if(key!==cacheKey){cacheKey=key;baseC=mkC(W,H);paintScene(baseC.getContext('2d'),W,H,PR,PINFO,em,TCOL,true);doneC=mkC(W,H);donePtr=0;doneTo=-1}
  if(S.curPi<doneTo){doneC.getContext('2d').clearRect(0,0,W,H);donePtr=0}
  doneTo=S.curPi;
@@ -1196,7 +1277,7 @@ function draw(){
  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y)||1;zoom0=S.view.zoom}});
  cv.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
-  if(ptrs.size===1){S.view.yaw+=dx*.01;S.view.pitch=Math.max(0,Math.min(Math.PI/2,S.view.pitch+dy*.01));S.view.name='free';segOn('#viewSeg .btn','')}
+  if(ptrs.size===1){S.view.lathe=false;S.view.yaw+=dx*.01;S.view.pitch=Math.max(0,Math.min(Math.PI/2,S.view.pitch+dy*.01));S.view.name='free';segOn('#viewSeg .btn','')}
   else if(ptrs.size===2){const[a,b]=[...ptrs.values()];S.view.zoom=Math.max(.3,Math.min(25,zoom0*Math.hypot(a.x-b.x,a.y-b.y)/pinch0))}});
  ['pointerup','pointercancel','lostpointercapture'].forEach(t=>cv.addEventListener(t,e=>ptrs.delete(e.pointerId)));
  cv.addEventListener('wheel',e=>{e.preventDefault();S.view.zoom=Math.max(.3,Math.min(25,S.view.zoom*(e.deltaY<0?1.15:1/1.15)))},{passive:false});
@@ -1205,20 +1286,20 @@ function draw(){
 /* ---------- Инструменти и магазин ---------- */
 const toolBody=$('#toolBody');
 function renderTools(){
- const N=S.cfg.mag.mn,rows=[];if(S.sel>N)S.sel=1;
+ const N=magCfg().mn,rows=[];if(S.sel>N)S.sel=1;
  for(let i=1;i<=N;i++){const t=toolOf(i);
-  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td>${t.d}${t.t===S.tool?'<span class="badge">шпиндел</span>':''}${t.t===10?'<span class="badge dimb">PRB1</span>':''}</td><td class="n">${t.empty?'—':t.len.toFixed(3)}</td><td class="n">${t.empty?'—':t.dia.toFixed(3)}</td><td class="n">${t.empty?'—':t.w.toFixed(3)}</td></tr>`)}
+  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td>${t.d}${t.t===S.tool?`<span class="badge">${MT()==='lathe'?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'?'<span class="badge dimb">PRB1</span>':''}</td><td class="n">${t.empty?'—':t.len.toFixed(3)}</td><td class="n">${t.empty?'—':t.dia.toFixed(3)}</td><td class="n">${t.empty?'—':t.w.toFixed(3)}</td></tr>`)}
  toolBody.innerHTML=rows.join('');
  set($('#btnTc'),'Смени с T'+S.sel);set($('#toolCnt'),N+' гнезда');
 }
 const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],magKey='';
 function buildMag(){
- const M=S.cfg.mag;PK.forEach(p=>p.remove());PK=[];
+ const M=magCfg();PK.forEach(p=>p.remove());PK=[];
  for(let i=1;i<=M.mn;i++){const p=document.createElement('div');p.className='pk';p.textContent=i;mag.appendChild(p);PK.push(p)}
- mag.className='mag '+M.mtype;S.magPh=S.magPos;set($('#magTitle'),'Магазин · '+MTYPE[M.mtype]);
+ mag.className='mag '+M.mtype;S.magPh=S.magPos;set($('#magTitle'),MT()==='lathe'?'Револверна глава':'Магазин · '+MTYPE[M.mtype]);
 }
 function updMag(dt){
- const M=S.cfg.mag,N=M.mn,key=M.mtype+'|'+N;
+ const M=magCfg(),N=M.mn,key=MT()+'|'+M.mtype+'|'+N;
  if(key!==magKey){magKey=key;buildMag()}
  let d=S.magPos-S.magPh;if(M.mtype!=='linear')d=((d%N)+N*1.5)%N-N/2;
  const sp=(M.mtype==='linear'?4:1/Math.max(.05,M.msp))*dt;S.magPh+=Math.abs(d)<=sp?d:Math.sign(d)*sp;
@@ -1251,7 +1332,7 @@ function updMag(dt){
   const x=p0[0]+(p1[0]-p0[0])*f,y=Math.min(p0[1],p1[1])-size*.55-1.9*em;spm.style.transform=`translate(${x}px,${y}px) translateX(-50%)`;set($('#spmT'),S.tool?'T'+S.tool:'празен')}
  set($('#hubT'),S.tool?'T'+S.tool:'—');set($('#magPos'),'гнездо '+S.magPos);
  const busy=S.actLabel.startsWith('Смяна');const atc=$('#atc');atc.classList.toggle('busy',busy);
- const txt=busy?S.actLabel.replace(/^Смяна на инструмент /,''):'Магазинът е готов · инструментът е затегнат';
+ const txt=busy?S.actLabel.replace(/^Смяна на инструмент /,''):(MT()==='lathe'?'Револверът е заключен':'Магазинът е готов · инструментът е затегнат');
  if(atc.dataset.t!==txt){atc.dataset.t=txt;atc.innerHTML=`<i class="led ${busy?'hot':'on'}"></i><span>${txt}</span>`}
 }
 
@@ -1330,6 +1411,7 @@ function runCycle(k){
  runOps(ops,'probe');
 }
 function measureTool(){
+ if(MT()==='lathe'){toast('Корекциите на ножовете се задават в таблицата');return}
  if(!canMove())return;
  if(!S.tool){toast('В шпиндела няма инструмент');return}
  if(S.tool===10){toast('3D пробникът не се мери с toolsetter-а');return}
@@ -1489,14 +1571,44 @@ const P_NET=[
  {k:'ssh',n:'SSH',t:'bool',on:'Включен',off:'Изключен',h:'За обновяване и диагностика от компютър. Изключете го, ако машината е в обща мрежа.'},
  {k:'web',n:'Уеб наблюдение',t:'bool',on:'Включено',off:'Изключено',h:'Страница само за преглед на състоянието от телефон или компютър в същата мрежа. Машината се управлява само от панела.'}
 ];
-const PDEF={};[...P_AX,...P_HOME,...P_MAG,...P_TS,...P_NET].forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={mag:P_MAG,ts:P_TS,net:P_NET};
+const isT=t=>D=>D.type===t;
+const P_MACH=[
+ {k:'type',n:'Вид на машината',t:'enum',opts:[['mill','Фреза / рутер'],['laser','Лазер'],['plasma','Плазма'],['lathe','Струг']],h:'Определя екраните, активните оси, изгледа на траекторията и как се разбират S, M3/M4 и T в програмата. При смяна всички оси стават нереферирани.'},
+ {t:'hdr',n:'Лазер',show:isT('laser')},
+ {k:'lzMax',n:'Макс. мощност',u:'%',t:'num',d:0,min:1,max:100,show:isT('laser'),h:'Горна граница на мощността, независимо от S в програмата (S1000 = 100 %).'},
+ {k:'lzPwm',n:'PWM честота',u:'Hz',t:'num',d:0,min:100,max:50000,show:isT('laser'),h:'Честотата на сигнала към захранването на лазера. Взима се от документацията на захранването: CO2 обикновено 1–20 kHz, диодни лазери 1–5 kHz.'},
+ {k:'lzAir',n:'Обдухване',t:'bool',on:'С лъча',off:'Ръчно',show:isT('laser'),h:'Включва обдухването заедно с лъча (M3/M4) и го изключва с M5.'},
+ {k:'lzTpw',n:'Тест импулс · мощност',u:'%',t:'num',d:0,min:1,max:100,show:isT('laser'),h:'Мощност на краткия импулс за проверка на фокуса и пътя на лъча.'},
+ {k:'lzTms',n:'Тест импулс · време',u:'ms',t:'num',d:0,min:1,max:2000,show:isT('laser'),h:'Продължителност на тестовия импулс.'},
+ {t:'hdr',n:'Плазма',show:isT('plasma')},
+ {k:'plV',n:'Напрежение на дъгата',u:'V',t:'num',d:0,min:50,max:250,show:isT('plasma'),h:'Целево напрежение за THC. Взима се от таблицата на производителя на плазмата за дебелината и тока.'},
+ {k:'plThc',n:'THC',t:'bool',on:'Включен',off:'Изключен',show:isT('plasma'),h:'Контрол на височината по напрежението на дъгата. Поддържа постоянна височина при огънат или неравен лист.'},
+ {k:'plIhs',n:'Намиране на листа (IHS)',t:'enum',opts:[['ohm','Омичен контакт'],['float','Плаващ датчик']],show:isT('plasma'),h:'Как се намира повърхността преди пробиване. Омичният е по-точен, но не работи с ръждив или боядисан лист.'},
+ {k:'plPierce',n:'Височина на пробиване',u:'мм',t:'num',d:1,min:.5,max:15,show:isT('plasma'),h:'По-голяма от височината на рязане, за да не пръска разтопен метал към дюзата.'},
+ {k:'plDelay',n:'Забавяне при пробиване',u:'s',t:'num',d:2,min:0,max:5,show:isT('plasma'),h:'Колко време горелката стои на място, докато дъгата пробие листа.'},
+ {k:'plCut',n:'Височина на рязане',u:'мм',t:'num',d:1,min:.5,max:10,show:isT('plasma'),h:'Началната височина след пробиване. После THC я поддържа.'},
+ {k:'plAd',n:'Anti-dive',u:'% от подаването',t:'num',d:0,min:0,max:100,show:isT('plasma'),h:'Под тази скорост (ъгли, малки отвори) THC се заключва, за да не забие горелката в листа.'},
+ {t:'hdr',n:'Струг',show:isT('lathe')},
+ {k:'ltDia',n:'X в диаметър',t:'bool',on:'Да',off:'Не (радиус)',show:isT('lathe'),h:'Позицията и програмата по X са в диаметър, както е прието при струговете.'},
+ {k:'ltMax',n:'Макс. обороти при G96',u:'об/мин',t:'num',d:0,min:100,max:10000,show:isT('lathe'),h:'При постоянна скорост на рязане оборотите растат към центъра. Това е горната граница, като G50 S.'},
+ {k:'ltTur',n:'Позиции на револвера',t:'num',d:0,min:4,max:16,show:isT('lathe'),h:'Колко ножа побира револверната глава. Таблицата на инструментите следва този брой.'}
+];
+const PDEF={};[...P_AX,...P_HOME,...P_MAG,...P_TS,...P_NET,...P_MACH].forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH};
+const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
+const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
+const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
+const VSEG={mill:[['iso','3D'],['top','XY'],['front','XZ'],['side','YZ']],laser:[['top','XY'],['iso','3D']],plasma:[['top','XY'],['iso','3D']],lathe:[['lathe','XZ'],['iso','3D']]};
+const DEFV={mill:'iso',laser:'top',plasma:'top',lathe:'lathe'};
+const AXPROF={mill:['X','Y','Z','A','B','C'],laser:['X','Y','Z'],plasma:['X','Y','Z'],lathe:['X','Z']};
+const SECX={mill:[],laser:['mag','prb','ts','sp'],plasma:['mag','prb','ts','sp'],lathe:['mag','prb','ts']};
 PDEF.__line={k:'__line',n:'Изпълни от ред',t:'num',d:0,min:1,max:1,h:'Преди този ред контролерът възстановява инструмента, оборотите и охлаждането, вдига Z, отива над началната точка и чак тогава слиза.'};
 const REHOME=['mdir','edir','spm','hsw','hdir','hswp','hpos','hidx'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
 const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
 S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
+S.cfg.mach={type:'mill',lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
 S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -1514,7 +1626,7 @@ function homeOps(axes){
  });
  return ops;
 }
-const SECS=[['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
+const SECS=[['mach','Машина'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
 const STATIC={
  enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
  sp:[['Управление','VFD Modbus'],['Порт','RS485 · 19200'],['Адрес','1'],['Обороти','0 … 24000'],['Енкодер','1024 имп/об'],['Ориентация','0.0°']],
@@ -1531,6 +1643,7 @@ function fmtP(p,v){
  return(+v).toFixed(p.d);
 }
 function renderSet(){
+ {const L=SECS.filter(x=>!SECX[MT()].includes(x[0]));if(!L.some(x=>x[0]===S.setSec))S.setSec='mach';$('#setNav').innerHTML=L.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('')}
  const sec=S.setSec,tab=sec==='ax'||sec==='home';
  segOn('#setNav .btn',sec);
  set($('#setTitle'),SECS.find(s=>s[0]===sec)[1]);
@@ -1560,10 +1673,10 @@ function renderSet(){
    const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
-   (sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   (sec==='mach'?'':sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button></div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
-  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
@@ -1593,6 +1706,68 @@ function renderNd(){
  set($('#ndNote'),(p.min!==undefined?`Обхват: ${p.min} … ${p.max}${p.u?' '+p.u:''}. `:'')+p.h);
 }
 
+/* ---------- Вид на машината ---------- */
+function genLaser(){
+ const L=['(ЛАЗЕР: ТАБЕЛА 100 X 60, ГРАВИРАНЕ И ИЗРЯЗВАНЕ)','G21 G90','G0 X0 Y0','M4 S0','(ГРАВИРАНЕ, ЗАПЪЛВАНЕ ЗА 3 MM)'];
+ for(let y=15,d=1;y<=45;y+=3,d=-d){L.push(`G0 X${d>0?'15.000':'85.000'} Y${y.toFixed(3)}`,`G1 X${d>0?'85.000':'15.000'} S350 F4000`)}
+ L.push('(ИЗРЯЗВАНЕ НА КОНТУРА)','G0 X0 Y0','G1 X100.000 S1000 F600','G1 Y60.000','G1 X0','G1 Y0','M5','G0 X0 Y0','M30');return L.join('\n');
+}
+function genPlasma(){
+ const L=['(ПЛАЗМА: ФЛАНЕЦ Ø150 С 4 ОТВОРА Ø20, ЛИСТ 6 MM)','G21 G90','G0 X0 Y0'];
+ for(const[sx,sy]of[[1,1],[-1,1],[-1,-1],[1,-1]]){const cx=sx*35.355,cy=sy*35.355;L.push(`G0 X${(cx+10).toFixed(3)} Y${cy.toFixed(3)}`,'M3',`G3 X${(cx+10).toFixed(3)} Y${cy.toFixed(3)} I-10.000 J0 F1800`,'M5')}
+ L.push('(ВЪНШЕН КОНТУР)','G0 X85.000 Y0','M3','G1 X75.000 Y0 F2500','G2 X75.000 Y0 I-75.000 J0','M5','G0 X0 Y0','M30');return L.join('\n');
+}
+function genLathe(){
+ const L=['(СТРУГ: ВАЛ Ø40 → Ø30 X 50, ГРУБО И ДОВЪРШВАНЕ)','G18 G21 G90 G95','T0101','G50 S3000','G96 S180 M3','G0 X42.000 Z2.000','(ЧЕЛНО)','G1 Z0 F0.15','G1 X-1.000','G0 X42.000 Z2.000','(ГРУБО ПО 2 MM)'];
+ for(const d of[38,36,34,32,30.4])L.push(`G0 X${d.toFixed(3)}`,`G1 Z-50.000 F0.2`,`G1 X${(d+2).toFixed(3)}`,'G0 Z2.000');
+ L.push('G0 X100.000 Z100.000','T0202','G96 S220 M3','G0 X30.000 Z2.000','(ДОВЪРШВАНЕ)','G1 Z-50.000 F0.08','G1 X40.000','G0 X100.000 Z100.000','M5','M30');return L.join('\n');
+}
+const SAMPLE={mill:['demo_dzhob.nc',()=>buildProgram().join('\n')],laser:['lazer_tabela_100x60.nc',genLaser],plasma:['plazma_flanets_d150.nc',genPlasma],lathe:['strug_val_d40.nc',genLathe]};
+function renderNav(){const L=NAVS[MT()],n=$('#nav');n.style.gridTemplateColumns=`repeat(${L.length},minmax(0,1fr))`;n.innerHTML=L.map(v=>`<button class="btn${v===S.screen?' on':''}" data-act="go" data-v="${v}" type="button">${NAVN[v]}</button>`).join('')}
+function renderViewSeg(){$('#viewSeg').innerHTML=VSEG[MT()].map(([v,l])=>`<button class="btn sm${S.view.name===v?' on':''}" data-act="view" data-v="${v}" type="button">${l}</button>`).join('')+'<button class="btn sm" data-act="view" data-v="fit" type="button">Побери</button>'}
+function applyType(change){
+ const t=MT();
+ if(change){
+  AX.forEach(a=>S.homed[a]=false);Object.assign(S.view,VIEWS[DEFV[t]],{zoom:1,name:DEFV[t]});
+  S.tool={mill:5,laser:0,plasma:0,lathe:1}[t];S.sel=1;S.magPos=Math.max(1,S.tool);S.magPh=S.magPos;magKey='';S.sp.on=false;S.sp.css=0;S.airBlast=false;
+  ['mem','usb','net'].forEach(k=>FILES[k].forEach(f=>delete f.c));
+  let f=FILES.mem.find(x=>x.name===SAMPLE[t][0]);if(!f){addFile('mem',SAMPLE[t][0],SAMPLE[t][1]());f=FILES.mem[FILES.mem.length-1]}
+  loadProgram(f);
+ }
+ renderNav();renderViewSeg();set($('#sbMach'),MTN[t]);
+ const lt=t==='lathe';set($('#thL'),lt?'Корекция Z':'Дължина');set($('#thD'),lt?'Корекция X':'Ø');set($('#thW'),lt?'R на върха':'Износв.');
+ renderTools();
+ if(!NAVS[t].includes(S.screen)&&S.screen!=='files')go('run');
+}
+const thcLocked=()=>S.F<S.cfg.mach.plAd/100*Math.max(1,S.progF*S.feedOv/100);
+function lzPow(now){
+ const M=S.cfg.mach;if(now-(S.lzTest||0)<Math.max(250,M.lzTms))return M.lzTpw;
+ if(!S.sp.on||S.state==='estop')return 0;
+ let p=Math.min(M.lzMax,S.sp.cmd/10)*S.spOv/100;
+ if(S.sp.dir==='M4'){const c=S.cur;if(S.state!=='run'||!c||c.type==='act'||c.rapid)return 0;p*=Math.min(1,S.F/Math.max(1,S.progF*S.feedOv/100))}
+ return Math.max(0,Math.min(100,p));
+}
+function updLz(now){
+ const p=lzPow(now);set($('#lzPow'),p.toFixed(0).padStart(3,' ')+' %');
+ set($('#lzMode'),S.sp.on?(S.sp.dir==='M4'?'M4 · мощността следва скоростта':'M3 · постоянна мощност'):'S'+S.sp.cmd+' · лъчът е изключен');
+ set($('#lzState'),p>0?'лъчът е включен':'изключен');
+ $('#lzAirBtn').classList.toggle('on',!!S.airBlast);
+ const b=PINFO.bounds;set($('#lzBox'),(b.x1-b.x0).toFixed(1)+' × '+(b.y1-b.y0).toFixed(1)+' мм');
+ set($('#lzFz'),S.lzFocus!=null?f3(S.lzFocus).trim():'не е зададен');
+ const il=[['Капакът е затворен','IN11',S.state==='estop'?'bad':'on'],['Охлаждане на тръбата: поток 2.1 л/мин','IN14','on'],['Температура на водата: 22 °C','AIN0','on'],['Обдухване','OUT5',S.airBlast?'hot':''],['Аспирация','OUT6',p>0?'hot':'on']];
+ const h=il.map(([n,c,st])=>`<div><i class="led ${st}"></i><span>${n}</span><code>${c}</code></div>`).join('');const el=$('#lzIl');if(el._h!==h){el._h=h;el.innerHTML=h}
+}
+function updPl(){
+ const M=S.cfg.mach,arc=(S.arcV||0)>20;
+ set($('#plVact'),String(Math.round(S.arcV||0)).padStart(3,' ')+' V');set($('#plVset'),'цел '+M.plV+' V');
+ set($('#plArcOk'),arc?'Arc OK':'няма дъга');
+ const st=!M.plThc?'изключен':!arc?'чака дъга':thcLocked()?'заключен (anti-dive)':'активен';set($('#plThcSt'),st);
+ const b=$('#plThcBtn');set(b,M.plThc?'THC вкл.':'THC изкл.');b.classList.toggle('on',!!M.plThc);
+ set($('#plZc'),((S.thcZ||0)>=0?'+':'')+(S.thcZ||0).toFixed(2)+' мм');
+ set($('#plIh'),M.plIhs==='ohm'?'омичен контакт':'плаващ датчик');set($('#plPh'),M.plPierce.toFixed(1)+' мм');set($('#plPd'),M.plDelay.toFixed(2)+' s');
+ set($('#plCh'),M.plCut.toFixed(1)+' мм');set($('#plAdv'),'под '+M.plAd+' % от подаването');
+}
+
 /* ---------- Статус ---------- */
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
@@ -1601,7 +1776,8 @@ function updStatus(now){
  if(MODE_TXT[S.screen])set($('#sbMode'),MODE_TXT[S.screen]);
  {const hb=$('#btnHomeMain'),need=AX.some(a=>S.active[a]&&!S.homed[a]);hb.classList.toggle('need',need&&S.state==='idle');
   hb.title=need?'Нереферирани оси: '+AX.filter(a=>S.active[a]&&!S.homed[a]).join(', '):'Всички активни оси са реферирани'}
- const t=toolOf(S.tool);set($('#sbTool'),S.tool?`T${S.tool} · ${t.d} Ø${t.dia}`:'Без инструмент');
+ const mt=MT(),t=toolOf(S.tool);
+ set($('#sbTool'),mt==='laser'?'Лазерна глава':mt==='plasma'?'Горелка':mt==='lathe'?(S.tool&&t?`T${String(S.tool).padStart(2,'0')+String(S.tool).padStart(2,'0')} · ${t.d}`:'Без нож'):(S.tool&&t?`T${S.tool} · ${t.d} Ø${t.dia}`:'Без инструмент'));
  const m=$('#sbMsg');let txt='',cls='';
  if(S.state==='estop'){txt='Аварийният стоп е натиснат. Захранването на драйверите и шпиндела е прекъснато.';cls='bad'}
  else if(S.state==='alarm'){txt=S.alarm;cls='bad'}
@@ -1613,8 +1789,10 @@ function updStatus(now){
  set($('#fAct'),S.F&&S.cur&&S.cur.rapid?'G0 '+String(Math.round(S.F)).padStart(5,' '):String(Math.round(S.F)).padStart(5,' '));
  set($('#fProg'),'F'+(S.progF||0)+' мм/мин');
  set($('#fOv'),S.feedOv+'%');set($('#sOv'),S.spOv+'%');set($('#rAct'),S.rapOv+'%');
- set($('#sAct'),String(Math.round(S.sp.act/10)*10).padStart(5,' '));
- set($('#sProg'),'S'+S.sp.cmd+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян'));
+ if(mt==='laser'){set($('#sLab'),'Лазер');set($('#sAct'),lzPow(now).toFixed(0).padStart(4,' ')+' %');set($('#sProg'),'S'+S.sp.cmd+' · '+(S.sp.on?S.sp.dir:'изкл.'))}
+ else if(mt==='plasma'){set($('#sLab'),'Дъга');set($('#sAct'),String(Math.round(S.arcV||0)).padStart(4,' ')+' V');set($('#sProg'),'цел '+S.cfg.mach.plV+' V · THC '+(S.cfg.mach.plThc?'вкл.':'изкл.'))}
+ else{set($('#sLab'),'Шпиндел');set($('#sAct'),String(Math.round(S.sp.act/10)*10).padStart(5,' '));
+  set($('#sProg'),(mt==='lathe'?(S.sp.css?'G96 '+S.sp.css+' м/мин':'G97 S'+S.sp.cmd):'S'+S.sp.cmd)+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян'))}
  set($('#runTime'),mmss(S.runTime));
  $('#btnSingle').classList.toggle('on',S.single);$('#btnCool').classList.toggle('on',S.coolant);
  const pl=$('#mtPrb'),tl=$('#mtTs');
@@ -1726,8 +1904,13 @@ panel.addEventListener('click',e=>{
    if(!canMove())break;
    if(JSON.stringify(S.cfg.net)!==JSON.stringify(S.draft.net))S.netOk=false;
    const re=[];AX.forEach(a=>{const o=S.cfg[a],n=S.draft[a];if(REHOME.some(k=>o[k]!==n[k])){re.push(a);S.homed[a]=false}});
-   if(S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
-   S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>S.cfg.mag.mn)S.magPos=1;renderSet();renderTools();renderTsPos();
+   const tCh=S.cfg.mach.type!==S.draft.mach.type,mCh=JSON.stringify(S.cfg.mach)!==JSON.stringify(S.draft.mach);
+   if(tCh){const pr=AXPROF[S.draft.mach.type];AX.forEach(a=>S.draft[a].active=pr.includes(a)?1:0)}
+   if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
+   S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>magCfg().mn)S.magPos=1;
+   if(tCh){applyType(true);renderSet();toast('Машината е „'+MTN[MT()]+'“. Активни оси: '+AXPROF[MT()].join(', ')+'. Натиснете HOME.',7000);break}
+   if(mCh){['mem','usb','net'].forEach(k=>FILES[k].forEach(f=>delete f.c));if(LOADED)loadProgram(LOADED);applyType(false)}
+   renderSet();renderTools();renderTsPos();
    toast(re.length?'Записано. Осите '+re.join(', ')+' трябва да се реферират отново.':'Настройките са записани',6000);break}
   case'axact':{
    if(!canMove())break;
@@ -1789,6 +1972,21 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'go-set-mach':go('set');S.setSec='mach';S.setHelp=null;renderSet();break;
+  case'lz-test':if(S.state!=='idle'){toast('Тест импулсът е разрешен само когато машината е спряна');break}S.lzTest=performance.now();toast('Тест импулс: '+S.cfg.mach.lzTpw+' % за '+S.cfg.mach.lzTms+' ms');break;
+  case'lz-air':S.airBlast=!S.airBlast;break;
+  case'lz-frame':{if(!canMove())break;const b=PINFO.bounds,low=v==='low';
+   runOps([{type:'act',dur:0,label:'Рамкиране',fn:()=>{if(low){S.sp.on=true;S.sp.dir='M3';S.sp.cmd=10}}},
+    {type:'line',tgt:{X:b.x0,Y:b.y0},rapid:true,label:'Рамкиране'},{type:'line',tgt:{X:b.x1},feed:3000,label:'Рамкиране'},{type:'line',tgt:{Y:b.y1},feed:3000,label:'Рамкиране'},
+    {type:'line',tgt:{X:b.x0},feed:3000,label:'Рамкиране'},{type:'line',tgt:{Y:b.y0},feed:3000,label:'Рамкиране'},
+    {type:'act',dur:0,fn:()=>{S.sp.on=false;S.sp.cmd=0;toast('Рамкирането завърши')}}],'jog');break}
+  case'lz-fz':if(v==='set'){if(!S.homed.Z){toast('Ос Z не е реферирана');break}S.lzFocus=S.mach.Z;toast('Z на фокуса: '+S.mach.Z.toFixed(3))}
+   else{if(S.lzFocus==null){toast('Първо запишете Z на фокуса');break}if(!canMove())break;runOps([{type:'line',tgtFn:()=>({Z:S.lzFocus-S.off.Z}),rapid:true,label:'Към фокуса'}],'jog')}break;
+  case'pl-v':S.cfg.mach.plV=S.draft.mach.plV=Math.max(50,Math.min(250,S.cfg.mach.plV+ +v));break;
+  case'pl-thc':S.cfg.mach.plThc=S.draft.mach.plThc=S.cfg.mach.plThc?0:1;break;
+  case'pl-ihs':{if(!canMove())break;if(!S.homed.Z){toast('Ос Z не е реферирана');break}const M=S.cfg.mach;
+   runOps([...touch('Z',-1,12+Math.random()*8,'IHS',(lm)=>{S.lastIhs=lm.Z},'prb'),{type:'line',rel:{Z:M.plPierce-PRB.back},rapid:true,label:'IHS: към височината на пробиване'},
+    {type:'act',dur:0,fn:()=>toast('Листът е намерен на Z '+f3(S.lastIhs).trim()+' (маш.). Горелката е на '+M.plPierce.toFixed(1)+' мм.',6000)}],'probe');break}
   case'view':if(v==='fit')S.view.zoom=1;else{Object.assign(S.view,VIEWS[v]);S.view.name=v;S.view.zoom=1}segOn('#viewSeg .btn',v==='fit'?S.view.name:v);break;
   case'src':S.src=v;S.fsel=0;renderFiles();previewFile();break;
   case'fsel':S.fsel=+v;renderFiles();previewFile();break;
@@ -1836,13 +2034,15 @@ document.querySelectorAll('.resbtn').forEach(b=>b.addEventListener('click',()=>{
 new ResizeObserver(fit).observe(vp);window.addEventListener('resize',fit);
 
 /* ---------- Цикъл ---------- */
-loadProgram(FILES.mem[0]);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
+loadProgram(FILES.mem[0]);applyType(false);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
 let last=performance.now(),acc=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);acc+=dt;
  updDro();updStatus(now);
  if(S.screen==='run'){updGc();draw()}
  if(S.screen==='tools')updMag(dt);
+ if(S.screen==='laser')updLz(now);
+ if(S.screen==='plasma')updPl();
  if(S.screen==='diag'&&acc>.1){acc=0;updDiag()}
  requestAnimationFrame(frame);
 }
