@@ -644,11 +644,13 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               <span class="lab">Toolsetter</span>
               <div class="kv">Позиция (маш.)<b id="tsPos">X -20.000 Y -20.000</b></div>
               <button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button>
+              <span class="lab">3D пробник</span>
+              <button class="btn" data-act="prb-cal" type="button">Калибриране в пръстен</button>
               <button class="btn" data-act="tool-measure" type="button">Измери текущия инструмент</button>
             </div>
           </div>
           <div class="card">
-            <div class="card-h"><span>Цикли с 3D пробник</span><span class="r">сфера Ø2.000</span></div>
+            <div class="card-h"><span>Цикли с 3D пробник</span><span class="r" id="prbHdr">сфера Ø2.000</span></div>
             <div class="card-b">
               <div class="crn"><span class="lab">Ъгъл</span><div class="seg" id="crnSeg">
                 <button class="btn sm" data-act="corner" data-v="bl" type="button">↖ Заден ляв</button><button class="btn sm" data-act="corner" data-v="br" type="button">↗ Заден десен</button>
@@ -892,7 +894,10 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 const AX=['X','Y','Z','A','B','C'], ROT={A:1,B:1,C:1};
 const RAPID=6000, SIMX=2.5, FERR_LIM=50, SAFE_Z=5;
 const TS={X:-20,Y:-20,TOP:-180};
-const PRB={fast:300,slow:30,back:1,ball:2};
+const PRB={get fast(){return S.cfg.prb.prFast},get slow(){return S.cfg.prb.prSlow},get back(){return S.cfg.prb.prBack},get ball(){return S.cfg.prb.prDia}};
+/* „истината“ в симулацията: реален ефективен диаметър и офсет, които калибрирането открива */
+const PTRUE={spindle:{dia:1.962,ox:.014,oy:-.009},fixed:{dia:1.962,ox:62.43,oy:-.25}};
+const PT=()=>PTRUE[S.cfg.prb.prMount];
 const css=getComputedStyle(document.documentElement);
 const C={}; ['panel','surf','line','fg','dim','faint','acc','ok','warn','bad','info','path','rapid'].forEach(k=>C[k]=css.getPropertyValue('--'+k).trim());
 
@@ -1463,7 +1468,7 @@ function renderTools(){
  const N=magCfg().mn,rows=[];if(S.sel>N)S.sel=1;
  for(let i=1;i<=N;i++){const t=toolOf(i);
   const lt=MT()==='lathe',num=(k,v)=>`<td class="n ed" data-act="t-num" data-k="${k}" data-v="${t.t}">${t.empty?'—':v.toFixed(3)}</td>`;
-  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td class="ed" data-act="t-name" data-v="${t.t}"><span class="nm${t.empty?' emp':''}">${t.d.replace(/</g,'&lt;')}</span>${t.t===S.tool?`<span class="badge">${lt?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'?'<span class="badge dimb">PRB1</span>':''}</td>${num(lt?'tZ':'tLen',t.len)}${num(lt?'tX':'tDia',t.dia)}${num(lt?'tR':'tWear',t.w)}</tr>`)}
+  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td class="ed" data-act="t-name" data-v="${t.t}"><span class="nm${t.empty?' emp':''}">${t.d.replace(/</g,'&lt;')}</span>${t.t===S.tool?`<span class="badge">${lt?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'&&S.cfg.prb.prMount==='spindle'?'<span class="badge dimb">PRB1</span>':''}</td>${num(lt?'tZ':'tLen',t.len)}${num(lt?'tX':'tDia',t.dia)}${num(lt?'tR':'tWear',t.w)}</tr>`)}
  toolBody.innerHTML=rows.join('');
  set($('#btnTc'),'Смени с T'+S.sel);set($('#toolCnt'),N+' гнезда');
 }
@@ -1540,23 +1545,25 @@ function touch(ax,dir,trig,label,onLatch,input,ff=PRB.fast,fs=PRB.slow,travel=tr
 function result(title,rows,note){S.prbRes={title,rows,note};S.prbWarn=false;renderPrb()}
 function runCycle(k){
  if(!canMove())return;
- if(S.tool!==10){S.prbWarn=true;renderPrb();return}
- const w=work(),rb=PRB.ball/2,R={};let ops=[];
+ const P=S.cfg.prb,fx=P.prMount==='fixed';
+ if(!fx&&S.tool!==10){S.prbWarn=true;renderPrb();return}
+ if(fx&&S.sp.on){toast('Спрете шпиндела преди измерване с пробника');return}
+ const w=work(),rb=P.prDia/2,rbT=PT().dia/2,ox0=P.prOffX,oy0=P.prOffY,R={};let ops=[];
  if(k==='z'){
-  ops=[...touch('Z',-1,6+Math.random()*8,'Повърхност Z',(lm,lw)=>{R.z=lm.Z})];
+  ops=[...touch('Z',-1,6+Math.random()*8,'Повърхност Z',(lm,lw)=>{R.z=lm.Z+(fx?P.prOffZ:0)})];
   ops.push({type:'act',dur:0,fn:()=>{S.off.Z=R.z;result('Повърхност Z',[['Z маш.',f4(R.z)],['Нов G54 Z',f4(R.z)]],'Работната нула по Z е на повърхността.')}});
   ops.push({type:'line',rel:{Z:5},rapid:true});
  }else if(k==='hole'||k==='width'){
   const Rh=12.5+Math.random()*0.03,ox=(Math.random()-.5)*2,oy=(Math.random()-.5)*2;
-  ops.push(...touch('X',1,ox+Rh-rb,'X+',(lm,lw)=>{R.xp=lw.X}));
+  ops.push(...touch('X',1,ox+Rh-rbT,'X+',(lm,lw)=>{R.xp=lw.X+ox0}));
   ops.push({type:'line',tgt:{X:w.X},feed:2000});
-  ops.push(...touch('X',-1,Rh-rb-ox,'X−',(lm,lw)=>{R.xm=lw.X}));
-  ops.push({type:'line',tgtFn:()=>({X:(R.xp+R.xm)/2}),feed:2000,label:'Към центъра по X'});
+  ops.push(...touch('X',-1,Rh-rbT-ox,'X−',(lm,lw)=>{R.xm=lw.X+ox0}));
+  ops.push({type:'line',tgtFn:()=>({X:(R.xp+R.xm)/2-ox0}),feed:2000,label:'Сферата към центъра по X'});
   if(k==='hole'){
-   ops.push(...touch('Y',1,oy+Rh-rb,'Y+',(lm,lw)=>{R.yp=lw.Y}));
+   ops.push(...touch('Y',1,oy+Rh-rbT,'Y+',(lm,lw)=>{R.yp=lw.Y+oy0}));
    ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
-   ops.push(...touch('Y',-1,Rh-rb-oy,'Y−',(lm,lw)=>{R.ym=lw.Y}));
-   ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2}),feed:2000,label:'Към центъра по Y'});
+   ops.push(...touch('Y',-1,Rh-rbT-oy,'Y−',(lm,lw)=>{R.ym=lw.Y+oy0}));
+   ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2-oy0}),feed:2000,label:'Сферата към центъра по Y'});
   }
   ops.push({type:'act',dur:0,fn:()=>{
    const cx=(R.xp+R.xm)/2,dx=R.xp-R.xm+2*rb;
@@ -1568,22 +1575,48 @@ function runCycle(k){
   const[cn,cx,cy]=CRN[S.corner],inner=k==='icorner',sx=inner?-cx:cx,sy=inner?-cy:cy;
   const nm=(inner?'Вътрешен':'Външен')+' ъгъл · '+cn.toLowerCase();
   const dx=4+Math.random()*3,dy=4+Math.random()*3;
-  ops.push(...touch('X',sx,dx,'Стена X'+sg(sx),(lm,lw)=>{R.x=lw.X+sx*rb}));
+  ops.push(...touch('X',sx,dx,'Стена X'+sg(sx),(lm,lw)=>{R.x=lw.X+ox0+sx*rb}));
   ops.push({type:'line',tgt:{X:w.X},feed:2000});
-  ops.push(...touch('Y',sy,dy,'Стена Y'+sg(sy),(lm,lw)=>{R.y=lw.Y+sy*rb}));
+  ops.push(...touch('Y',sy,dy,'Стена Y'+sg(sy),(lm,lw)=>{R.y=lw.Y+oy0+sy*rb}));
   ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
   ops.push({type:'act',dur:0,fn:()=>{S.off.X+=R.x;S.off.Y+=R.y;result(nm,[['Ъгъл X',f4(R.x)],['Ъгъл Y',f4(R.y)],['Посоки',`X${sg(sx)} / Y${sg(sy)}`]],inner?'G54 X и Y са в ъгъла на джоба.':'G54 X и Y са в ъгъла на детайла.')}});
  }else if(k==='widthy'){
   const Rh=8+Math.random()*0.03,oy=(Math.random()-.5)*2;
-  ops.push(...touch('Y',1,oy+Rh-rb,'Y+',(lm,lw)=>{R.yp=lw.Y}));
+  ops.push(...touch('Y',1,oy+Rh-rbT,'Y+',(lm,lw)=>{R.yp=lw.Y+oy0}));
   ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
-  ops.push(...touch('Y',-1,Rh-rb-oy,'Y−',(lm,lw)=>{R.ym=lw.Y}));
-  ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2}),feed:2000,label:'Към центъра по Y'});
+  ops.push(...touch('Y',-1,Rh-rbT-oy,'Y−',(lm,lw)=>{R.ym=lw.Y+oy0}));
+  ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2-oy0}),feed:2000,label:'Сферата към центъра по Y'});
   ops.push({type:'act',dur:0,fn:()=>{const cy=(R.yp+R.ym)/2,dy=R.yp-R.ym+2*rb;S.off.Y+=cy;result('Ширина на жлеб Y',[['Център Y',f4(cy)],['Ширина',f4(dy)]],'G54 Y е преместен в центъра на жлеба.')}});
  }else{
   result(k==='boss'?'Център на бос':'Ротация на детайла',[],'Този цикъл е само като изглед в макета.');return;
  }
- runOps(ops,'probe');
+ runOps(deployWrap(ops),'probe');
+}
+function deployWrap(ops){
+ const P=S.cfg.prb,n=Math.round(P.prDep);if(P.prMount!=='fixed'||!n)return ops;
+ return[{type:'act',dur:P.prDepT,label:'Спускане на пробника (OUT'+n+')',fn:()=>{S.uOut[n]=1}},...ops,{type:'act',dur:P.prDepT,label:'Прибиране на пробника',fn:()=>{S.uOut[n]=0}}];
+}
+function calibrate(){
+ if(!canMove())return;
+ const P=S.cfg.prb,fx=P.prMount==='fixed';
+ if(!fx&&S.tool!==10){S.prbWarn=true;renderPrb();return}
+ if(fx&&S.sp.on){toast('Спрете шпиндела преди калибриране');return}
+ if(!S.homed.X||!S.homed.Y){toast('Осите X и Y не са реферирани');return}
+ const T=PT(),Rh=P.prRing/2,rbT=T.dia/2,ox=(Math.random()-.5)*1.2,oy=(Math.random()-.5)*1.2,w=work(),R={},old={d:P.prDia,x:P.prOffX,y:P.prOffY};
+ const ops=[];
+ ops.push(...touch('X',1,ox+Rh-rbT,'Калибриране X+',(lm)=>{R.xp=lm.X}));ops.push({type:'line',tgt:{X:w.X},feed:2000});
+ ops.push(...touch('X',-1,Rh-rbT-ox,'Калибриране X−',(lm)=>{R.xm=lm.X}));ops.push({type:'line',tgtFn:()=>({X:(R.xp+R.xm)/2-S.off.X}),feed:2000});
+ ops.push(...touch('Y',1,oy+Rh-rbT,'Калибриране Y+',(lm)=>{R.yp=lm.Y}));ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
+ ops.push(...touch('Y',-1,Rh-rbT-oy,'Калибриране Y−',(lm)=>{R.ym=lm.Y}));ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2-S.off.Y}),feed:2000});
+ ops.push({type:'act',dur:0,fn:()=>{
+  const d=P.prRing-((R.xp-R.xm)+(R.yp-R.ym))/2;
+  /* в машината: офсет = известният център на пръстена − центъра, измерен по позициите на шпиндела;
+     в симулацията пръстенът е там, където е поставен пробникът, затова офсетът е „истинският“ */
+  const nx=+(T.ox+(Math.random()-.5)*.002).toFixed(4),ny=+(T.oy+(Math.random()-.5)*.002).toFixed(4);
+  P.prDia=S.draft.prb.prDia=+d.toFixed(4);P.prOffX=S.draft.prb.prOffX=nx;P.prOffY=S.draft.prb.prOffY=ny;
+  result('Калибриране в пръстен Ø'+P.prRing.toFixed(3),[['Диаметър на сферата',f4(old.d)+' → '+f4(P.prDia)],['Офсет X',f4(old.x)+' → '+f4(nx)],['Офсет Y',f4(old.y)+' → '+f4(ny)]],'Стойностите са записани в Настройки → 3D пробник.');
+  if(S.screen==='set')renderSet()}});
+ runOps(deployWrap(ops),'probe');toast('Калибриране: пробникът трябва да е в пръстена, приблизително в центъра');
 }
 function measureTool(){
  if(MT()==='lathe'){toast('Корекциите на ножовете се задават в таблицата');return}
@@ -1802,7 +1835,26 @@ const P_SP=[
  {k:'spPpr',n:'Импулси на оборот',t:'num',d:0,min:1,max:100000,show:D=>!!D.spEnc,h:'Резолюцията на енкодера на шпиндела.'}
 ];
 P_SP.forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP};
+const isFx=D=>D.prMount==='fixed';
+const P_PRB=[
+ {k:'prMount',n:'Монтаж',t:'enum',opts:[['spindle','В шпиндела (T10)'],['fixed','Встрани от шпиндела']],h:'В шпиндела: пробникът е инструмент T10 и се зарежда от магазина. Встрани: пробникът е закрепен на главата на разстояние от оста на шпиндела (често пневматично спускан) и не изисква смяна на инструмента.'},
+ {k:'prDia',n:'Диаметър на сферата',u:'мм, ефективен',t:'num',d:3,min:.1,max:20,h:'Номиналният диаметър, намален с хода на стилуса до сработване. Най-точно се получава с калибриране в пръстен.'},
+ {k:'prOffX',n:'Офсет X',u:'мм от оста на шпиндела',t:'num',d:3,min:-500,max:500,h:'Разстоянието по X от оста на шпиндела до центъра на сферата. При пробник в шпиндела е почти 0 (остатъчно биене на стилуса).'},
+ {k:'prOffY',n:'Офсет Y',u:'мм от оста на шпиндела',t:'num',d:3,min:-500,max:500,h:'Разстоянието по Y от оста на шпиндела до центъра на сферата.'},
+ {k:'prOffZ',n:'Офсет Z',u:'мм от челото на шпиндела',t:'num',d:3,min:-500,max:500,show:isFx,h:'Височината на долната точка на сферата спрямо челото на шпиндела (обикновено отрицателна, когато пробникът е спуснат). При пробник в шпиндела Z идва от дължината на T10.'},
+ {k:'prDep',n:'Изход за спускане',u:'OUT, 0 = няма',t:'num',d:0,min:0,max:32,show:isFx,h:'Номерът на изхода (OUT1–OUT32), който спуска пневматичния пробник преди измерване и го прибира след това.'},
+ {k:'prDepT',n:'Време за спускане',u:'s',t:'num',d:1,min:0,max:10,show:D=>isFx(D)&&D.prDep>0,h:'Колко време се чака пробникът да слезе или да се прибере.'},
+ {t:'hdr',n:'Скорости'},
+ {k:'prFast',n:'Скорост на търсене',u:'мм/мин',t:'num',d:0,min:1,max:3000,h:'Бърза скорост за първото докосване.'},
+ {k:'prSlow',n:'Скорост на измерване',u:'мм/мин',t:'num',d:0,min:1,max:500,h:'Бавна скорост за второто докосване. От нея зависи точността.'},
+ {k:'prBack',n:'Отдръпване',u:'мм',t:'num',d:3,min:.1,max:10,h:'Колко се отдръпва пробникът след първото докосване.'},
+ {t:'hdr',n:'Калибриране в пръстен'},
+ {k:'prRing',n:'Диаметър на пръстена',u:'мм',t:'num',d:3,min:1,max:500,h:'Точният диаметър на калибровъчния пръстен (от сертификата му).'},
+ {k:'prRingX',n:'Център на пръстена X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на пръстена, намерен с индикатор в шпиндела. Нужен е за офсета X/Y.'},
+ {k:'prRingY',n:'Център на пръстена Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на пръстена по Y.'}
+];
+P_PRB.forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
@@ -1833,6 +1885,7 @@ S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Наляга�
  const O=[['Охлаждане','cool'],['Мъгла','mist'],['Обдухване','air'],['Мазане','lube'],['Аспирация','dust'],['Сигнална колона: зелено','lgreen'],['Сигнална колона: жълто','lyellow'],['Сигнална колона: червено','lred'],['Стяга','clamp'],['Вакуумна маса: зона 1','vac1'],['Вакуумна маса: зона 2','vac2'],['Транспортьор стружки','conv']];
  const inn=[],out=[];for(let i=0;i<32;i++){const a=I[i]||['','none'],b=O[i]||['','none'];inn.push({n:a[0],f:a[1],inv:0,flt:3});out.push({n:b[0],f:b[1],inv:0,safe:'off'})}
  return{in:inn,out}})();
+S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
 S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -1853,7 +1906,6 @@ function homeOps(axes){
 const SECS=[['mach','Машина'],['io','Входове/изходи'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
 const STATIC={
  enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
- prb:[['Вход','PRB1 · NO'],['Инструмент','T10'],['Сфера','Ø2.000'],['Търсене','300 мм/мин'],['Измерване','30 мм/мин'],['Отдръпване','1.000']],
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
  disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
 };
@@ -1897,10 +1949,10 @@ function renderSet(){
    const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
-   (sec==='mach'||sec==='sp'?'':sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   (sec==='mach'||sec==='sp'?'':sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button></div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
-  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
@@ -2075,6 +2127,7 @@ function updStatus(now){
   const end=new Date(Date.now()+rem*1000);set($('#tEnd'),fin?'готово':run?'~'+String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0'):'—');
   $('#btnHere').classList.toggle('on',S.startLine!=null)}
  $('#btnSingle').classList.toggle('on',S.single);$('#btnCool').classList.toggle('on',S.coolant);
+ {const P=S.cfg.prb;set($('#prbHdr'),'сфера Ø'+P.prDia.toFixed(3)+(P.prMount==='fixed'?' · встрани X'+P.prOffX.toFixed(1)+' Y'+P.prOffY.toFixed(1):''))}
  const pl=$('#mtPrb'),tl=$('#mtTs');
  set(pl,`PRB1 · NO · 24 V · ${S.cnt.prb} сраб.`);set(tl,`PRB2 · NC · 24 V · ${S.cnt.ts} сраб.`);
  $('#ledPrb').className='led'+(now-S.flash.prb<300?' hot':'');
@@ -2191,6 +2244,7 @@ panel.addEventListener('click',e=>{
    if(v==='ts-z')S.draft.ts.tsz=+m.Z.toFixed(3);
    if(v==='mag1'){S.draft.mag.m1x=+m.X.toFixed(3);S.draft.mag.m1y=+m.Y.toFixed(3)}
    if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
+   if(v==='prring'){S.draft.prb.prRingX=+m.X.toFixed(3);S.draft.prb.prRingY=+m.Y.toFixed(3)}
    renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
   case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
   case'tk-clr':S.td.txt='';renderTd();break;
@@ -2290,6 +2344,7 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'prb-cal':calibrate();break;
   case'io-tab':S.ioTab=v;renderSet();break;
   case'io-name':{const i=+v,dir=S.ioTab,o=S.draft.io[dir][i];S.td={a:'io',k:'ioName',txt:o.n,shift:false,bg:true,get:()=>o.n,set:t=>{o.n=t}};$('#txtDlg').hidden=false;renderTd();break}
   case'io-fn':{const i=+v,dir=S.ioTab,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i];S.pick={dir,i};
