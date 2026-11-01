@@ -14,6 +14,7 @@
 | [`docs/arhitektura.md`](docs/arhitektura.md) | Хардуер, разделение Linux / MCU, енкодери, таймери, SPI протокол, периферия |
 | [`docs/platki.md`](docs/platki.md) | Подходящи модели Orange Pi и Raspberry Pi, препоръки и правила за преносимост |
 | [`docs/ui-iziskvania.md`](docs/ui-iziskvania.md) | Всички изисквания към интерфейса, екран по екран |
+| [`docs/makrosi-logika.md`](docs/makrosi-logika.md) | Макроси, фонова логика и скриптове: разширение след стабилната версия |
 | [`docs/otvoreni-vaprosi.md`](docs/otvoreni-vaprosi.md) | Неуточнени въпроси и следващи стъпки |
 | [`ui/maket.html`](ui/maket.html) | Интерактивен макет на интерфейса (отваря се в браузър) |
 
