@@ -12,6 +12,7 @@
 | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | Чужди компоненти, техните лицензи и правилата кодът да остане затворен |
 | [`CLAUDE.md`](CLAUDE.md) | Кратък контекст за нови сесии с Claude Code: правила, решения, стил на работа |
 | [`docs/arhitektura.md`](docs/arhitektura.md) | Хардуер, разделение Linux / MCU, енкодери, таймери, SPI протокол, периферия |
+| [`docs/platki.md`](docs/platki.md) | Подходящи модели Orange Pi и Raspberry Pi, препоръки и правила за преносимост |
 | [`docs/ui-iziskvania.md`](docs/ui-iziskvania.md) | Всички изисквания към интерфейса, екран по екран |
 | [`docs/otvoreni-vaprosi.md`](docs/otvoreni-vaprosi.md) | Неуточнени въпроси и следващи стъпки |
 | [`ui/maket.html`](ui/maket.html) | Интерактивен макет на интерфейса (отваря се в браузър) |
