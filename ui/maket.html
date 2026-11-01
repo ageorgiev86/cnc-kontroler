@@ -303,6 +303,11 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .tt tr{cursor:pointer}
 .tt tr.sel td{background:var(--acc-soft)}
 .tt td.tn{font:700 1.05em var(--f-ui);color:var(--acc)}
+.tt td.ed{cursor:pointer}
+.tt td.ed:active{background:var(--surf3)}
+.tt td.ed .nm{border-bottom:1px dashed var(--faint)}
+.tt td.n.ed{text-decoration:underline dashed var(--faint);text-underline-offset:.25em}
+.tt td .emp{color:var(--faint);font-style:italic}
 .badge{display:inline-block;font:700 .72em/1 var(--f-ui);letter-spacing:.08em;padding:.3em .45em;border-radius:.25em;background:var(--acc);color:var(--acc-ink);margin-left:.4em;vertical-align:.1em}
 .badge.dimb{background:var(--surf3);color:var(--fg)}
 .mag{position:relative;width:16.5em;height:16.5em;margin:.2em auto 0;flex:none}
@@ -611,7 +616,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <!-- ИНСТРУМЕНТИ -->
         <section class="screen tools" data-screen="tools" hidden>
           <div class="card">
-            <div class="card-h"><span>Таблица на инструментите</span><span class="r" id="toolCnt">12 гнезда</span></div>
+            <div class="card-h"><span>Таблица на инструментите</span><span class="r"><span style="font-family:var(--f-txt);color:var(--faint)">натиснете име или стойност за промяна</span>&nbsp;·&nbsp;<span id="toolCnt">12 гнезда</span></span></div>
             <div class="tbl-wrap"><table class="tt"><thead><tr><th>T</th><th>Описание</th><th class="n" id="thL">Дължина</th><th class="n" id="thD">Ø</th><th class="n" id="thW">Износв.</th></tr></thead><tbody id="toolBody"></tbody></table></div>
           </div>
           <div class="card">
@@ -941,6 +946,7 @@ const set=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t};
 const f3=(v,w=9)=>{const s=Math.abs(v)<0.0005?0:v;return((s<0?'-':'')+Math.abs(s).toFixed(3)).padStart(w,' ')};
 const f4=v=>(v<0?'-':'')+Math.abs(v).toFixed(4);
 const hms=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/3600)+':'+String(Math.floor(s%3600/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+const x3=v=>(+v).toFixed(3);
 const mmss=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');
 
 /* ---------- Програма ---------- */
@@ -1456,7 +1462,8 @@ const toolBody=$('#toolBody');
 function renderTools(){
  const N=magCfg().mn,rows=[];if(S.sel>N)S.sel=1;
  for(let i=1;i<=N;i++){const t=toolOf(i);
-  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td>${t.d}${t.t===S.tool?`<span class="badge">${MT()==='lathe'?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'?'<span class="badge dimb">PRB1</span>':''}</td><td class="n">${t.empty?'—':t.len.toFixed(3)}</td><td class="n">${t.empty?'—':t.dia.toFixed(3)}</td><td class="n">${t.empty?'—':t.w.toFixed(3)}</td></tr>`)}
+  const lt=MT()==='lathe',num=(k,v)=>`<td class="n ed" data-act="t-num" data-k="${k}" data-v="${t.t}">${t.empty?'—':v.toFixed(3)}</td>`;
+  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td class="ed" data-act="t-name" data-v="${t.t}"><span class="nm${t.empty?' emp':''}">${t.d.replace(/</g,'&lt;')}</span>${t.t===S.tool?`<span class="badge">${lt?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'?'<span class="badge dimb">PRB1</span>':''}</td>${num(lt?'tZ':'tLen',t.len)}${num(lt?'tX':'tDia',t.dia)}${num(lt?'tR':'tWear',t.w)}</tr>`)}
  toolBody.innerHTML=rows.join('');
  set($('#btnTc'),'Смени с T'+S.sel);set($('#toolCnt'),N+' гнезда');
 }
@@ -1494,7 +1501,7 @@ function updMag(dt){
   p.style.transform=`translate(${x}px,${y}px)`;
   p.classList.toggle('empty',i===S.tool||!!toolOf(i).empty);
   p.classList.toggle('top',i===S.magPos&&Math.abs(S.magPh-S.magPos)<.05);
-  p.classList.toggle('sel',i===S.sel&&i!==S.tool)});
+  p.classList.toggle('sel',i===S.sel&&i!==S.tool);const tt=toolOf(i),tl='T'+i+' · '+(tt?tt.d:'');if(p.title!==tl)p.title=tl});
  const spm=$('#spm');spm.hidden=M.mtype!=='linear';
  if(M.mtype==='linear'){const a=Math.floor(ph),f=ph-a,p0=pos(Math.max(1,a)),p1=pos(Math.min(N,a+1));
   const x=p0[0]+(p1[0]-p0[0])*f,y=Math.min(p0[1],p1[1])-size*.55-1.9*em;spm.style.transform=`translate(${x}px,${y}px) translateX(-50%)`;set($('#spmT'),S.tool?'T'+S.tool:'празен')}
@@ -1798,6 +1805,13 @@ P_SP.forEach(p=>{if(p.k)PDEF[p.k]=p});
 const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
+PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
+PDEF.tLen={k:'tLen',n:'Дължина',u:'мм',t:'num',d:3,min:0,max:1000,h:'Дължината от челото на шпиндела до върха (G43). Измерва се най-точно с toolsetter-а.'};
+PDEF.tDia={k:'tDia',n:'Диаметър',u:'мм',t:'num',d:3,min:0,max:500,h:'Диаметърът на инструмента (за компенсация G41/G42 и за 3D изгледа).'};
+PDEF.tWear={k:'tWear',n:'Износване',u:'мм',t:'num',d:3,min:-5,max:5,h:'Корекция за износване на диаметъра.'};
+PDEF.tX={k:'tX',n:'Корекция X',u:'мм',t:'num',d:3,min:-500,max:500,h:'Корекцията на ножа по X (в диаметър).'};
+PDEF.tZ={k:'tZ',n:'Корекция Z',u:'мм',t:'num',d:3,min:-500,max:500,h:'Корекцията на ножа по Z.'};
+PDEF.tR={k:'tR',n:'Радиус на върха',u:'мм',t:'num',d:3,min:0,max:10,h:'Радиусът на върха на ножа (за компенсация на радиуса).'};
 PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
@@ -1906,7 +1920,7 @@ function renderTd(){
  const up=c=>d.shift?c.toUpperCase():c;
 const T=d.bg?TKB:TK;
  $('#tkeys').innerHTML=T.map(r=>[...r].map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')).join('')+
-  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button>${(d.bg?['ю',',','.']:['@',':','\\']).map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')}<button class="btn" data-act="tk-lang" type="button">${d.bg?'EN':'БГ'}</button><button class="btn w3" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
+  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button>${(d.bg?['ю',',','.']:['@',':','\\']).map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')}<button class="btn" data-act="tk-lang" type="button">${d.bg?'EN':'БГ'}</button><button class="btn w2" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-clr" type="button">C</button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
 }
 function renderNd(){
  const d=S.nd,p=PDEF[d.k];
@@ -2095,8 +2109,8 @@ panel.addEventListener('click',e=>{
    {const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
    openRF(L);break}
   case'rf-cancel':$('#rfDlg').hidden=true;break;
-  case'rf-z':S.nd={a:'rf',k:'rfZ',txt:'',get:()=>S.rf.safeZ,set:v=>{S.rf.safeZ=v}};$('#numDlg').hidden=false;renderNd();break;
-  case'rf-f':S.nd={a:'rf',k:'rfF',txt:'',get:()=>S.rf.F,set:v=>{S.rf.F=v}};$('#numDlg').hidden=false;renderNd();break;
+  case'rf-z':S.nd={a:'rf',k:'rfZ',txt:'',get:()=>S.rf.safeZ,set:v=>{S.rf.safeZ=v},after:rfRender};$('#numDlg').hidden=false;renderNd();break;
+  case'rf-f':S.nd={a:'rf',k:'rfF',txt:'',get:()=>S.rf.F,set:v=>{S.rf.F=v},after:rfRender};$('#numDlg').hidden=false;renderNd();break;
   case'rf-spin':S.rf.spin=v==='1';rfRender();break;
   case'rf-cool':S.rf.cool=v==='1';rfRender();break;
   case'rf-go':{const R=S.rf;if(R.safeZ<R.st.pos.Z){toast('Безопасната височина е под началната точка');break}
@@ -2164,7 +2178,7 @@ panel.addEventListener('click',e=>{
     if(S.state==='run'||S.state==='hold'){toast('Спрете текущата програма, преди да заредите нова.');break}
     const n=Math.round(val);loadProgram(d.file);S.startLine=n>1?n-1:null;go('run');
     toast('Заредена '+d.file.name+(n>1?'. Старт от ред '+n+' с ЦИКЪЛ СТАРТ.':''));break}
-   if(d.set){d.set(val);$('#numDlg').hidden=true;rfRender();break}
+   if(d.set){d.set(val);$('#numDlg').hidden=true;if(d.after)d.after();break}
    S.draft[d.a][d.k]=val;$('#numDlg').hidden=true;renderSet();break}
   case'pe':S.draft[b.dataset.a][b.dataset.k]=v;S.setHelp=b.dataset.k;renderSet();break;
   case'teach':{
@@ -2179,13 +2193,14 @@ panel.addEventListener('click',e=>{
    if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
    renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
   case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
+  case'tk-clr':S.td.txt='';renderTd();break;
   case'tk-lang':S.td.bg=!S.td.bg;renderTd();break;
   case'tk-sh':S.td.shift=!S.td.shift;renderTd();break;
   case'tk-bs':S.td.txt=S.td.txt.slice(0,-1);renderTd();break;
   case'td-cancel':$('#txtDlg').hidden=true;break;
   case'td-ok':{const d=S.td;
    if(d.k==='host'&&!/^[A-Za-z0-9-]{1,32}$/.test(d.txt)){toast('Името може да съдържа само латински букви, цифри и тире');break}
-   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&!d.txt.trim()){toast('Полето не може да е празно');break}
+   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&d.k!=='toolName'&&!d.txt.trim()){toast('Полето не може да е празно');break}
    if(d.set)d.set(d.txt.trim());else S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
   case'net-test':{const N=S.cfg.net;
    if(JSON.stringify(N)!==JSON.stringify(S.draft.net)){toast('Първо запишете промените');break}
@@ -2264,6 +2279,12 @@ panel.addEventListener('click',e=>{
    if(!canMove())break;
    const ops=parse(txt.split('\n'));if(!ops.length){toast('Няма движение или команда в този ред');break}
    S.mdiHist=[txt,...S.mdiHist.filter(h=>h!==txt)].slice(0,8);S.mdi='';renderMdi();runOps(ops,'mdi');break}
+  case't-name':{const t=toolOf(+v);S.sel=+v;const empty=t.empty;
+   S.td={a:'tool',k:'toolName',txt:empty?'':t.d,shift:false,bg:true,get:()=>t.empty?'празно':t.d,
+    set:x=>{if(x){t.d=x;t.empty=0}else{t.d=MT()==='lathe'?'Празна позиция':'Празно гнездо';t.empty=1;if(S.tool===t.t)toast('Инструментът в шпиндела вече е без име')}renderTools();magKey='';toast('T'+t.t+': '+(x||'празно'))}};
+   $('#txtDlg').hidden=false;renderTd();renderTools();break}
+  case't-num':{const t=toolOf(+v),k=b.dataset.k,f={tLen:'len',tZ:'len',tDia:'dia',tX:'dia',tWear:'w',tR:'w'}[k];S.sel=+v;
+   S.nd={a:'tool',k,txt:'',get:()=>t[f],set:x=>{t[f]=x;renderTools()},after:()=>toast('T'+t.t+': '+PDEF[k].n.toLowerCase()+' = '+x3(t[f]))};$('#numDlg').hidden=false;renderNd();renderTools();break}
   case'tsel':S.sel=+v;renderTools();break;
   case'tool-change':if(!canMove())break;runOps([atcOp(S.sel)],'atc');break;
   case'tool-measure':measureTool();break;
