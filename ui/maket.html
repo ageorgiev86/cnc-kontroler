@@ -184,6 +184,16 @@ body{font-family:var(--f-txt)}
 .cycle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto minmax(0,1fr);gap:.4em;min-width:0}
 .cycle .info{grid-column:1/-1;display:flex;gap:.4em;align-items:center}
 .cycle .info .btn{min-height:2.4em;font-size:.86em}
+.rfh{width:36em}
+.rf-pos{display:flex;flex-wrap:wrap;gap:.35em;padding:.2em 0 .1em}
+.rf-pos span{font:500 1.05em var(--f-num);background:var(--panel);border:1px solid var(--line);border-radius:.3em;padding:.3em .55em}
+.rf-pos span i{font-style:normal;color:var(--acc);font-family:var(--f-ui);font-weight:700;margin-right:.35em}
+.rf-st{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.2em 1em;font:500 .86em var(--f-txt);color:var(--dim)}
+.rf-st b{color:var(--fg);font-weight:600}
+.rf-steps{font:500 .85em/1.5 var(--f-txt);color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:.35em;padding:.45em .7em}
+.rf-steps ol{margin:0;padding-left:1.3em}
+.rf-warn{color:var(--warn);font:600 .85em/1.35 var(--f-txt)}
+.rfh .pf th{width:40%}
 .gcfoot{display:grid;grid-template-columns:1fr 1.4fr;gap:.35em;padding:.4em;border-top:1px solid var(--line);flex:none}
 .gcfoot .btn{min-height:2.8em}
 .prog{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:.3em .9em;padding:.45em .7em;background:var(--surf);border:1px solid var(--line);border-radius:.45em}
@@ -773,6 +783,23 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         </div>
       </div>
 
+      <div class="modal" id="rfDlg" hidden>
+        <div class="dlg rfh" role="dialog" aria-label="Run from here">
+          <div class="dlg-h"><b id="rfT">Run from here</b><span id="rfFile"></span></div>
+          <span class="lab">Начална точка (работни координати)</span>
+          <div class="rf-pos" id="rfPos"></div>
+          <span class="lab">Състояние от програмата преди този ред</span>
+          <div class="rf-st" id="rfState"></div>
+          <table class="pf"><tbody id="rfOpts"></tbody></table>
+          <div class="rf-steps" id="rfSteps"></div>
+          <div class="rf-warn" id="rfWarn"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1.6fr">
+            <button class="btn" data-act="rf-cancel" type="button">Отказ</button>
+            <button class="btn go" data-act="rf-go" id="rfGo" type="button">Старт</button>
+          </div>
+        </div>
+      </div>
+
       <div class="modal" id="numDlg" hidden>
         <div class="dlg" role="dialog" aria-label="Въвеждане на стойност">
           <div class="dlg-h"><b id="ndT"></b><span id="ndCur"></span></div>
@@ -976,14 +1003,14 @@ function parse(lines){
   for(const k of['X','Y','Z','I','J','K','R'])if(w[k]!==undefined)w[k]*=u;
   if(w.F!==undefined)F=w.F*u;
   if(w.T!==undefined)T=w.T;
-  if(w.S!==undefined&&!gs.includes(50)){const s=w.S,c=css;out.push({type:'act',line:li,dur:0,fn:()=>{if(c)S.sp.css=s;else{S.sp.css=0;S.sp.cmd=s}}})}
+  if(w.S!==undefined&&!gs.includes(50)){const s=w.S,c=css;out.push({type:'act',sv:s,cs:c,line:li,dur:0,fn:()=>{if(c)S.sp.css=s;else{S.sp.css=0;S.sp.cmd=s}}})}
   if(mt==='lathe'&&w.T!==undefined)out.push(atcOp(w.T>=100?Math.floor(w.T/100):w.T,li));
   else if(ms.includes(6)&&T!=null)out.push(atcOp(T,li));
   if((ms.includes(3)||ms.includes(4))&&mt==='laser'){const m4=ms.includes(4);out.push({type:'act',line:li,dur:0,label:'Лазер вкл. ('+(m4?'M4 динамична':'M3 постоянна')+')',fn:()=>{S.sp.on=true;S.sp.dir=m4?'M4':'M3';if(S.cfg.mach.lzAir)S.airBlast=true}})}
   else if((ms.includes(3)||ms.includes(4))&&mt==='plasma'){const P=S.cfg.mach;out.push({type:'act',line:li,dur:.6,label:'Плазма: намиране на листа ('+(P.plIhs==='ohm'?'омичен контакт':'плаващ датчик')+')'},{type:'act',line:li,dur:P.plDelay+.2,label:'Плазма: пробиване на '+P.plPierce.toFixed(1)+' мм, забавяне '+P.plDelay.toFixed(2)+' s',fn:()=>{S.sp.on=true}},{type:'act',line:li,dur:.2,label:'Плазма: височина на рязане '+P.plCut.toFixed(1)+' мм'})}
-  else if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,durFn:spWaitDur,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
-  if(ms.includes(8))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=true}});
-  if(ms.includes(9))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=false}});
+  else if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',sp:ccw?'CCW':'CW',line:li,dur:.8,durFn:spWaitDur,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
+  if(ms.includes(8))out.push({type:'act',cl:1,line:li,dur:0,fn:()=>{S.coolant=true}});
+  if(ms.includes(9))out.push({type:'act',cl:0,line:li,dur:0,fn:()=>{S.coolant=false}});
   if(gs.includes(4)){const d=w.P!==undefined?(w.P>=100?w.P/1000:w.P):0;out.push({type:'act',line:li,dur:d,label:'Пауза G4 '+d.toFixed(2)+' s'})}
   const tgt={};let has=false;AX.forEach(a=>{if(w[a]!==undefined&&!(cyc&&a==='Z')){tgt[a]=w[a];has=true}});
   if(gs.includes(53)&&has){const t={...tgt};out.push({type:'line',line:li,rapid:mode!==1,feed:F,tgtFn:()=>{const r={};for(const k in t)r[k]=t[k]-S.off[k];return r}});}
@@ -1003,7 +1030,7 @@ function parse(lines){
    else out.push({type:'arc',line:li,[k]:tgt,cw:mode===2,I:w.I||0,J:w.J||0,R:w.I===undefined&&w.J===undefined?w.R:undefined,feed:FF,fpr:fp});
    for(const a in tgt)pos[a]=inc?pos[a]+tgt[a]:tgt[a];
   }
-  if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
+  if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,sp:'off',label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,sp:'off',label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,sp:'off',label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
   for(const mc of[62,63,64,65])if(ms.includes(mc)&&w.P!==undefined){const n=Math.round(w.P),on=mc===62||mc===64;out.push({type:'act',line:li,dur:0,label:'M'+mc+' P'+n+': OUT'+n+(on?' вкл.':' изкл.'),fn:()=>{S.uOut[n]=on?1:0}})}
   if(ms.includes(66)&&w.P!==undefined){const n=Math.round(w.P),q=w.Q!==undefined?w.Q:10;out.push({type:'act',line:li,dur:q,label:'M66: чака IN'+n,until:()=>n>=1&&n<=32&&inVal(n-1),onTimeout:()=>toast('M66: IN'+n+' не се включи за '+q+' s')})}
   if(ms.includes(30)||ms.includes(2)){out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});return'end'}
@@ -1060,7 +1087,7 @@ function analyze(ops){
   const mb=!op.tgtFn; /* ходове в машинни координати (G53/G28) не влизат в размера */
   for(let k=0;k<=n;k++){const q=posAt(m,k/n);pts.push([q.X,q.Y,q.Z]);if(mb&&(!m.rapid||k===n)){if(q.X<x0)x0=q.X;if(q.X>x1)x1=q.X;if(q.Y<y0)y0=q.Y;if(q.Y>y1)y1=q.Y}}
   if(mb){z0=Math.min(z0,m.to.Z,m.rapid?m.to.Z:m.from.Z);z1=Math.max(z1,m.to.Z,m.rapid?m.to.Z:m.from.Z)}
-  segs.push({pi:op.pi,pts,rapid:!!m.rapid,tool:curT,from:{...m.from}});len+=m.len;t+=m.len/((m.rapid?RAPID:Math.max(1,m.feed))/60);cum[op.pi]=t;p=m.to;
+  segs.push({pi:op.pi,pts,rapid:!!m.rapid,mach:!mb,tool:curT,from:{...m.from}});len+=m.len;t+=m.len/((m.rapid?RAPID:Math.max(1,m.feed))/60);cum[op.pi]=t;p=m.to;
  });
  if(x0>x1){x0=-10;x1=10;y0=-10;y1=10;z0=z1=0}
  if(x1-x0<2){x0-=5;x1+=5}if(y1-y0<2){y0-=5;y1+=5}
@@ -1245,21 +1272,62 @@ function loadProgram(f){
 function startProg(L){
  S.runTime=0;S.curPi=-1;S.progLine=-1;S.startLine=null;
  const pi0=L>0?Math.max(0,PROG_OPS.findIndex(o=>o.line>=L)):0;S.tDone0=doneNominal(pi0);
- if(L>0){S.curPi=pi0;S.progLine=L;runOps(fromLine(L),'prog');toast('Старт от ред '+(L+1))}else runOps(PROG_OPS,'prog');
+ if(L>0){S.curPi=pi0;S.progLine=L;runOps(fromLine(L,S.rf),'prog');toast('Старт от ред '+(L+1))}else runOps(PROG_OPS,'prog');
 }
 function doneNominal(pi){const c=PINFO.cum;if(!c||pi<=0)return 0;return c[Math.min(pi,c.length)-1]||0}
-function fromLine(L){
- const ops=[];let first=true;
- for(const o of PROG_OPS){
-  if(o.line<L){if(o.type==='act')ops.push(o.tool?{...o,prog:false}:{...o,dur:0,label:undefined,prog:false});continue}
-  if(first&&o.type!=='act'){first=false;const sg=PREVMAP.get(o.pi);
-   if(sg){const st=sg.from,lb='Подход към ред '+(L+1)+': ';
-    ops.push({type:'line',tgtFn:()=>({Z:0-S.off.Z}),rapid:true,label:lb+'Z нагоре'},
-             {type:'line',tgt:{X:st.X,Y:st.Y,A:st.A,B:st.B,C:st.C},rapid:true,label:lb+'X Y'},
-             {type:'line',tgt:{Z:st.Z},feed:500,label:lb+'Z надолу'})}}
-  ops.push(o);
+function modalAt(L){
+ const pi0=Math.max(0,PROG_OPS.findIndex(o=>o.line>=L));const st={tool:S.tool,sv:S.sp.cmd,cs:0,sp:'off',cl:0,F:0,pos:null,pi0};
+ for(let i=0;i<pi0;i++){const o=PROG_OPS[i];if(o.tool)st.tool=o.tool;if(o.sv!==undefined){st.sv=o.sv;st.cs=o.cs?o.sv:0}if(o.sp)st.sp=o.sp;if(o.cl!==undefined)st.cl=o.cl;if(o.type!=='act'&&!o.rapid)st.F=o.fpr?o.fpr:o.feed}
+ for(let i=pi0;i<PROG_OPS.length;i++){const o=PROG_OPS[i];if(o.type!=='act'){const sg=PREVMAP.get(o.pi);if(sg){st.pos=sg.from;break}}}
+ let clr=-1e9;PREV.forEach(sg=>{if(sg.rapid&&!sg.mach){const z=sg.pts[sg.pts.length-1][2];if(z>clr)clr=z}});
+ st.clear=clr>-1e9?clr:null;return st;
+}
+function fromLine(L,o){
+ o=o||{safeZ:null,F:300,spin:true,cool:false,st:modalAt(L)};
+ const ops=[],lb='Подход към ред '+(L+1)+': ';let first=true;
+ for(const op of PROG_OPS){
+  if(op.line<L){if(op.tool)ops.push({...op,prog:false});else if(op.sv!==undefined)ops.push({...op,dur:0,label:undefined,prog:false});continue}
+  if(first&&op.type!=='act'){first=false;const sg=PREVMAP.get(op.pi);
+   if(sg){const p=sg.from,z=o.safeZ!=null?o.safeZ:p.Z+5;
+    ops.push({type:'line',tgt:{Z:z},rapid:true,label:lb+'Z до безопасна височина '+z.toFixed(3)},
+             {type:'line',tgt:{X:p.X,Y:p.Y,A:p.A,B:p.B,C:p.C},rapid:true,label:lb+'X Y на височина '+z.toFixed(3)});
+    if(o.spin&&o.st.sp!=='off')ops.push({type:'act',dur:.8,durFn:spWaitDur,label:lb+'шпинделът набира обороти',fn:()=>{S.sp.on=true;S.sp.dir=o.st.sp}});
+    if(o.cool)ops.push({type:'act',dur:0,label:lb+'охлаждане',fn:()=>{S.coolant=true}});
+    ops.push({type:'line',tgt:{Z:p.Z},feed:o.F,label:lb+'спускане до Z '+p.Z.toFixed(3)+' с F'+o.F})}}
+  ops.push(op);
  }
  return ops;
+}
+function openRF(L){
+ const st=modalAt(L);if(!st.pos){toast('След този ред няма движение');return}
+ const lp=MT()==='laser'||MT()==='plasma';
+ const dz=Math.max(st.pos.Z+5,st.clear!=null?Math.min(st.clear,st.pos.Z+50):st.pos.Z+5);
+ S.rf={L,st,safeZ:+dz.toFixed(3),F:300,spin:!lp&&st.sp!=='off',cool:!!st.cl,lp};
+ $('#rfDlg').hidden=false;rfRender();
+}
+function rfRender(){
+ const R=S.rf,st=R.st,p=st.pos,t=toolOf(st.tool),mt=MT();
+ set($('#rfT'),'Run from here · ред '+(R.L+1));set($('#rfFile'),PROG_NAME);
+ $('#rfPos').innerHTML=AX.filter(a=>S.active[a]).map(a=>`<span><i>${a}</i>${f3(p[a]).trim()}</span>`).join('');
+ const spTxt=st.sp==='off'?'спрян':(mt==='laser'?'лазер вкл.':mt==='plasma'?'дъга вкл.':(st.cs?'G96 '+st.cs+' м/мин':'S'+st.sv)+' '+st.sp);
+ const toolTxt=mt==='laser'||mt==='plasma'?'—':st.tool?('T'+st.tool+(t?' · '+t.d:'')+(st.tool!==S.tool?' (ще се смени от T'+(S.tool||'—')+')':'')):'няма';
+ $('#rfState').innerHTML=`<div>Инструмент: <b>${toolTxt}</b></div><div>Шпиндел: <b>${spTxt}</b></div><div>Охлаждане: <b>${st.cl?'вкл.':'изкл.'}</b></div><div>Подаване: <b>${st.F?'F'+(+st.F.toFixed(3)):'—'}</b></div>`;
+ const sp=!R.lp&&st.sp!=='off';
+ $('#rfOpts').innerHTML=
+  `<tr><th>Безопасна височина Z<small>работни координати</small></th><td><button class="btn" data-act="rf-z" type="button">${R.safeZ.toFixed(3)}</button></td></tr>`+
+  `<tr><th>Скорост на спускане<small>мм/мин</small></th><td><button class="btn" data-act="rf-f" type="button">${R.F}</button></td></tr>`+
+  (sp?`<tr><th>Шпиндел</th><td><div class="seg"><button class="btn sm${R.spin?' on':''}" data-act="rf-spin" data-v="1" type="button">Пусни преди спускането</button><button class="btn sm${R.spin?'':' on'}" data-act="rf-spin" data-v="0" type="button">Не пускай</button></div></td></tr>`:'')+
+  (R.lp?'':`<tr><th>Охлаждане</th><td><div class="seg"><button class="btn sm${R.cool?' on':''}" data-act="rf-cool" data-v="1" type="button">Вкл.</button><button class="btn sm${R.cool?'':' on'}" data-act="rf-cool" data-v="0" type="button">Изкл.</button></div></td></tr>`);
+ const xy=AX.filter(a=>S.active[a]&&a!=='Z').join(' ');
+ const steps=[];if(st.tool&&st.tool!==S.tool&&!R.lp)steps.push('Смяна на инструмента с T'+st.tool);
+ steps.push('Z нагоре/надолу до безопасната височина '+R.safeZ.toFixed(3));steps.push(xy+' бързо до началната точка');
+ if(sp&&R.spin)steps.push('Шпинделът се пуска и чака оборотите');if(!R.lp&&R.cool)steps.push('Охлаждането се включва');
+ steps.push('Z се спуска до '+p.Z.toFixed(3)+' с F'+R.F);steps.push('Програмата продължава от ред '+(R.L+1));
+ $('#rfSteps').innerHTML='<ol>'+steps.map(x=>`<li>${x}</li>`).join('')+'</ol>';
+ const w=[];if(R.safeZ<p.Z)w.push('Безопасната височина е под началната точка. Изберете по-висока стойност.');
+ if(sp&&!R.spin)w.push('Шпинделът няма да се пусне, а програмата е с въртящ се шпиндел на този ред. Използвайте само за проба без рязане.');
+ if(R.lp&&st.sp!=='off')w.push((mt==='laser'?'Лъчът':'Дъгата')+' не се включва при подхода. За рязане изберете ред преди M3.');
+ $('#rfWarn').innerHTML=w.join('<br>');$('#rfGo').classList.toggle('dis',R.safeZ<p.Z);set($('#rfGo'),'Старт от ред '+(R.L+1));
 }
 function renderFiles(){
  segOn('#srcSeg .btn',S.src);const el=$('#flist');
@@ -1718,6 +1786,8 @@ const P_SP=[
 ];
 P_SP.forEach(p=>{if(p.k)PDEF[p.k]=p});
 const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP};
+PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
+PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
@@ -1831,7 +1901,7 @@ const T=d.bg?TKB:TK;
 function renderNd(){
  const d=S.nd,p=PDEF[d.k];
  set($('#ndT'),p.n+(AX.includes(d.a)?' · '+d.a:''));
- const cv0=d.k==='__line'?1:S.draft[d.a][d.k];
+ const cv0=d.get?d.get():d.k==='__line'?1:S.draft[d.a][d.k];
  set($('#ndCur'),d.k==='__line'?d.file.name:'сега '+fmtP(p,cv0)+(p.u?' '+p.u:''));
  $('#ndIn').innerHTML=(d.txt||'<span style="color:var(--faint)">'+fmtP(p,cv0)+'</span>')+'<span class="caret"></span>';
  set($('#ndNote'),(p.min!==undefined?`Обхват: ${p.min} … ${p.max}${p.u?' '+p.u:''}. `:'')+p.h);
@@ -2003,14 +2073,22 @@ panel.addEventListener('click',e=>{
    {const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
    if(!PROG_OPS.length){toast('Няма заредена програма. Натиснете „Отвори“.');break}
    if(S.ioForce.some(x=>x!=null)){S.ioForce.fill(null);toast('Ръчно включените изходи са освободени')}
-   startProg(S.startLine>0?S.startLine:0);break;
+   if(S.startLine>0){openRF(S.startLine);break}
+   startProg(0);break;
   case'runhere':{
    if(S.state!=='idle'){toast(S.state==='hold'?'Програмата е на пауза. Натиснете ЦИКЪЛ СТАРТ или СТОП.':'Машината работи');break}
    const L=S.startLine!=null?S.startLine:(S.progLine>0&&S.curPi!==Infinity?S.progLine:null);
    if(L==null){toast('Натиснете ред в програмата, от който да започне');break}
    if(!canMove())break;
    {const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
-   startProg(L);break}
+   openRF(L);break}
+  case'rf-cancel':$('#rfDlg').hidden=true;break;
+  case'rf-z':S.nd={a:'rf',k:'rfZ',txt:'',get:()=>S.rf.safeZ,set:v=>{S.rf.safeZ=v}};$('#numDlg').hidden=false;renderNd();break;
+  case'rf-f':S.nd={a:'rf',k:'rfF',txt:'',get:()=>S.rf.F,set:v=>{S.rf.F=v}};$('#numDlg').hidden=false;renderNd();break;
+  case'rf-spin':S.rf.spin=v==='1';rfRender();break;
+  case'rf-cool':S.rf.cool=v==='1';rfRender();break;
+  case'rf-go':{const R=S.rf;if(R.safeZ<R.st.pos.Z){toast('Безопасната височина е под началната точка');break}
+   if(!canMove())break;$('#rfDlg').hidden=true;startProg(R.L);break}
   case'rewind':
    if(S.state!=='idle'){toast('Rewind е разрешен само при спряна машина');break}
    S.curPi=-1;S.progLine=-1;S.startLine=null;S.runTime=0;S.tDone0=0;lastLine=-2;lastWin='';gcList.scrollTop=0;toast('Програмата е върната в началото');break;
@@ -2048,7 +2126,7 @@ panel.addEventListener('click',e=>{
     renderNd();break}
    if(v==='bs')d.txt=d.txt.slice(0,-1);else if(v==='clr')d.txt='';
    else if(v==='pm'){if(p.min===undefined||p.min<0)d.txt=d.txt.startsWith('-')?d.txt.slice(1):'-'+d.txt}
-   else if(v==='cur')d.txt=String(d.k==='__line'?1:S.draft[d.a][d.k]);
+   else if(v==='cur')d.txt=String(d.get?d.get():d.k==='__line'?1:S.draft[d.a][d.k]);
    else if(v==='.'){if(p.d>0&&!d.txt.includes('.'))d.txt+=(d.txt===''||d.txt==='-'?'0.':'.')}
    else if(d.txt.replace(/[-.]/g,'').length<8)d.txt+=v;
    renderNd();break}
@@ -2064,6 +2142,7 @@ panel.addEventListener('click',e=>{
     if(S.state==='run'||S.state==='hold'){toast('Спрете текущата програма, преди да заредите нова.');break}
     const n=Math.round(val);loadProgram(d.file);S.startLine=n>1?n-1:null;go('run');
     toast('Заредена '+d.file.name+(n>1?'. Старт от ред '+n+' с ЦИКЪЛ СТАРТ.':''));break}
+   if(d.set){d.set(val);$('#numDlg').hidden=true;rfRender();break}
    S.draft[d.a][d.k]=val;$('#numDlg').hidden=true;renderSet();break}
   case'pe':S.draft[b.dataset.a][b.dataset.k]=v;S.setHelp=b.dataset.k;renderSet();break;
   case'teach':{
