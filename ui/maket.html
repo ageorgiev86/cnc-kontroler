@@ -111,7 +111,8 @@ body{font-family:var(--f-txt)}
 .panel.portrait .tools .mag{grid-row:1/3;margin:0}
 .panel.portrait .probe{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
 .panel.portrait .probe>.card:nth-child(2){grid-column:1/-1;grid-row:2}
-.panel.portrait .diag{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.panel.portrait .diag{grid-template-columns:minmax(0,1fr)}
+.panel.portrait .diag>.card{grid-column:1!important;grid-row:auto!important}
 .panel.portrait .sets{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
 .panel.portrait .setnav{flex-direction:row;flex-wrap:wrap}
 .panel.portrait .setnav .btn{flex:1 1 auto;justify-content:center}
@@ -303,6 +304,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .tk .btn{min-height:0;height:100%;padding:0;font:600 1.1em var(--f-num);text-transform:none;letter-spacing:0}
 .tk .btn.w2{grid-column:span 2;font:600 .9em var(--f-ui);text-transform:uppercase}
 .tk .btn.w4{grid-column:span 4}
+.tk .btn.w3{grid-column:span 3}
 .teach{display:flex;gap:.4em;flex-wrap:wrap;padding:.3em .3em .6em}
 .teach .btn{min-height:2.6em}
 .pk.empty{background:transparent;border-style:dashed;color:var(--faint)}
@@ -337,7 +339,32 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .warnbox{border:1px solid color-mix(in srgb,var(--warn) 50%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent);color:var(--fg);border-radius:.35em;padding:.55em .65em;font:500 .88em/1.35 var(--f-txt);display:flex;flex-direction:column;gap:.5em}
 
 /* Диагностика */
-.diag{grid-template-columns:minmax(0,56fr) minmax(0,44fr);grid-template-rows:minmax(0,1fr) auto}
+.diag{grid-template-columns:minmax(0,52fr) minmax(0,48fr);grid-auto-rows:max-content;align-content:start;overflow:auto;scrollbar-width:thin}
+.diag>.card{overflow:visible;min-height:auto}
+.diag>.card.gio{grid-column:2;grid-row:1/3}
+.diag .link{grid-column:1/-1}
+.gioh{display:flex;align-items:center;justify-content:space-between;gap:.5em;padding:.55em .75em .25em;font:600 .78em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.giog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.3em;padding:.2em .6em .6em}
+.iob{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;gap:.15em .5em;padding:.38em .5em;border:1px solid var(--line);border-radius:.35em;background:var(--panel);font:500 .82em var(--f-txt);opacity:.42;min-width:0;text-align:left;color:var(--fg)}
+.iob b{font:600 .95em var(--f-num);color:var(--dim)}
+.iob span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iob span.rz{font-style:italic;color:var(--faint)}
+.iob .led{width:.85em;height:.85em}
+.iob.on{opacity:1;border-color:color-mix(in srgb,var(--ok) 55%,var(--line))}
+.iob.on b{color:var(--fg)}
+.iob.on .led{background:var(--ok);box-shadow:0 0 .55em .1em color-mix(in srgb,var(--ok) 70%,transparent)}
+.iob.out.on{border-color:color-mix(in srgb,var(--acc) 60%,var(--line))}
+.iob.out.on .led{background:var(--acc);box-shadow:0 0 .55em .1em color-mix(in srgb,var(--acc) 70%,transparent)}
+.iob.out{cursor:pointer}
+.iob.arm{outline:.15em solid var(--warn);opacity:1}
+.iob em{grid-column:3;font:600 .72em var(--f-ui);font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:var(--warn)}
+.panel:not(.portrait) .giog{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pio td,.pio th{white-space:nowrap}
+.pio .btn{width:100%;min-height:2.4em;font:500 .9em var(--f-txt);text-transform:none;letter-spacing:0;justify-content:flex-start;overflow:hidden;text-overflow:ellipsis}
+.pio td.num{font:600 .9em var(--f-num);color:var(--dim);width:3.6em}
+.pio td.c{width:6.5em}.pio td.c .btn{justify-content:center}
+.pick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35em;max-height:60vh;overflow:auto}
+.pick .btn{justify-content:flex-start;text-transform:none;letter-spacing:0;font:500 .95em var(--f-txt);min-height:2.7em}
 .io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 1em;padding:.4em .7em}
 .io div{display:flex;align-items:center;gap:.55em;font:500 .86em var(--f-txt);padding:.32em 0;border-bottom:1px solid var(--line);min-width:0}
 .io div span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -604,8 +631,15 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="tbl-wrap"><table class="tt"><thead><tr><th>Ос</th><th>Контур</th><th class="n">Заповядана</th><th class="n">Енкодер</th><th class="n">Грешка</th><th class="n">Лимит</th><th>Статус</th></tr></thead><tbody id="encBody"></tbody></table></div>
           </div>
           <div class="card">
-            <div class="card-h"><span>Входове · изходи</span></div>
+            <div class="card-h"><span>Системни входове и изходи (STM32)</span></div>
             <div class="io" id="ioBox"></div>
+          </div>
+          <div class="card gio">
+            <div class="card-h"><span>Входове и изходи 32 + 32</span><button class="btn sm" data-act="force-clr" type="button">Освободи ръчните</button></div>
+            <div class="gioh"><span>Входове</span><span id="ginCnt"></span></div>
+            <div class="giog" id="ginBox"></div>
+            <div class="gioh"><span>Изходи · двойно натискане = ръчно</span><span id="goutCnt"></span></div>
+            <div class="giog" id="goutBox"></div>
           </div>
           <div class="link">
             <div class="card"><div class="card-b"><span>SPI връзка</span><b>16 MHz</b></div></div>
@@ -752,6 +786,14 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <button class="btn" data-act="td-cancel" type="button">Отказ</button>
             <button class="btn go" data-act="td-ok" type="button">Готово</button>
           </div>
+        </div>
+      </div>
+
+      <div class="modal" id="pickDlg" hidden>
+        <div class="dlg" role="dialog" aria-label="Избор">
+          <div class="dlg-h"><b id="pkT"></b><span id="pkCur"></span></div>
+          <div class="pick" id="pkList"></div>
+          <button class="btn" data-act="pk-cancel" type="button">Отказ</button>
         </div>
       </div>
 
@@ -945,6 +987,8 @@ function parse(lines){
    for(const a in tgt)pos[a]=inc?pos[a]+tgt[a]:tgt[a];
   }
   if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
+  for(const mc of[62,63,64,65])if(ms.includes(mc)&&w.P!==undefined){const n=Math.round(w.P),on=mc===62||mc===64;out.push({type:'act',line:li,dur:0,label:'M'+mc+' P'+n+': OUT'+n+(on?' вкл.':' изкл.'),fn:()=>{S.uOut[n]=on?1:0}})}
+  if(ms.includes(66)&&w.P!==undefined){const n=Math.round(w.P),q=w.Q!==undefined?w.Q:10;out.push({type:'act',line:li,dur:q,label:'M66: чака IN'+n,until:()=>n>=1&&n<=32&&inVal(n-1),onTimeout:()=>toast('M66: IN'+n+' не се включи за '+q+' s')})}
   if(ms.includes(30)||ms.includes(2))out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});
  });
  return out;
@@ -1032,7 +1076,7 @@ function stepQueue(dt){
  while(b>0&&S.state==='run'&&guard++<400){
   if(!S.cur){if(!S.queue.length){finishRun();return}S.cur=S.queue.shift();begin(S.cur);if(S.state!=='run')return}
   const m=S.cur;
-  if(m.type==='act'){m.el=(m.el||0)+b;if(m.el<m.dur)return;b=m.el-m.dur;S.cur=null;continue}
+  if(m.type==='act'){m.el=(m.el||0)+b;if(m.until&&m.until()){S.cur=null;b=0;continue}if(m.el<m.dur)return;if(m.until&&m.onTimeout)m.onTimeout();b=m.el-m.dur;S.cur=null;continue}
   const feed=m.rapid?RAPID*S.rapOv/100:(m.fpr?m.fpr*Math.max(50,S.sp.act):m.feed)*S.feedOv/100;S.F=feed;if(m.prog||S.runKind==='mdi')S.progF=m.rapid?0:m.feed;
   const v=Math.max(feed,1)/60*SIMX;
   if(m.type==='probe'&&m.s+v*b>=m.trig){m.s=m.trig;setWork(posAt(m,m.s/m.len));trigger(m);S.cur=null;b=0;return}
@@ -1465,20 +1509,19 @@ function updDiag(){
   ['Лимити X/Y/Z (NC)','IN0–2',S.state==='estop'?'off':'on'],['Home X','IN3',home('X')?'hot':''],['Home Y','IN4',home('Y')?'hot':''],['Home Z','IN5',home('Z')?'hot':''],
   ['3D пробник','PRB1',now-S.flash.prb<300?'hot':''],['Toolsetter','PRB2',now-S.flash.ts<300?'hot':''],
   ['Инструмент затегнат','IN8',S.clamped?'on':''],['Магазин в позиция','IN9',S.magMoving?'':'on'],
-  ['Налягане въздух','IN10','on'],['Врата затворена','IN11','on'],
   ['Авариен стоп верига','IN12',S.state==='estop'?'bad':'on'],['Аларма драйвер Y','IN13',S.alarmY?'bad':''],
   ['Enable драйвери','OUT0',S.state==='estop'?'':'on'],['Drawbar (освобождаване)','OUT1',S.clamped?'':'hot'],
-  ['Мотор магазин','OUT2',S.magMoving?'hot':''],['Ориентация шпиндел','OUT3',S.orient?'hot':''],
-  ['Охлаждане','OUT4',S.coolant?'hot':''],['Обдухване','OUT5',S.airBlast?'hot':'']
+  ['Мотор магазин','OUT2',S.magMoving?'hot':''],['Ориентация шпиндел','OUT3',S.orient?'hot':'']
  ];
  const html=io.map(([n,p,s])=>`<div><i class="led ${s}"></i><span>${n}</span><code>${p}</code></div>`).join('');
  if(ioBox._h!==html){ioBox._h=html;ioBox.innerHTML=html}
+ updGio();
  set($('#lkBuf'),(S.state==='run'&&S.cur&&S.cur.type!=='act'?Math.round(82+Math.random()*12):0)+' %');
  set($('#lkWd'),S.state==='estop'?'СПРЯН':'ОК · 1 ms');
 }
 
 /* ---------- MDI ---------- */
-const KEYS=['G','M','X','Y','Z','F','S','T','A','B','I','J','7','8','9','4','5','6','1','2','3','-','0','.'];
+const KEYS=['G','M','X','Y','Z','F','S','T','A','B','C','P','Q','R','I','J','K','H','7','8','9','4','5','6','1','2','3','-','0','.'];
 $('#keys').innerHTML=KEYS.map(k=>`<button class="btn" data-act="key" data-v="${k}" type="button">${k}</button>`).join('')+
  `<button class="btn w3" data-act="key" data-v=" " type="button">Интервал</button><button class="btn w3" data-act="mdi-del" type="button">⌫ Изтрий</button>`;
 function renderMdi(){
@@ -1635,6 +1678,7 @@ const P_SP=[
 ];
 P_SP.forEach(p=>{if(p.k)PDEF[p.k]=p});
 const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP};
+PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
 const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
@@ -1651,6 +1695,10 @@ const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,
 S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
 S.cfg.mach={type:'mill',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
 S.cfg.sp={spCtl:'modbus',spVfd:'huanyang',spPort:'uart1',spBaud:'19200',spPar:'8N1',spAddr:1,spRegCmd:8192,spRegFreq:8193,spRegFb:12288,spPoll:100,spOut:'v010',spPwmF:2000,spPwmMin:0,spPwmMax:100,spInv:0,spDirCW:'low',spEn:1,spMin:6000,spMax:24000,spRamp:4,spWait:'fb',spDelay:3,spEnc:1,spPpr:1024};
+S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Налягане въздух','air'],['Ниво масло','oil'],['Бутон Старт (пулт)','start'],['Бутон Пауза (пулт)','hold'],['Детайл затегнат','clamp'],['Вакуум ОК','vac'],['Палет на място','pallet'],['Контейнер за стружки пълен','chip']];
+ const O=[['Охлаждане','cool'],['Мъгла','mist'],['Обдухване','air'],['Мазане','lube'],['Аспирация','dust'],['Сигнална колона: зелено','lgreen'],['Сигнална колона: жълто','lyellow'],['Сигнална колона: червено','lred'],['Стяга','clamp'],['Вакуумна маса: зона 1','vac1'],['Вакуумна маса: зона 2','vac2'],['Транспортьор стружки','conv']];
+ const inn=[],out=[];for(let i=0;i<32;i++){const a=I[i]||['','none'],b=O[i]||['','none'];inn.push({n:a[0],f:a[1],inv:0,flt:3});out.push({n:b[0],f:b[1],inv:0,safe:'off'})}
+ return{in:inn,out}})();
 S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -1668,7 +1716,7 @@ function homeOps(axes){
  });
  return ops;
 }
-const SECS=[['mach','Машина'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
+const SECS=[['mach','Машина'],['io','Входове/изходи'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
 const STATIC={
  enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
  prb:[['Вход','PRB1 · NO'],['Инструмент','T10'],['Сфера','Ø2.000'],['Търсене','300 мм/мин'],['Измерване','30 мм/мин'],['Отдръпване','1.000']],
@@ -1691,10 +1739,11 @@ function renderSet(){
  const dirty=JSON.stringify(S.cfg)!==JSON.stringify(S.draft);
  set($('#setDirty'),dirty?'незаписани промени':'');
  const form=!!FORMS[sec];
- $('#setFoot').hidden=!(tab||form);
+ $('#setFoot').hidden=!(tab||form||sec==='io');
  set($('#setNote'),dirty?'Промените важат след „Запиши“.':'');
  const body=$('#setBody'),help=$('#setHelp');
- if(tab){
+ if(sec==='io'){renderIoSet(body);help.innerHTML=S.setHelp?S.setHelp:'Името и функцията се виждат в „Диагностика“ и в макросите (по-късно). Инвертирането обръща логическото състояние. Филтърът потиска смущения по входа. „При авария“ определя какво прави изходът при авариен стоп или загуба на връзката с Linux.';help.hidden=false}
+ else if(tab){
   const P=sec==='ax'?P_AX:P_HOME;
   body.innerHTML=`<table class="pt"><thead><tr><th></th>${AX.map(a=>`<th class="${S.draft[a].active?'':'off'}">${a}</th>`).join('')}</tr></thead><tbody>`+
    P.map(p=>`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th>`+AX.map(a=>{
@@ -1728,15 +1777,16 @@ function netStatus(){
  const sh=!N.shOn?['no','изключен']:S.netOk?['ok','свързан · '+(N.shType==='smb'?'//':'')+N.shSrv+'/'+N.shPath]:['no','не е свързан'];
  return`<div class="netst"><div><span>Кабел</span><b class="ok">свързан · 100 Mbit/s</b></div><div><span>Текущ адрес</span><b>${ip}</b></div><div><span>MAC</span><b>02:81:3c:5e:1a:7f</b></div><div><span>Мрежов дял</span><b class="${sh[0]}">${sh[1]}</b></div></div>`;
 }
-const TK=['1234567890','qwertyuiop','asdfghjkl-','zxcvbnm._/'];
+const TK=['1234567890','qwertyuiop','asdfghjkl-','zxcvbnm._/'],TKB=['1234567890','явертъуиоп','асдфгхйкл-','зьцжбнмчшщ'];
 function renderTd(){
  const d=S.td,p=PDEF[d.k];
- set($('#tdT'),p.n);set($('#tdCur'),p.t==='pass'?'':'сега '+fmtP(p,S.draft[d.a][d.k]));
+ set($('#tdT'),p.n);set($('#tdCur'),p.t==='pass'?'':'сега '+fmtP(p,d.get?d.get():S.draft[d.a][d.k]));
  const shown=p.t==='pass'?'•'.repeat(d.txt.length):d.txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');
  $('#tdIn').innerHTML=shown+'<span class="caret"></span>';set($('#tdNote'),p.h);
  const up=c=>d.shift?c.toUpperCase():c;
- $('#tkeys').innerHTML=TK.map(r=>[...r].map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')).join('')+
-  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button><button class="btn" data-act="tk" data-v="@" type="button">@</button><button class="btn" data-act="tk" data-v=":" type="button">:</button><button class="btn" data-act="tk" data-v="\\" type="button">\\</button><button class="btn w4" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
+const T=d.bg?TKB:TK;
+ $('#tkeys').innerHTML=T.map(r=>[...r].map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')).join('')+
+  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button>${(d.bg?['ю',',','.']:['@',':','\\']).map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')}<button class="btn" data-act="tk-lang" type="button">${d.bg?'EN':'БГ'}</button><button class="btn w3" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
 }
 function renderNd(){
  const d=S.nd,p=PDEF[d.k];
@@ -1809,6 +1859,48 @@ function updPl(){
  set($('#plCh'),M.plCut.toFixed(1)+' мм');set($('#plAdv'),'под '+M.plAd+' % от подаването');
 }
 
+/* ---------- Входове и изходи 32 + 32 ---------- */
+const IN_F=[['none','Не се използва'],['door','Врата затворена'],['air','Налягане въздух'],['oil','Ниво масло'],['start','Бутон Старт'],['hold','Бутон Пауза'],['clamp','Детайл затегнат'],['vac','Вакуум ОК'],['pallet','Палет на място'],['chip','Контейнер за стружки пълен'],['user','Потребителски (M66)']];
+const OUT_F=[['none','Не се използва'],['cool','Охлаждане'],['mist','Мъгла'],['air','Обдухване'],['lube','Мазане'],['dust','Аспирация'],['lgreen','Сигнална колона: зелено'],['lyellow','Сигнална колона: жълто'],['lred','Сигнална колона: червено'],['clamp','Стяга'],['vac1','Вакуумна маса: зона 1'],['vac2','Вакуумна маса: зона 2'],['conv','Транспортьор стружки'],['user','Потребителски (M62–M65)']];
+const FN=(L,k)=>(L.find(x=>x[0]===k)||L[0])[1];
+S.uOut=Array(33).fill(0);S.ioForce=Array(32).fill(null);S.ioTab='in';S.forceArm=-1;
+function outFn(f){
+ const st=S.state;
+ switch(f){case'cool':return S.coolant;case'air':return!!S.airBlast;case'lube':return st==='run'&&(S.runTime%20)<2;
+  case'dust':return S.sp.on&&MT()!=='lathe';case'lgreen':return st==='run';case'lyellow':return st==='idle'||st==='hold';
+  case'lred':return st==='alarm'||st==='estop';case'clamp':return true;case'conv':return S.sp.on;default:return false}
+}
+function outVal(i){if(S.ioForce[i]!=null)return S.ioForce[i];const o=S.cfg.io.out[i];if(S.state==='estop'&&o.safe==='off')return false;return o.f==='user'?!!S.uOut[i+1]:outFn(o.f)}
+function inVal(i){
+ const f=S.cfg.io.in[i].f;
+ switch(f){case'door':case'air':case'oil':case'pallet':return true;case'start':case'hold':case'chip':return false;
+  case'clamp':return S.cfg.io.out.some((o,k)=>o.f==='clamp'&&outVal(k));case'vac':return S.cfg.io.out.some((o,k)=>(o.f==='vac1'||o.f==='vac2')&&outVal(k));
+  default:return(i*7)%5===0}
+}
+function ioItems(dir){
+ const L=S.cfg.io[dir],Fl=dir==='in'?IN_F:OUT_F;let on=0;
+ const h=L.map((o,i)=>{const v=dir==='in'?inVal(i):outVal(i);if(v)on++;const used=o.f!=='none'||o.n;
+  const nm=o.n||(o.f!=='none'?FN(Fl,o.f):'');
+  return`<${dir==='out'?'button':'div'} class="iob ${dir}${v?' on':''}${dir==='out'&&S.forceArm===i?' arm':''}"${dir==='out'?` data-act="force" data-v="${i}" type="button"`:''}><i class="led"></i><b>${dir==='in'?'IN':'OUT'}${i+1}</b><span class="${used?'':'rz'}">${used?nm.replace(/</g,'&lt;'):'резерв'}</span>${dir==='out'&&S.ioForce[i]!=null?'<em>ръчно</em>':''}</${dir==='out'?'button':'div'}>`}).join('');
+ return[h,on];
+}
+function updGio(){
+ const[a,na]=ioItems('in'),[b,nb]=ioItems('out');
+ const A=$('#ginBox'),B=$('#goutBox');if(A._h!==a){A._h=a;A.innerHTML=a}if(B._h!==b){B._h=b;B.innerHTML=b}
+ set($('#ginCnt'),na+' вкл. от 32');set($('#goutCnt'),nb+' вкл. от 32');
+}
+function renderIoSet(body){
+ const dir=S.ioTab,L=S.draft.io[dir],C=S.cfg.io[dir],Fl=dir==='in'?IN_F:OUT_F;
+ body.innerHTML=`<div class="seg" style="max-width:24em;padding:.3em .3em .5em"><button class="btn sm${dir==='in'?' on':''}" data-act="io-tab" data-v="in" type="button">Входове (32)</button><button class="btn sm${dir==='out'?' on':''}" data-act="io-tab" data-v="out" type="button">Изходи (32)</button></div>`+
+ `<table class="pf pio"><thead><tr><th>№</th><th>Име</th><th>Функция</th><th>Инв.</th><th>${dir==='in'?'Филтър':'При авария'}</th></tr></thead><tbody>`+
+ L.map((o,i)=>{const c=C[i],ch=k=>o[k]!==c[k]?' chg':'';
+  return`<tr><td class="num">${dir==='in'?'IN':'OUT'}${i+1}</td>`+
+  `<td><button class="btn${ch('n')}" data-act="io-name" data-v="${i}" type="button">${o.n?o.n.replace(/</g,'&lt;'):'<span style="color:var(--faint)">—</span>'}</button></td>`+
+  `<td><button class="btn${ch('f')}" data-act="io-fn" data-v="${i}" type="button">${FN(Fl,o.f)}</button></td>`+
+  `<td class="c"><button class="btn${ch('inv')}${o.inv?' on':''}" data-act="io-inv" data-v="${i}" type="button">${o.inv?'Да':'Не'}</button></td>`+
+  `<td class="c">${dir==='in'?`<button class="btn${ch('flt')}" data-act="io-flt" data-v="${i}" type="button">${o.flt} ms</button>`:`<button class="btn${ch('safe')}" data-act="io-safe" data-v="${i}" type="button">${o.safe==='off'?'Изключи':'Запази'}</button>`}</td></tr>`}).join('')+'</tbody></table>';
+}
+
 /* ---------- Статус ---------- */
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
@@ -1859,6 +1951,7 @@ panel.addEventListener('click',e=>{
    if(!canMove())break;
    {const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
    if(!PROG_OPS.length){toast('Няма заредена програма. Натиснете „Отвори“.');break}
+   if(S.ioForce.some(x=>x!=null)){S.ioForce.fill(null);toast('Ръчно включените изходи са освободени')}
    S.runTime=0;S.curPi=-1;S.progLine=-1;
    if(S.startLine>0){runOps(fromLine(S.startLine),'prog');toast('Старт от ред '+(S.startLine+1))}else runOps(PROG_OPS,'prog');
    S.startLine=null;break;
@@ -1926,13 +2019,14 @@ panel.addEventListener('click',e=>{
    if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
    renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
   case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
+  case'tk-lang':S.td.bg=!S.td.bg;renderTd();break;
   case'tk-sh':S.td.shift=!S.td.shift;renderTd();break;
   case'tk-bs':S.td.txt=S.td.txt.slice(0,-1);renderTd();break;
   case'td-cancel':$('#txtDlg').hidden=true;break;
   case'td-ok':{const d=S.td;
    if(d.k==='host'&&!/^[A-Za-z0-9-]{1,32}$/.test(d.txt)){toast('Името може да съдържа само латински букви, цифри и тире');break}
-   if(d.k!=='shPass'&&d.k!=='shUser'&&!d.txt.trim()){toast('Полето не може да е празно');break}
-   S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
+   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&!d.txt.trim()){toast('Полето не може да е празно');break}
+   if(d.set)d.set(d.txt.trim());else S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
   case'net-test':{const N=S.cfg.net;
    if(JSON.stringify(N)!==JSON.stringify(S.draft.net)){toast('Първо запишете промените');break}
    if(!N.shOn){toast('Включете „Използвай мрежов дял“ и запишете');break}
@@ -2015,6 +2109,22 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'io-tab':S.ioTab=v;renderSet();break;
+  case'io-name':{const i=+v,dir=S.ioTab,o=S.draft.io[dir][i];S.td={a:'io',k:'ioName',txt:o.n,shift:false,bg:true,get:()=>o.n,set:t=>{o.n=t}};$('#txtDlg').hidden=false;renderTd();break}
+  case'io-fn':{const i=+v,dir=S.ioTab,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i];S.pick={dir,i};
+   set($('#pkT'),(dir==='in'?'IN':'OUT')+(i+1)+' · функция');set($('#pkCur'),'сега: '+FN(Fl,o.f));
+   $('#pkList').innerHTML=Fl.map(([k,n])=>`<button class="btn${o.f===k?' on':''}" data-act="pk" data-v="${k}" type="button">${n}</button>`).join('');$('#pickDlg').hidden=false;break}
+  case'pk':{const{dir,i}=S.pick,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i],old=FN(Fl,o.f);
+   if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;$('#pickDlg').hidden=true;renderSet();break}
+  case'pk-cancel':$('#pickDlg').hidden=true;break;
+  case'io-inv':{const o=S.draft.io[S.ioTab][+v];o.inv=o.inv?0:1;renderSet();break}
+  case'io-flt':{const o=S.draft.io.in[+v],F=[1,3,5,10,20,50];o.flt=F[(F.indexOf(o.flt)+1)%F.length];renderSet();break}
+  case'io-safe':{const o=S.draft.io.out[+v];o.safe=o.safe==='off'?'keep':'off';renderSet();break}
+  case'force':{const i=+v;
+   if(S.state!=='idle'){toast('Изходите се включват ръчно само когато машината е спряна');break}
+   if(S.forceArm!==i){S.forceArm=i;clearTimeout(S.forceT);S.forceT=setTimeout(()=>{S.forceArm=-1},3000);toast('OUT'+(i+1)+': натиснете пак за ръчно '+(outVal(i)?'изключване':'включване'));break}
+   S.forceArm=-1;S.ioForce[i]=!outVal(i);toast('OUT'+(i+1)+' е ръчно '+(S.ioForce[i]?'включен':'изключен')+'. „Освободи ръчните“ го връща към автоматично.');break}
+  case'force-clr':S.ioForce.fill(null);S.forceArm=-1;toast('Всички изходи са върнати към автоматично управление');break;
   case'go-set-mach':go('set');S.setSec='mach';S.setHelp=null;renderSet();break;
   case'lz-test':if(S.state!=='idle'){toast('Тест импулсът е разрешен само когато машината е спряна');break}S.lzTest=performance.now();toast('Тест импулс: '+S.cfg.mach.lzTpw+' % за '+S.cfg.mach.lzTms+' ms');break;
   case'lz-air':S.airBlast=!S.airBlast;break;
