@@ -1180,7 +1180,7 @@ function tick(dt){
  AX.forEach(a=>{
   const v=(S.mach[a]-before[a])/Math.max(dt,1e-4);S.vel[a]=v;
   if(S.state==='alarm'&&a==='Y'&&S.alarmY)return;
-  const tgt=v*0.11+(Math.random()-.5)*(ROT[a]?0.5:0.7);
+  const tgt=S.cfg[a].encOn?v*0.11+(Math.random()-.5)*(ROT[a]?0.5:0.7):0;
   S.ferr[a]+=(tgt-S.ferr[a])*Math.min(1,dt*8);
  });
  if(S.sp.css&&MT()==='lathe')S.sp.cmd=Math.round(Math.min(S.cfg.mach.ltMax,S.sp.css*1000/(Math.PI*Math.max(1,Math.abs(work().X)))));
@@ -1215,8 +1215,8 @@ function updDro(){
   const mach=!d.compact&&S.coord==='mach';
   set(r.val,f3(mach?S.mach[a]:w[a]));
   if(r.sm){set(r.sm,(mach?'РАБ':'МАШ')+f3(mach?w[a]:S.mach[a],9));set(r.sd,'ОСТ'+f3(to?to[a]-w[a]:0,9));
-   const e=Math.abs(S.ferr[a]);r.fb.style.width=Math.min(100,e/FERR_LIM*100)+'%';
-   r.fb.style.background=e>40?C.bad:e>25?C.warn:C.ok;set(r.fe,e.toFixed(1)+(ROT[a]?' ″':' µm'))}
+   const e=Math.abs(S.ferr[a]),ec=S.cfg[a].encOn,lim=S.cfg[a].encFerr;r.fb.style.width=ec?Math.min(100,e/lim*100)+'%':'0';
+   r.fb.style.background=e>lim*.8?C.bad:e>lim*.5?C.warn:C.ok;set(r.fe,ec?e.toFixed(1)+(ROT[a]?' ″':' µm'):'без енкодер')}
   r.row.hidden=!S.active[a];
   set(r.dm,a==='X'&&MT()==='lathe'&&S.cfg.mach.ltDia?'Ø':'');
   r.hm.classList.toggle('on',S.homed[a]==='sensor');r.hm.classList.toggle('man',S.homed[a]==='manual');
@@ -1644,18 +1644,18 @@ function renderPrb(){
 }
 
 /* ---------- Диагностика ---------- */
-const MODES={X:'двоен',Y:'двоен',Z:'затворен',A:'затворен',B:'затворен',C:'отворен'};
+const encMode=a=>{const c=S.cfg[a];return!c.encOn?'отворен':c.encMode==='dual'?'двоен':'затворен'};
 const encBody=$('#encBody');
-encBody.innerHTML=AX.map(a=>`<tr><td class="tn">${a}</td><td>${MODES[a]}</td><td class="n" id="ec${a}"></td><td class="n" id="ee${a}"></td><td class="n" id="ef${a}"></td><td class="n">${ROT[a]?'50 ″':'50 µm'}</td><td id="es${a}"></td></tr>`).join('')+
+encBody.innerHTML=AX.map(a=>`<tr><td class="tn">${a}</td><td id="em${a}"></td><td class="n" id="ec${a}"></td><td class="n" id="ee${a}"></td><td class="n" id="ef${a}"></td><td class="n" id="el${a}"></td><td id="es${a}"></td></tr>`).join('')+
  `<tr><td class="tn">S</td><td>шпиндел</td><td class="n" id="ecS"></td><td class="n" id="eeS"></td><td class="n" id="efS"></td><td class="n">300 об/мин</td><td id="esS"></td></tr>`;
 const ioBox=$('#ioBox');
 function updDiag(){
  AX.forEach(a=>{
   set($('#ec'+a),f3(S.mach[a],0));
-  const open=MODES[a]==='отворен';
+  const open=!S.cfg[a].encOn;set($('#em'+a),encMode(a));set($('#el'+a),open?'—':S.cfg[a].encFerr+(ROT[a]?' ″':' µm'));
   set($('#ee'+a),open?'—':f3(S.mach[a]-Math.sign(S.vel[a])*Math.abs(S.ferr[a])/1000,0));
   set($('#ef'+a),open?'—':Math.abs(S.ferr[a]).toFixed(1));
-  const bad=Math.abs(S.ferr[a])>FERR_LIM,es=$('#es'+a),k=open?'off':bad?'bad':'ok';
+  const bad=Math.abs(S.ferr[a])>S.cfg[a].encFerr,es=$('#es'+a),k=open?'off':bad?'bad':'ok';
   if(es.dataset.k!==k){es.dataset.k=k;es.innerHTML=`<span class="st ${k}">${open?'БЕЗ ЕНКОДЕР':bad?'ГРЕШКА':'ОК'}</span>`}
  });
  const sa=Math.round(S.sp.act),sc=Math.round(S.sp.on?S.sp.cmd*S.spOv/100:0);
@@ -1719,7 +1719,6 @@ function applyDlg(){
 const P_AX=[
  {k:'active',n:'Активна',t:'bool',on:'Да',off:'Не',h:'Изключената ос не участва в HOME, ръчното движение и програмата. Ползва се, когато машината няма тази ос.'},
  {k:'mdir',n:'Посока на мотора',t:'bool',on:'Обратна',off:'Нормална',rev:1,h:'Обръща сигнала DIR към драйвера. Ако при X+ масата тръгне наобратно, сменете тук, без да разменяте проводниците на мотора.',ref:'LinuxCNC: инвертиране на DIR в StepConf · grblHAL: <code>$3</code> · Mach3: Dir Low Active'},
- {k:'edir',n:'Посока на енкодера',t:'bool',on:'Обратна',off:'Нормална',rev:1,h:'Обръща броенето на енкодера. При затворен контур енкодерът трябва да брои в същата посока като мотора. Иначе грешката расте и контролерът спира с аларма.',ref:'LinuxCNC: отрицателен ENCODER_SCALE'},
  {k:'spm',n:'Стъпки на единица',u:'стъпки/мм (°)',t:'num',d:3,min:1,max:100000,h:'Колко стъпки са нужни за 1 мм (или 1° при въртяща ос). Пример: 200 стъпки × 8 микростъпки ÷ винт 5 мм = 320.',ref:'LinuxCNC: SCALE · grblHAL: <code>$100–$105</code> · Mach3: Steps per'},
  {k:'vmax',n:'Макс. скорост',u:'мм/мин',t:'num',d:0,min:1,max:60000,h:'Най-високата скорост на оста. Планерът не я надвишава дори при G0.',ref:'LinuxCNC: MAX_VELOCITY · grblHAL: <code>$110–$115</code>'},
  {k:'acc',n:'Ускорение',u:'мм/с²',t:'num',d:0,min:1,max:20000,h:'Колко бързо оста набира и сваля скорост. Твърде голямо ускорение води до загубени стъпки и удари в механиката.',ref:'LinuxCNC: MAX_ACCELERATION · grblHAL: <code>$120–$125</code>'},
@@ -1803,7 +1802,15 @@ const P_MACH=[
  {k:'ltMax',n:'Макс. обороти при G96',u:'об/мин',t:'num',d:0,min:100,max:10000,show:isT('lathe'),h:'При постоянна скорост на рязане оборотите растат към центъра. Това е горната граница, като G50 S.'},
  {k:'ltTur',n:'Позиции на револвера',t:'num',d:0,min:4,max:16,show:isT('lathe'),h:'Колко ножа побира револверната глава. Таблицата на инструментите следва този брой.'}
 ];
-const PDEF={};[...P_AX,...P_HOME,...P_MAG,...P_TS,...P_NET,...P_MACH].forEach(p=>{if(p.k)PDEF[p.k]=p});
+const P_ENC=[
+ {k:'encOn',n:'Енкодер',t:'bool',on:'Има',off:'Няма',h:'Има ли закачен енкодер на тази ос. Без енкодер оста работи в отворен контур: без следяща грешка, без корекция и без Z индекс при HOME.'},
+ {k:'encMode',n:'Контур',t:'enum',opts:[['closed','Затворен'],['dual','Двоен']],h:'Затворен: енкодерът е на мотора; STM32 добавя или отнема стъпки при разминаване. Двоен: линийка на масата; серво драйверът държи мотора, а STM32 коригира бавно луфта и топлинното разширение.'},
+ {k:'encRes',n:'Резолюция',u:'импулса/мм (°)',t:'num',d:3,min:.001,max:1000000,h:'Колко импулса (след умножение ×4) дава енкодерът за 1 мм или 1°. Пример: линийка 1 µm = 1000; енкодер 4000 имп/об на винт 10 мм = 400.'},
+ {k:'edir',n:'Посока на енкодера',t:'bool',on:'Обратна',off:'Нормална',rev:1,h:'Обръща броенето на енкодера. При затворен контур енкодерът трябва да брои в същата посока като мотора. Иначе грешката расте и контролерът спира с аларма.',ref:'LinuxCNC: отрицателен ENCODER_SCALE'},
+ {k:'encFerr',n:'Лимит на грешката',u:'µm (″)',t:'num',d:0,min:1,max:10000,h:'Над тази следяща грешка машината спира с аларма (удар, загубени стъпки, прекъснат енкодер).'},
+ {k:'encCorr',n:'Макс. корекция',u:'мм (°)',t:'num',d:3,min:0,max:10,h:'Най-голямата корекция, която STM32 може да внесе. Ако е нужна по-голяма, нещо не е наред и машината спира.'}
+];
+const PDEF={};[...P_AX,...P_HOME,...P_ENC,...P_MAG,...P_TS,...P_NET,...P_MACH].forEach(p=>{if(p.k)PDEF[p.k]=p});
 const isMb=D=>D.spCtl==='modbus',isPw=D=>D.spCtl==='pwm';
 const P_SP=[
  {k:'spCtl',n:'Управление',t:'enum',opts:[['modbus','Modbus RS485 (VFD)'],['pwm','PWM + посока']],h:'Modbus: контролерът изпраща оборотите и посоката цифрово по RS485 и чете обратно реалната честота, тока и грешките на честотния регулатор. PWM + посока: аналогов сигнал за оборотите и отделен изход за посоката. По-просто, но без обратна връзка от VFD-то.'},
@@ -1874,11 +1881,11 @@ const AXK={'3':[],'4a':['A'],'5ac':['A','C'],'5bc':['B','C'],'5ab':['A','B']};
 const axProf=D=>D.type==='mill'?['X','Y','Z','A','B','C']:D.type==='lathe'?(D.ltY?['X','Y','Z']:['X','Z']):['X','Y','Z',...AXK[D.type==='laser'?D.lzAx:D.plAx]];
 const SECX={mill:[],laser:['mag','prb','ts','sp'],plasma:['mag','prb','ts','sp'],lathe:['mag','prb','ts']};
 PDEF.__line={k:'__line',n:'Изпълни от ред',t:'num',d:0,min:1,max:1,h:'Преди този ред контролерът възстановява инструмента, оборотите и охлаждането, вдига Z, отива над началната точка и чак тогава слиза.'};
-const REHOME=['mdir','edir','spm','hsw','hdir','hswp','hpos','hidx'];
+const REHOME=['mdir','edir','encRes','spm','hsw','hdir','hswp','hpos','hidx'];
 const clone=o=>JSON.parse(JSON.stringify(o));
-const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
-const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
-S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
+const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,encOn:1,encMode:'closed',encRes:400,encFerr:50,encCorr:.2,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
+const rot=()=>({active:1,mdir:0,edir:0,encOn:1,encMode:'closed',encRes:11.111,encFerr:50,encCorr:.2,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
+S.cfg={X:{...lin(-600,0,1),encMode:'dual',encRes:1000},Y:{...lin(-400,0,1),encMode:'dual',encRes:1000},Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:{...rot(),encOn:0}};
 S.cfg.mach={type:'mill',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
 S.cfg.sp={spCtl:'modbus',spVfd:'huanyang',spPort:'uart1',spBaud:'19200',spPar:'8N1',spAddr:1,spRegCmd:8192,spRegFreq:8193,spRegFb:12288,spPoll:100,spOut:'v010',spPwmF:2000,spPwmMin:0,spPwmMax:100,spInv:0,spDirCW:'low',spEn:1,spMin:6000,spMax:24000,spRamp:4,spWait:'fb',spDelay:3,spEnc:1,spPpr:1024};
 S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Налягане въздух','air'],['Ниво масло','oil'],['Бутон Старт (пулт)','start'],['Бутон Пауза (пулт)','hold'],['Детайл затегнат','clamp'],['Вакуум ОК','vac'],['Палет на място','pallet'],['Контейнер за стружки пълен','chip']];
@@ -1897,7 +1904,7 @@ function homeOps(axes){
   const g=axes.filter(a=>S.cfg[a].hseq===q),n=g.join(' ');
   ops.push({type:'line',tgtFn:()=>Object.fromEntries(g.map(a=>[a,S.cfg[a].hswp-S.off[a]])),feed:Math.min(...g.map(a=>S.cfg[a].hvs)),label:'Home '+n+': търсене на датчика'});
   ops.push({type:'act',dur:.6,label:'Home '+n+': отдръпване и бавно докосване'});
-  if(g.some(a=>S.cfg[a].hidx))ops.push({type:'act',dur:.3,label:'Home '+n+': търсене на Z индекса на енкодера'});
+  if(g.some(a=>S.cfg[a].hidx&&S.cfg[a].encOn))ops.push({type:'act',dur:.3,label:'Home '+n+': търсене на Z индекса на енкодера'});
   ops.push({type:'act',dur:0,fn:()=>g.forEach(a=>S.homed[a]='sensor')});
   ops.push({type:'line',tgtFn:()=>Object.fromEntries(g.map(a=>[a,S.cfg[a].hpos-S.off[a]])),rapid:true,label:'Home '+n+': към позицията след Home'});
  });
@@ -1905,7 +1912,6 @@ function homeOps(axes){
 }
 const SECS=[['mach','Машина'],['io','Входове/изходи'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
 const STATIC={
- enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
  disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
 };
@@ -1913,13 +1919,14 @@ $('#setNav').innerHTML=SECS.map(([k,n])=>`<button class="btn" data-act="setsec" 
 function fmtP(p,v){
  if(p.t==='bool')return v?p.on:p.off;
  if(p.t==='dir')return v>0?'+':'−';
+ if(p.t==='enum')return(p.opts.find(o=>o[0]===v)||[0,v])[1];
  if(p.t==='ip'||p.t==='text')return v===''||v==null?'—':String(v);
  if(p.t==='pass')return v?'••••••':'не е зададена';
  return(+v).toFixed(p.d);
 }
 function renderSet(){
  {const L=SECS.filter(x=>!SECX[MT()].includes(x[0]));if(!L.some(x=>x[0]===S.setSec))S.setSec='mach';$('#setNav').innerHTML=L.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('')}
- const sec=S.setSec,tab=sec==='ax'||sec==='home';
+ const sec=S.setSec,tab=sec==='ax'||sec==='home'||sec==='enc';
  segOn('#setNav .btn',sec);
  set($('#setTitle'),SECS.find(s=>s[0]===sec)[1]);
  const dirty=JSON.stringify(S.cfg)!==JSON.stringify(S.draft);
@@ -1930,15 +1937,15 @@ function renderSet(){
  const body=$('#setBody'),help=$('#setHelp');
  if(sec==='io'){renderIoSet(body);help.innerHTML=S.setHelp?S.setHelp:'Името и функцията се виждат в „Диагностика“ и в макросите (по-късно). Инвертирането обръща логическото състояние. Филтърът потиска смущения по входа. „При авария“ определя какво прави изходът при авариен стоп или загуба на връзката с Linux.';help.hidden=false}
  else if(tab){
-  const P=sec==='ax'?P_AX:P_HOME;
+  const P={ax:P_AX,home:P_HOME,enc:P_ENC}[sec];
   body.innerHTML=`<table class="pt"><thead><tr><th></th>${AX.map(a=>`<th class="${S.draft[a].active?'':'off'}">${a}</th>`).join('')}</tr></thead><tbody>`+
    P.map(p=>`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th>`+AX.map(a=>{
     const v=S.draft[a][p.k],chg=v!==S.cfg[a][p.k];
-    const cls=[p.rev&&v?'rev':'',p.t==='bool'&&!p.rev&&v?'yes':'',chg?'chg':'',!S.draft[a].active&&p.k!=='active'?'offax':''].join(' ');
+    const cls=[p.rev&&v?'rev':'',p.t==='bool'&&!p.rev&&v?'yes':'',chg?'chg':'',(!S.draft[a].active&&p.k!=='active')||(sec==='enc'&&p.k!=='encOn'&&!S.draft[a].encOn)?'offax':''].join(' ');
     return`<td><button class="btn ${cls}" data-act="pt" data-a="${a}" data-k="${p.k}" type="button">${fmtP(p,v)}</button></td>`}).join('')+'</tr>').join('')+'</tbody></table>';
   const h=S.setHelp&&PDEF[S.setHelp];
   help.innerHTML=h?`<b>${h.n}.</b> ${h.h}${h.ref?`<br>${h.ref}`:''}`:
-   (sec==='ax'?'Натиснете клетка, за да я промените. Числата се въвеждат с клавиатура, а Да/Не и посоките се превключват с едно натискане. Оранжевото означава обърната посока.':'Натиснете име на параметър, за да видите какво прави. Промени в посоката или позициите изискват ново реферирване.');
+   (sec==='enc'?'Изключете енкодера на оста, на която няма закачен. Тогава тя работи в отворен контур, а параметрите ѝ за енкодера не се използват. Входът е RS422 A/B/Z.':sec==='ax'?'Натиснете клетка, за да я промените. Числата се въвеждат с клавиатура, а Да/Не и посоките се превключват с едно натискане. Оранжевото означава обърната посока.':'Натиснете име на параметър, за да видите какво прави. Промени в посоката или позициите изискват ново реферирване.');
   help.hidden=false;
  }else if(form){
   const D=S.draft[sec],C=S.cfg[sec];
@@ -2204,6 +2211,7 @@ panel.addEventListener('click',e=>{
     if(k==='active'&&D.active&&AX.filter(x=>S.draft[x].active).length===1){toast('Поне една ос трябва да е активна');renderSet();break}
     D[k]=D[k]?0:1;
    }else if(p.t==='dir')D[k]=-D[k];
+   else if(p.t==='enum'){const i=p.opts.findIndex(o=>o[0]===D[k]);D[k]=p.opts[(i+1)%p.opts.length][0]}
    else if(p.t==='text'||p.t==='pass'){S.td={a,k,txt:p.t==='pass'?'':String(D[k]||''),shift:false};$('#txtDlg').hidden=false;renderTd()}
    else{S.nd={a,k,txt:''};$('#numDlg').hidden=false;renderNd()}
    renderSet();break}
@@ -2265,7 +2273,7 @@ panel.addEventListener('click',e=>{
   case'go-net':go('set');S.setSec='net';S.setHelp=null;renderSet();break;
   case'cfg-revert':S.draft=clone(S.cfg);renderSet();toast('Промените са отменени');break;
   case'cfg-save':{
-   if(!canMove())break;
+   if(S.state==='run'||S.state==='hold'){toast('Спрете машината, преди да запишете настройките');break}
    if(JSON.stringify(S.cfg.net)!==JSON.stringify(S.draft.net))S.netOk=false;
    const re=[];AX.forEach(a=>{const o=S.cfg[a],n=S.draft[a];if(REHOME.some(k=>o[k]!==n[k])){re.push(a);S.homed[a]=false}});
    const tCh=S.cfg.mach.type!==S.draft.mach.type,mCh=JSON.stringify(S.cfg.mach)!==JSON.stringify(S.draft.mach);
@@ -2392,7 +2400,7 @@ panel.addEventListener('click',e=>{
   case'sl-clr':S.startLine=null;lastWin='';break;
   case'corner':S.corner=v;renderCycs();break;
   case'test':S.flash[v]=performance.now();S.cnt[v]++;S.lastEv={inp:v,lm:{...S.mach}};break;
-  case'sim-alarm':if(S.state==='estop')break;halt();S.enabled=false;S.ready=false;S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
+  case'sim-alarm':if(S.state==='estop')break;if(!S.cfg.Y.encOn){toast('Ос Y е без енкодер: няма следяща грешка');break}halt();S.enabled=false;S.ready=false;S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
  }
 });
 // ръчно движение
