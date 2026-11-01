@@ -158,11 +158,19 @@ body{font-family:var(--f-txt)}
 .dro-row.compact .val{font-size:1.45em}
 
 /* Работа */
-.run{grid-template-columns:minmax(0,63fr) minmax(0,37fr);grid-template-rows:auto minmax(0,1fr) auto}
+.run{grid-template-columns:minmax(0,63fr) minmax(0,37fr);grid-template-rows:auto minmax(0,1fr) auto auto}
 .run>.card:nth-child(1){grid-column:1;grid-row:1}
 .run>.card:nth-child(2){grid-column:1;grid-row:2;min-height:7em}
-.run>.card:nth-child(3){grid-column:2;grid-row:1/-1}
-.run>.ctrl{grid-column:1;grid-row:3}
+.run>.card:nth-child(3){grid-column:2;grid-row:1/3}
+.run>.ctrl{grid-column:1/-1;grid-row:3}
+.run>.cbtns{grid-column:1/-1;grid-row:4}
+.cbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45em}
+.cbtns .btn{min-height:3.6em;font-size:1.05em;letter-spacing:.05em;white-space:normal;line-height:1.05;text-align:center;padding:0 .4em}
+.rst{background:var(--bad);border-color:#ffb3b5;color:#fff;font-weight:700;letter-spacing:.1em;min-height:2.6em;animation:blink 1.2s steps(2) infinite}
+.rst.homing{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);animation:none}
+.rst.ok{background:var(--ok);border-color:var(--ok);color:#04170d;animation:none}
+.pill.off{background:var(--surf3);color:var(--dim)}
+@media (prefers-reduced-motion:reduce){.rst{animation:none}}
 .run .dro-row{padding:.12em .75em;row-gap:0}
 .run .val{font-size:1.75em}
 .panel:not(.portrait) .run .dro-row{grid-template-columns:2.2em minmax(0,1fr) auto 1.6em;grid-template-rows:auto;padding:.05em .75em;column-gap:.7em}
@@ -171,9 +179,11 @@ body{font-family:var(--f-txt)}
 .panel:not(.portrait) .run .sub .ferr{grid-column:1/-1}
 .panel:not(.portrait) .run .val{grid-column:3;grid-row:1}
 .panel:not(.portrait) .run .unit{grid-column:4;grid-row:1}
-.panel:not(.portrait) .ctrl{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1.9fr)}
+.panel:not(.portrait) .ctrl{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1.6fr)}
+.panel:not(.portrait) .prog{grid-column:auto;grid-template-columns:repeat(3,minmax(0,1fr));align-content:center}
+.panel:not(.portrait) .prog>div:nth-child(2){grid-column:1/-1;order:-1}
 .panel:not(.portrait) .cycle .info .btn{font-size:.78em;padding:0 .5em}
-.ctrl{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.75fr) minmax(0,1.7fr);gap:.6em}
+.ctrl{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6em}
 .ov .card-b{gap:.45em;padding:.5em .6em}
 .ovtop{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:0 .4em}
 .ovv{font:500 1.55em/1 var(--f-num);font-variant-numeric:tabular-nums;white-space:pre}
@@ -453,6 +463,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
     <div class="panel" id="panel">
       <div class="statusbar">
         <div class="sb-l">
+          <button class="btn rst" data-act="mreset" id="btnReset" type="button" title="Машината е изключена. RESET включва задвижванията и реферира осите.">RESET</button>
           <span class="brand">CNC</span>
           <span class="pill idle" id="sbState">ГОТОВ</span>
           <span class="chip" id="sbMode">АВТО</span>
@@ -464,7 +475,6 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <div class="sb-msg" id="sbMsg"></div>
         <div class="sb-r">
           <span class="clock" id="clock">--:--</span>
-          <button class="btn" data-act="reset" type="button">Нулиране</button>
           <button class="btn estop" data-act="estop" type="button">Авариен стоп</button>
         </div>
       </div>
@@ -477,6 +487,8 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               <div class="grp">
                 <button class="btn sm homebtn" data-act="home" data-v="all" id="btnHomeMain" type="button">Home</button>
                 <button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button>
+                <button class="btn sm ghost" data-act="single" id="btnSingle" type="button">Ед. блок</button>
+                <button class="btn sm ghost" data-act="cool" id="btnCool" type="button">M8</button>
                 <div class="seg"><button class="btn sm on" data-act="coord" data-v="work" type="button">Раб.</button><button class="btn sm" data-act="coord" data-v="mach" type="button">Маш.</button></div>
               </div>
             </div>
@@ -492,7 +504,6 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
             <div class="slbar" id="slBar" hidden><span>Старт от ред <b id="slN"></b></span><button class="btn sm" data-act="sl-clr" type="button">Отказ</button></div>
             <div class="gc-list" id="gcList"></div>
-            <div class="gcfoot"><button class="btn" data-act="rewind" type="button">⏮ Rewind</button><button class="btn" data-act="runhere" id="btnHere" type="button">▶ Run from here</button></div>
           </div>
           <div class="ctrl">
             <div class="card ov"><div class="card-b">
@@ -516,15 +527,13 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               <div><span>Остава</span><b id="tRem">—</b></div>
               <div><span>Край</span><b id="tEnd">—</b></div>
             </div>
-            <div class="cycle">
-              <div class="info">
-                <button class="btn ghost" data-act="single" id="btnSingle" type="button">Единичен блок</button>
-                <button class="btn ghost on" data-act="cool" id="btnCool" type="button">Охлаждане M8</button>
-              </div>
-              <button class="btn go" data-act="start" type="button">Цикъл старт</button>
-              <button class="btn hold" data-act="hold" type="button">Пауза</button>
-              <button class="btn stop" data-act="stop" type="button">Стоп</button>
-            </div>
+          </div>
+          <div class="cbtns">
+            <button class="btn go" data-act="start" type="button">Цикъл старт</button>
+            <button class="btn hold" data-act="hold" type="button">Пауза</button>
+            <button class="btn stop" data-act="stop" type="button">Стоп</button>
+            <button class="btn" data-act="rewind" type="button">⏮ Rewind</button>
+            <button class="btn" data-act="runhere" id="btnHere" type="button">▶ Run from here</button>
           </div>
         </section>
 
@@ -914,7 +923,7 @@ const S={
  vel:{X:0,Y:0,Z:0,A:0,B:0,C:0}, ferr:{X:0,Y:0,Z:0,A:0,B:0,C:0},
  homed:{X:false,Y:false,Z:false,A:false,B:false,C:false}, refMode:'sensor',
  active:{X:true,Y:true,Z:true,A:true,B:true,C:true},
- corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'mach', setHelp:null, nd:{a:'X',k:'spm',txt:''},
+ enabled:false, ready:false, resetHoming:false, corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'mach', setHelp:null, nd:{a:'X',k:'spm',txt:''},
  dlg:{ax:'X',tgt:'work',txt:''},
  feedOv:100, spOv:100, rapOv:100, F:0, progF:0,
  sp:{cmd:0,act:0,on:false,dir:'CW'}, coolant:false, airBlast:false,
@@ -1103,12 +1112,13 @@ function compile(text){
 /* ---------- Изпълнение ---------- */
 function runOps(ops,kind){S.queue=ops.map(o=>({...o}));S.cur=null;S.runKind=kind;S.state='run'}
 function canMove(){
- if(S.state==='estop'){toast('Аварийният стоп е натиснат. Освободете го и натиснете НУЛИРАНЕ.');return false}
- if(S.state==='alarm'){toast('Има активна аларма. Отстранете причината и натиснете НУЛИРАНЕ.');return false}
+ if(S.state==='estop'){toast('Аварийният стоп е натиснат. Освободете го и натиснете RESET.');return false}
+ if(S.state==='alarm'){toast('Има активна аларма. Отстранете причината и натиснете RESET.');return false}
+ if(!S.enabled){toast('Машината е изключена. Натиснете RESET горе вляво.');return false}
  if(S.state!=='idle'){toast('Машината се движи. Изчакайте или натиснете СТОП.');return false}
  return true;
 }
-function halt(){S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
+function halt(){S.resetHoming=false;S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
 function finishRun(){
  const k=S.runKind;S.state='idle';S.runKind=null;S.cur=null;S.actLabel='';S.F=0;
  if(k==='prog'){S.curPi=Infinity;toast('Програмата приключи за '+mmss(S.runTime))}
@@ -1977,10 +1987,10 @@ S.uOut=Array(33).fill(0);S.ioForce=Array(32).fill(null);S.ioTab='in';S.forceArm=
 function outFn(f){
  const st=S.state;
  switch(f){case'cool':return S.coolant;case'air':return!!S.airBlast;case'lube':return st==='run'&&(S.runTime%20)<2;
-  case'dust':return S.sp.on&&MT()!=='lathe';case'lgreen':return st==='run';case'lyellow':return st==='idle'||st==='hold';
-  case'lred':return st==='alarm'||st==='estop';case'clamp':return true;case'conv':return S.sp.on;default:return false}
+  case'dust':return S.sp.on&&MT()!=='lathe';case'lgreen':return st==='run';case'lyellow':return S.enabled&&(st==='idle'||st==='hold');
+  case'lred':return st==='alarm'||st==='estop'||!S.enabled;case'clamp':return true;case'conv':return S.sp.on;default:return false}
 }
-function outVal(i){if(S.ioForce[i]!=null)return S.ioForce[i];const o=S.cfg.io.out[i];if(S.state==='estop'&&o.safe==='off')return false;return o.f==='user'?!!S.uOut[i+1]:outFn(o.f)}
+function outVal(i){if(S.ioForce[i]!=null)return S.ioForce[i];const o=S.cfg.io.out[i];if(!S.enabled)return o.f==='lred';if(S.state==='estop'&&o.safe==='off')return false;return o.f==='user'?!!S.uOut[i+1]:outFn(o.f)}
 function inVal(i){
  const f=S.cfg.io.in[i].f;
  switch(f){case'door':case'air':case'oil':case'pallet':return true;case'start':case'hold':case'chip':return false;
@@ -2015,7 +2025,9 @@ function renderIoSet(body){
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
 function updStatus(now){
- const p=$('#sbState');p.className='pill '+S.state;set(p,STATE_TXT[S.state]);
+ const p=$('#sbState'),off=!S.enabled&&S.state==='idle';p.className='pill '+(off?'off':S.state);set(p,off?'ИЗКЛЮЧЕНА':STATE_TXT[S.state]);
+ {const r=$('#btnReset');r.className='btn rst'+(S.resetHoming?' homing':S.ready&&S.enabled?' ok':'');
+  r.title=S.resetHoming?'Реферирване…':S.ready&&S.enabled?'Машината е активна и реферирана':'Машината е изключена. RESET включва задвижванията и реферира осите.'}
  if(MODE_TXT[S.screen])set($('#sbMode'),MODE_TXT[S.screen]);
  {const hb=$('#btnHomeMain'),need=AX.some(a=>S.active[a]&&!S.homed[a]);hb.classList.toggle('need',need&&S.state==='idle');
   hb.title=need?'Нереферирани оси: '+AX.filter(a=>S.active[a]&&!S.homed[a]).join(', '):'Всички активни оси са реферирани'}
@@ -2095,11 +2107,21 @@ panel.addEventListener('click',e=>{
   case'hold':if(S.state==='run'){S.state='hold';S.F=0}break;
   case'stop':if(S.state==='run'||S.state==='hold'){halt();S.state='idle';S.coolant=false;toast('Движението е спряно')}break;
   case'single':S.single=!S.single;break;
-  case'cool':S.coolant=!S.coolant;break;
+  case'cool':if(!S.enabled){canMove();break}S.coolant=!S.coolant;break;
   case'fov':S.feedOv=v==='0'?100:Math.max(0,Math.min(150,S.feedOv+ +v));break;
   case'sov':S.spOv=v==='0'?100:Math.max(50,Math.min(120,S.spOv+ +v));break;
   case'rap':S.rapOv=+v;segOn('#rapSeg .btn',v);break;
-  case'estop':halt();S.state='estop';S.coolant=false;break;
+  case'estop':halt();S.state='estop';S.coolant=false;S.enabled=false;S.ready=false;AX.forEach(a=>S.homed[a]=false);break;
+  case'mreset':{
+   if(S.resetHoming){toast('Реферирането е в ход');break}
+   if(S.ready&&S.enabled){toast('Машината е активна. Аварийният стоп я изключва.');break}
+   if(S.state==='run'||S.state==='hold'){toast('Спрете машината');break}
+   S.state='idle';S.alarm='';S.alarmY=false;S.ferr.Y=0;S.enabled=true;
+   const axes=['Z','X','Y','A','B','C'].filter(a=>S.active[a]&&S.cfg[a].hsw),nm=AX.filter(a=>S.active[a]&&!S.cfg[a].hsw);
+   if(!axes.length){S.ready=true;toast('Задвижванията са включени. Няма оси с датчик: реферирайте ръчно.');break}
+   const ops=homeOps(axes);S.resetHoming=true;
+   ops.push({type:'act',dur:0,fn:()=>{S.resetHoming=false;S.ready=true;toast('Машината е активна и реферирана'+(nm.length?'. Без датчик (реферирайте ръчно): '+nm.join(', '):''),6000)}});
+   axes.forEach(a=>S.homed[a]=false);runOps(ops,'home');toast('RESET: задвижванията са включени, реферирване на '+axes.join(', '));break}
   case'reset':
    if(S.state==='estop'||S.state==='alarm'){S.state='idle';S.alarm='';S.alarmY=false;S.ferr.Y=0;toast('Машината е готова')}
    break;
@@ -2259,13 +2281,14 @@ panel.addEventListener('click',e=>{
   case'io-flt':{const o=S.draft.io.in[+v],F=[1,3,5,10,20,50];o.flt=F[(F.indexOf(o.flt)+1)%F.length];renderSet();break}
   case'io-safe':{const o=S.draft.io.out[+v];o.safe=o.safe==='off'?'keep':'off';renderSet();break}
   case'force':{const i=+v;
+   if(!S.enabled){canMove();break}
    if(S.state!=='idle'){toast('Изходите се включват ръчно само когато машината е спряна');break}
    if(S.forceArm!==i){S.forceArm=i;clearTimeout(S.forceT);S.forceT=setTimeout(()=>{S.forceArm=-1},3000);toast('OUT'+(i+1)+': натиснете пак за ръчно '+(outVal(i)?'изключване':'включване'));break}
    S.forceArm=-1;S.ioForce[i]=!outVal(i);toast('OUT'+(i+1)+' е ръчно '+(S.ioForce[i]?'включен':'изключен')+'. „Освободи ръчните“ го връща към автоматично.');break}
   case'force-clr':S.ioForce.fill(null);S.forceArm=-1;toast('Всички изходи са върнати към автоматично управление');break;
   case'go-set-mach':go('set');S.setSec='mach';S.setHelp=null;renderSet();break;
-  case'lz-test':if(S.state!=='idle'){toast('Тест импулсът е разрешен само когато машината е спряна');break}S.lzTest=performance.now();toast('Тест импулс: '+S.cfg.mach.lzTpw+' % за '+S.cfg.mach.lzTms+' ms');break;
-  case'lz-air':S.airBlast=!S.airBlast;break;
+  case'lz-test':if(!S.enabled){canMove();break}if(S.state!=='idle'){toast('Тест импулсът е разрешен само когато машината е спряна');break}S.lzTest=performance.now();toast('Тест импулс: '+S.cfg.mach.lzTpw+' % за '+S.cfg.mach.lzTms+' ms');break;
+  case'lz-air':if(!S.enabled){canMove();break}S.airBlast=!S.airBlast;break;
   case'lz-frame':{if(!canMove())break;const b=PINFO.bounds,low=v==='low';
    runOps([{type:'act',dur:0,label:'Рамкиране',fn:()=>{if(low){S.sp.on=true;S.sp.dir='M3';S.sp.cmd=10}}},
     {type:'line',tgt:{X:b.x0,Y:b.y0},rapid:true,label:'Рамкиране'},{type:'line',tgt:{X:b.x1},feed:3000,label:'Рамкиране'},{type:'line',tgt:{Y:b.y1},feed:3000,label:'Рамкиране'},
@@ -2293,7 +2316,7 @@ panel.addEventListener('click',e=>{
   case'sl-clr':S.startLine=null;lastWin='';break;
   case'corner':S.corner=v;renderCycs();break;
   case'test':S.flash[v]=performance.now();S.cnt[v]++;S.lastEv={inp:v,lm:{...S.mach}};break;
-  case'sim-alarm':if(S.state==='estop')break;halt();S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
+  case'sim-alarm':if(S.state==='estop')break;halt();S.enabled=false;S.ready=false;S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
  }
 });
 // ръчно движение
@@ -2301,7 +2324,7 @@ panel.addEventListener('pointerdown',e=>{
  const b=e.target.closest('[data-jog]');if(!b)return;
  const a=b.dataset.jog[0],d=b.dataset.jog[1]==='+'?1:-1;
  if(!S.active[a]){toast('Ос '+a+' е изключена в Настройки → Оси');return}
- if(S.jogInc==='cont'){if(S.state!=='idle'){canMove();return}S.jogHold={a,d};b.setPointerCapture&&b.setPointerCapture(e.pointerId)}
+ if(S.jogInc==='cont'){if(S.state!=='idle'||!S.enabled){canMove();return}S.jogHold={a,d};b.setPointerCapture&&b.setPointerCapture(e.pointerId)}
  else{if(!canMove())return;let dl=d*S.jogInc;
   if(S.homed[a]){const c=S.cfg[a],t=Math.max(c.min,Math.min(c.max,S.mach[a]+dl));if(t!==S.mach[a]+dl)toast('Софтуерен лимит на '+a);dl=t-S.mach[a];if(Math.abs(dl)<1e-9)return}
   runOps([{type:'line',rel:{[a]:dl},feed:S.jogF}],'jog')}
