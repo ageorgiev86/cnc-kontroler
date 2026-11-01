@@ -1,0 +1,1851 @@
+<!doctype html>
+<html lang="bg">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<title>CNC операторски панел</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Оформление: фиксиран „екран“ W×H, мащабиран в страницата; вътре всичко е в em, базата е H/800·16px.
+   Една тъмна визия, умишлено (машинен панел). Плоски форми, без градиенти и размазване — 1:1 с LVGL. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1114; --panel:#11161a; --surf:#171e24; --surf2:#1f282f; --surf3:#2a353e; --line:#29343c;
+  --fg:#e3e9ed; --dim:#8a99a4; --faint:#56636c;
+  --acc:#f2b632; --acc-ink:#1d1500; --acc-soft:rgba(242,182,50,.13);
+  --ok:#3dbb7e; --warn:#ff9447; --bad:#ec4f54; --info:#59aee6;
+  --path:#3b4a55; --rapid:#617079;
+  --f-ui:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-txt:"Barlow",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-txt)}
+.page{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 36px;max-width:1960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.toolbar h1{font:700 28px/1.1 var(--f-ui);letter-spacing:.02em;margin:0;text-wrap:balance}
+.toolbar p{margin:4px 0 0;color:var(--dim);font-size:14px}
+.resbox{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.resbox>span{color:var(--dim);font:600 13px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;margin-right:4px}
+.resbtn{font:600 14px var(--f-num);background:var(--surf);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:7px 10px;cursor:pointer}
+.resbtn.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.resbtn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.viewport{position:relative;width:100%;overflow:hidden}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px 28px;color:var(--dim);font-size:14px;line-height:1.55}
+.notes h2{font:600 13px var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--fg);margin:0 0 6px}
+.notes ul{margin:0;padding-left:18px}
+.notes code{font:12.5px var(--f-num);color:var(--fg)}
+
+/* ---------- Панел ---------- */
+.panel{position:absolute;left:0;top:0;transform-origin:0 0;background:var(--panel);border:1px solid var(--line);border-radius:.5em;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;font-family:var(--f-ui);color:var(--fg);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.panel *{box-sizing:border-box}
+.statusbar{display:flex;align-items:center;gap:.5em;padding:.45em .6em;background:var(--surf);border-bottom:1px solid var(--line)}
+.sb-l,.sb-r{display:flex;align-items:center;gap:.4em;flex:none}
+.sb-msg{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim);font:500 .95em var(--f-txt);padding:0 .5em}
+.sb-msg.bad{color:var(--bad);font-weight:600}
+.sb-msg.act{color:var(--acc)}
+.brand{font:700 1.2em var(--f-ui);letter-spacing:.08em;color:var(--acc);padding:0 .35em 0 .2em}
+.pill{font:700 1.05em/1 var(--f-ui);letter-spacing:.08em;padding:.5em .8em;border-radius:.3em;min-width:8em;text-align:center}
+.pill.idle{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.pill.run{background:var(--info);color:#06131d}
+.pill.hold{background:var(--acc);color:var(--acc-ink)}
+.pill.alarm,.pill.estop{background:var(--bad);color:#fff}
+.pill.estop{animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.55}}
+.chip{font:600 .95em/1 var(--f-ui);letter-spacing:.05em;padding:.5em .65em;border:1px solid var(--line);border-radius:.3em;background:var(--panel);white-space:nowrap}
+.chip b{color:var(--acc);font-weight:700}
+.clock{font:500 .95em var(--f-num);color:var(--dim);padding:0 .4em}
+.led{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--surf3);vertical-align:middle;flex:none}
+.led.on{background:var(--ok)} .led.hot{background:var(--acc)} .led.bad{background:var(--bad)}
+.chip .led{margin-right:.4em;margin-top:-.15em}
+
+.screens{min-height:0;padding:.6em;overflow:hidden}
+.screen{height:100%;min-height:0;display:grid;gap:.6em}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:.45em;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:.5em;padding:.3em .4em .3em .75em;border-bottom:1px solid var(--line);font:600 .85em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);min-height:2.9em;flex:none}
+.card-h .r{display:flex;gap:.3em;align-items:center;font-family:var(--f-num);letter-spacing:0;text-transform:none}
+.card-b{padding:.6em .7em;display:flex;flex-direction:column;gap:.55em;min-height:0;flex:1}
+
+.btn{appearance:none;font:600 1em/1 var(--f-ui);letter-spacing:.05em;text-transform:uppercase;color:var(--fg);background:var(--surf2);border:1px solid var(--line);border-radius:.35em;min-height:3em;padding:0 .85em;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.4em;white-space:nowrap}
+.btn:active{background:var(--surf3)}
+.btn:focus-visible{outline:.15em solid var(--acc);outline-offset:.1em}
+.btn.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.btn.sm{min-height:2.3em;padding:0 .6em;font-size:.88em}
+.btn.go{background:var(--ok);border-color:var(--ok);color:#04170d}
+.btn.hold{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.btn.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.ghost{background:transparent}
+.btn.ghost.on{background:var(--acc-soft);color:var(--acc);border-color:var(--acc)}
+[hidden]{display:none!important}
+.dro-row[data-act]{cursor:pointer}
+.dro-row[data-act]:active{background:var(--surf2)}
+.ax .hm.man{background:var(--acc)}
+.dro-row.off{opacity:.3}
+.homebtn{font-size:1em;letter-spacing:.1em;padding:0 1em}
+.homebtn.need{background:var(--acc-soft);color:var(--acc);border-color:var(--acc);animation:blink 1.4s steps(2) infinite}
+.homebtn.on{animation:none}
+.card-h .grp{display:flex;gap:.5em;align-items:center}
+@media (prefers-reduced-motion:reduce){.homebtn.need{animation:none}}
+
+/* ---------- Портретно оформление ---------- */
+.panel.portrait .statusbar{flex-wrap:wrap;row-gap:.4em}
+.panel.portrait .sb-l{flex:1 1 100%;min-width:0;overflow:hidden}
+.panel.portrait .sb-msg{order:2;padding-left:.2em}
+.panel.portrait .sb-r{order:3}
+.panel.portrait .run{grid-template-columns:minmax(0,57fr) minmax(0,43fr)}
+.panel.portrait .run .dro-row{padding:.4em .8em;row-gap:.1em}
+.panel.portrait .run .val{font-size:1.9em}
+.panel.portrait .ctrl{grid-template-columns:repeat(3,minmax(0,1fr))}
+.panel.portrait .cycle{grid-column:1/-1}
+.panel.portrait .jog{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.panel.portrait .jog>.card:last-child .card-b{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.55em 1.2em}
+.panel.portrait .jog .refgrid{grid-column:2}
+.panel.portrait .mdi{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.panel.portrait .mdi>.card:last-child{grid-column:1/-1}
+.panel.portrait .mdi .hist{max-height:11em}
+.panel.portrait .tools{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+.panel.portrait .tools>.card:last-child .card-b{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr auto;align-items:center;gap:.6em 1.4em}
+.panel.portrait .tools .mag{grid-row:1/3;margin:0}
+.panel.portrait .probe{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.panel.portrait .probe>.card:nth-child(2){grid-column:1/-1;grid-row:2}
+.panel.portrait .diag{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.panel.portrait .sets{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.panel.portrait .setnav{flex-direction:row;flex-wrap:wrap}
+.panel.portrait .setnav .btn{flex:1 1 auto;justify-content:center}
+.panel.portrait .navbar .btn{font-size:.86em;letter-spacing:.02em;padding:0 .2em}
+.panel.portrait .legend{font-size:.8em;gap:.5em}
+.resbox .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+.zb{display:flex;gap:.3em}
+.stepper .btn{min-height:2.5em}
+.refgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr);gap:.35em}
+.refgrid .all{grid-column:4;grid-row:1/3;min-height:0;height:100%;white-space:normal;text-align:center;line-height:1.15;padding:0 .3em}
+.modal{position:absolute;inset:0;background:rgba(5,8,10,.74);display:flex;align-items:center;justify-content:center;z-index:5}
+.dlg{width:31em;max-width:94%;background:var(--surf);border:1px solid var(--line);border-radius:.5em;padding:.8em;display:flex;flex-direction:column;gap:.5em}
+.dlg-h{display:flex;justify-content:space-between;align-items:baseline;gap:.6em}
+.dlg-h b{font:700 1.3em var(--f-ui);letter-spacing:.03em}
+.dlg-h span{font:400 .85em var(--f-num);color:var(--dim);white-space:pre}
+.dlg .mdi-in{min-height:0;font-size:1.5em;padding:.25em .5em;text-align:right}
+.dlg-note{font:500 .82em/1.35 var(--f-txt);color:var(--dim);min-height:2.7em}
+.dlg-note.w{color:var(--warn)}
+.dk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:2.8em;gap:.3em}
+.dk .btn{min-height:0;height:100%;font:600 1.2em var(--f-num);padding:0}
+.dk .btn.w2{grid-column:span 2;font:600 .95em var(--f-ui)}
+.btn.estop{background:var(--bad);border:.15em solid #ffb3b5;color:#fff;font-weight:700;min-height:2.7em;letter-spacing:.08em}
+.btn.dis{opacity:.38}
+.seg{display:flex;gap:.25em;flex-wrap:wrap}
+.seg .btn{flex:1}
+
+/* DRO */
+.dro{display:flex;flex-direction:column;flex:1;min-height:0}
+.dro-row{flex:1;display:grid;grid-template-columns:2.4em minmax(0,1fr) 1.6em;grid-template-rows:auto auto;align-content:center;column-gap:.5em;row-gap:.15em;padding:.2em .75em;border-bottom:1px solid var(--line)}
+.dro-row:last-child{border-bottom:0}
+.ax{grid-row:1/3;font:700 1.95em/1 var(--f-ui);color:var(--acc);position:relative;align-self:center}
+.ax .hm{position:absolute;right:.1em;bottom:-.05em;width:.22em;height:.22em;border-radius:50%;background:var(--surf3)}
+.ax .hm.on{background:var(--ok)}
+.val{font:500 1.9em/1.05 var(--f-num);font-variant-numeric:tabular-nums;text-align:right;white-space:pre;letter-spacing:-.02em}
+.unit{font:500 .8em var(--f-ui);color:var(--dim);align-self:center}
+.sub{grid-column:2/4;display:flex;justify-content:space-between;gap:.6em;font:400 .74em var(--f-num);color:var(--dim);white-space:pre}
+.ferr{display:flex;align-items:center;gap:.4em}
+.ferr i{width:3.6em;height:.45em;background:var(--surf3);border-radius:.2em;overflow:hidden;display:block}
+.ferr i b{display:block;height:100%;width:0;background:var(--ok)}
+.ferr em{font-style:normal;min-width:5.4em;text-align:right}
+.dro-row.compact{grid-template-columns:2em minmax(0,1fr) 1.4em auto;grid-template-rows:auto;padding:.15em .6em .15em .75em}
+.dro-row.compact .ax{grid-row:auto;font-size:1.55em}
+.dro-row.compact .val{font-size:1.45em}
+
+/* Работа */
+.run{grid-template-columns:minmax(0,63fr) minmax(0,37fr);grid-template-rows:auto minmax(0,1fr) auto}
+.run>.card:nth-child(1){grid-column:1;grid-row:1}
+.run>.card:nth-child(2){grid-column:1;grid-row:2;min-height:7em}
+.run>.card:nth-child(3){grid-column:2;grid-row:1/-1}
+.run>.ctrl{grid-column:1;grid-row:3}
+.run .dro-row{padding:.12em .75em;row-gap:0}
+.run .val{font-size:1.75em}
+.panel:not(.portrait) .run .dro-row{grid-template-columns:2.2em minmax(0,1fr) auto 1.6em;grid-template-rows:auto;padding:.05em .75em;column-gap:.7em}
+.panel:not(.portrait) .run .ax{grid-row:1}
+.panel:not(.portrait) .run .sub{grid-column:2;grid-row:1;display:grid;grid-template-columns:auto auto;justify-content:start;align-content:center;gap:.05em 1.1em}
+.panel:not(.portrait) .run .sub .ferr{grid-column:1/-1}
+.panel:not(.portrait) .run .val{grid-column:3;grid-row:1}
+.panel:not(.portrait) .run .unit{grid-column:4;grid-row:1}
+.panel:not(.portrait) .ctrl{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,1.9fr)}
+.panel:not(.portrait) .cycle .info .btn{font-size:.78em;padding:0 .5em}
+.ctrl{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.75fr) minmax(0,1.7fr);gap:.6em}
+.ov .card-b{gap:.45em;padding:.5em .6em}
+.ovtop{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:0 .4em}
+.ovv{font:500 1.55em/1 var(--f-num);font-variant-numeric:tabular-nums;white-space:pre}
+.ovs{font:400 .74em var(--f-num);color:var(--dim);white-space:nowrap}
+.ovrow{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:.3em}
+.ovrow .btn{min-height:2.6em;padding:0}
+.ovrow .btn.pct{font-family:var(--f-num);font-weight:500;letter-spacing:0}
+.cycle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto minmax(0,1fr);gap:.4em;min-width:0}
+.cycle .info{grid-column:1/-1;display:flex;gap:.4em;align-items:center}
+.cycle .info .btn{min-height:2.4em;font-size:.86em}
+.cycle .info .tm{margin-left:auto;font:500 .9em var(--f-num);color:var(--dim);white-space:nowrap}
+.cycle>.btn{min-height:3.8em;font-size:1.15em;letter-spacing:.07em;white-space:normal;line-height:1.05;text-align:center}
+.canvas-wrap{position:relative;flex:1;min-height:0}
+.canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cv-leg{position:absolute;left:.5em;top:.45em;display:flex;flex-direction:column;gap:.2em;font:500 .74em var(--f-txt);color:var(--dim);background:color-mix(in srgb,var(--surf) 82%,transparent);padding:.35em .55em;border-radius:.25em;pointer-events:none;max-width:62%}
+.cv-leg span{display:flex;align-items:center;gap:.45em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-leg i{width:1.2em;height:.28em;border-radius:.1em;flex:none}
+.cv-leg i.rp{background:repeating-linear-gradient(90deg,var(--rapid) 0 .25em,transparent .25em .45em)}
+.cv-hint{position:absolute;right:.6em;top:.55em;max-width:34%;text-align:right;font:400 .7em/1.3 var(--f-txt);color:var(--faint);pointer-events:none}
+.canvas-wrap canvas{touch-action:none}
+.vseg .btn{padding:0 .5em}
+.panel.portrait .ttl{display:none}
+.cv-info{position:absolute;left:.6em;bottom:.5em;font:400 .76em var(--f-num);color:var(--dim);background:color-mix(in srgb,var(--surf) 85%,transparent);padding:.25em .45em;border-radius:.25em;white-space:pre}
+.legend{display:flex;gap:.8em;font:500 .9em var(--f-ui);letter-spacing:.04em;text-transform:none;color:var(--dim)}
+.legend span{display:flex;align-items:center;gap:.35em}
+.legend i{display:inline-block;width:1.2em;height:.18em;border-radius:.1em}
+.gc-list{flex:1;overflow:auto;position:relative;font:400 .82em/1.7 var(--f-num);padding:.3em 0;scrollbar-width:thin}
+.gc-in{position:relative}
+.gl{position:absolute;left:0;right:0;height:1.7em;display:grid;grid-template-columns:3.4em 1fr;padding:0 .5em 0 0;white-space:pre;overflow:hidden;color:var(--fg);cursor:pointer}
+.gl.sl{background:color-mix(in srgb,var(--info) 16%,transparent)}
+.gl.sl>span:first-child{color:var(--info)}
+.gcn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:.01em;font-family:var(--f-num);color:var(--fg);min-width:0}
+.slbar{display:flex;align-items:center;gap:.5em;padding:.25em .4em .25em .75em;background:color-mix(in srgb,var(--info) 12%,transparent);color:var(--info);font:500 .85em var(--f-txt);border-bottom:1px solid var(--line);flex:none}
+.slbar .btn{margin-left:auto}
+.files{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}
+.flist{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column;gap:.3em}
+.fi{display:grid!important;grid-template-columns:minmax(0,1fr) auto;justify-items:start;align-items:center;gap:.15em .6em;text-align:left;padding:.45em .7em!important;min-height:3.3em!important;text-transform:none!important;letter-spacing:0!important;flex:none}
+.fi b{font:600 1.02em var(--f-num);overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.fi small{grid-column:1;font:400 .78em var(--f-txt);color:var(--dim)}
+.fi .badge{grid-row:1/3;grid-column:2}
+.fi.on{border-color:var(--acc);background:var(--acc-soft);color:var(--fg)}
+.fp-cv{min-height:6em}
+.fpinfo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.45em .9em;padding:.55em .8em;border-top:1px solid var(--line);flex:none}
+.fpinfo div{display:flex;flex-direction:column;gap:.1em;min-width:0}
+.fpinfo span{font:600 .74em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.fpinfo b{font:500 .92em var(--f-num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fpbtns{display:flex;gap:.5em;justify-content:flex-end;padding:.5em .6em;border-top:1px solid var(--line);flex:none}
+.panel.portrait .files{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,.85fr) minmax(0,1.15fr)}
+.gl>span:first-child{color:var(--faint);text-align:right;padding-right:.7em}
+.gl .cm{color:var(--dim)}
+.gl .g{color:var(--info)} .gl .m{color:var(--warn)} .gl .t{color:var(--acc)}
+.gl.c{background:var(--acc-soft)}
+.gl.c>span:first-child{color:var(--acc)}
+
+/* Ръчно */
+.jog{grid-template-columns:minmax(0,33fr) minmax(0,42fr) minmax(0,25fr)}
+.pad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:.45em;flex:1;min-height:0}
+.pad .btn,.rot .btn{min-height:0;height:100%;font-size:1.45em;font-weight:700;letter-spacing:.04em}
+.pad .lbl{display:flex;align-items:center;justify-content:center;font:700 1.1em var(--f-ui);color:var(--faint);letter-spacing:.1em}
+.rot{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.45em;height:4.2em;flex:none}
+.kv{display:flex;justify-content:space-between;align-items:center;gap:.6em;font:500 .9em var(--f-txt);color:var(--dim)}
+.kv b{font:500 1em var(--f-num);color:var(--fg);white-space:nowrap}
+.stepper{display:grid;grid-template-columns:3em 1fr 3em;gap:.3em;align-items:center}
+.stepper .v{text-align:center;font:500 1.25em var(--f-num)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.35em}
+.lab{font:600 .82em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+
+/* MDI */
+.mdi{grid-template-columns:minmax(0,29fr) minmax(0,37fr) minmax(0,34fr)}
+.mdi-in{font:500 1.3em/1.5 var(--f-num);background:var(--panel);border:1px solid var(--line);border-radius:.35em;padding:.45em .6em;min-height:4.8em;white-space:pre-wrap;word-break:break-all}
+.mdi-in .caret{display:inline-block;width:.55em;height:1.1em;vertical-align:-.15em;background:var(--acc);animation:blink 1s steps(2) infinite}
+.hist{display:flex;flex-direction:column;gap:.3em;overflow:auto;min-height:0;flex:1}
+.hist .btn{justify-content:flex-start;font:400 .95em var(--f-num);text-transform:none;letter-spacing:0;min-height:2.6em}
+.keys{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:.3em;flex:1;min-height:0}
+.keys .btn{min-height:0;height:100%;padding:0;font:600 1.2em var(--f-num)}
+.keys .btn.w2{grid-column:span 2;font-family:var(--f-ui);font-size:1em}
+.keys .btn.w3{grid-column:span 3;font-family:var(--f-ui);font-size:1em}
+
+/* Инструменти */
+.tools{grid-template-columns:minmax(0,58fr) minmax(0,42fr)}
+.tbl-wrap{overflow:auto;flex:1;min-height:0}
+.tt{width:100%;border-collapse:collapse;font:500 .92em var(--f-txt)}
+.tt th{font:600 .82em var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:left;padding:.55em .6em;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surf)}
+.tt td{padding:.5em .6em;border-bottom:1px solid var(--line);white-space:nowrap}
+.tt td.n{font:400 .95em var(--f-num);text-align:right}
+.tt th.n{text-align:right}
+.tt tr{cursor:pointer}
+.tt tr.sel td{background:var(--acc-soft)}
+.tt td.tn{font:700 1.05em var(--f-ui);color:var(--acc)}
+.badge{display:inline-block;font:700 .72em/1 var(--f-ui);letter-spacing:.08em;padding:.3em .45em;border-radius:.25em;background:var(--acc);color:var(--acc-ink);margin-left:.4em;vertical-align:.1em}
+.badge.dimb{background:var(--surf3);color:var(--fg)}
+.mag{position:relative;width:16.5em;height:16.5em;margin:.2em auto 0;flex:none}
+.mag .ring{position:absolute;inset:1.4em;border-radius:50%;border:1px dashed var(--line)}
+.pk{position:absolute;left:50%;top:50%;border-radius:50%;background:var(--surf2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--f-num);font-weight:600}
+.mag.chain{width:23em;max-width:100%;height:12.5em}
+.panel.portrait .tools .card-b:has(.mag.linear){display:flex}
+.mag.chain .ring{inset:1.25em;border-radius:5em}
+.mag.linear{width:100%;max-width:none;height:8em}
+.mag.linear .ring,.mag.linear .hub,.mag.linear .mk{display:none}
+.mag.linear .pk{border-radius:.3em}
+.spm{position:absolute;left:50%;top:50%;display:flex;flex-direction:column;align-items:center;font:700 .8em/1.1 var(--f-ui);color:var(--acc);letter-spacing:.06em;pointer-events:none;white-space:nowrap}
+.pf{border-collapse:separate;border-spacing:.3em;font:500 .92em var(--f-txt);width:100%;max-width:40em}
+.pf th{text-align:left;font:500 .95em/1.2 var(--f-txt);padding:0 .8em 0 .2em;cursor:pointer;width:45%}
+.pf th small{display:block;color:var(--dim);font-size:.8em}
+.pf th.h{color:var(--acc)}
+.pf td .btn{width:100%;min-height:2.6em;font:500 .95em var(--f-num);text-transform:none;letter-spacing:0}
+.pf td .seg .btn{font-family:var(--f-ui);font-size:1em;text-transform:uppercase;letter-spacing:.04em}
+.pf td .btn.chg{box-shadow:inset 0 0 0 .14em var(--info)}
+.pf td.grp{font:600 .8em var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--acc);padding:.9em .2em .15em;border-bottom:1px solid var(--line)}
+.netst{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35em 1.2em;padding:.5em .5em .2em;max-width:40em}
+.netst div{display:flex;flex-direction:column;gap:.1em;min-width:0}
+.netst span{font:600 .74em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.netst b{font:500 .92em var(--f-num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.netst b.ok{color:var(--ok)} .netst b.no{color:var(--dim)}
+.tdlg{width:46em}
+.tk{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));grid-auto-rows:2.7em;gap:.28em}
+.tk .btn{min-height:0;height:100%;padding:0;font:600 1.1em var(--f-num);text-transform:none;letter-spacing:0}
+.tk .btn.w2{grid-column:span 2;font:600 .9em var(--f-ui);text-transform:uppercase}
+.tk .btn.w4{grid-column:span 4}
+.teach{display:flex;gap:.4em;flex-wrap:wrap;padding:.3em .3em .6em}
+.teach .btn{min-height:2.6em}
+.pk.empty{background:transparent;border-style:dashed;color:var(--faint)}
+.pk.top{border-color:var(--acc);box-shadow:0 0 0 .15em var(--acc-soft)}
+.pk.sel{background:var(--acc-soft);color:var(--acc)}
+.mag .mk{position:absolute;left:50%;top:-.2em;transform:translateX(-50%);font:600 .7em var(--f-ui);letter-spacing:.1em;color:var(--acc);text-transform:uppercase;white-space:nowrap}
+.mag .hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font:600 .8em var(--f-ui);letter-spacing:.08em;color:var(--dim);text-transform:uppercase;line-height:1.3}
+.mag .hub b{display:block;font:700 1.9em var(--f-ui);color:var(--fg);letter-spacing:.02em}
+.atc{border:1px solid var(--line);border-radius:.35em;padding:.5em .65em;font:500 .9em var(--f-txt);color:var(--dim);background:var(--panel);min-height:2.6em;display:flex;align-items:center;gap:.5em}
+.atc.busy{color:var(--acc)}
+
+/* Пробинг */
+.probe{grid-template-columns:minmax(0,30fr) minmax(0,42fr) minmax(0,28fr)}
+.inp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.15em .7em;align-items:center;padding:.6em .7em;border-bottom:1px solid var(--line)}
+.inp:last-child{border-bottom:0}
+.inp .led{width:1.35em;height:1.35em;grid-row:1/3}
+.inp .nm{font:700 1.1em var(--f-ui);letter-spacing:.03em}
+.inp .mt{font:400 .74em var(--f-num);color:var(--dim);grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inp .btn{grid-row:1/3;grid-column:3}
+.inp .nm{grid-column:2;grid-row:1}
+.cycs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:.45em;flex:1;min-height:0}
+.cyc{flex-direction:column;gap:.35em;height:100%;min-height:0;text-transform:none;letter-spacing:.02em;font-size:.98em;padding:.4em}
+.cyc svg{width:3.4em;height:2.6em;flex:none}
+.cyc span{white-space:normal;text-align:center;line-height:1.1}
+.crn{display:flex;align-items:center;gap:.5em;flex:none}
+.crn .seg{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:.25em}
+.crn .btn{font-size:.85em}
+.cyc small{font:500 .74em var(--f-num);color:var(--dim)}
+.res{display:flex;flex-direction:column;gap:.3em;font:400 .85em var(--f-num)}
+.res div{display:flex;justify-content:space-between;gap:.6em}
+.res span{color:var(--dim);font-family:var(--f-txt)}
+.warnbox{border:1px solid color-mix(in srgb,var(--warn) 50%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent);color:var(--fg);border-radius:.35em;padding:.55em .65em;font:500 .88em/1.35 var(--f-txt);display:flex;flex-direction:column;gap:.5em}
+
+/* Диагностика */
+.diag{grid-template-columns:minmax(0,56fr) minmax(0,44fr);grid-template-rows:minmax(0,1fr) auto}
+.io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 1em;padding:.4em .7em}
+.io div{display:flex;align-items:center;gap:.55em;font:500 .86em var(--f-txt);padding:.32em 0;border-bottom:1px solid var(--line);min-width:0}
+.io div span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.io div code{font:400 .85em var(--f-num);color:var(--faint)}
+.st{font:700 .78em/1 var(--f-ui);letter-spacing:.08em;padding:.3em .45em;border-radius:.25em;display:inline-block}
+.st.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.st.bad{background:var(--bad);color:#fff}
+.st.off{background:var(--surf3);color:var(--dim)}
+.link{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.6em;grid-column:1/-1}
+.link .card-b{padding:.45em .7em;gap:.15em}
+.link b{font:500 1.2em var(--f-num)}
+.link .card-b>span{font:600 .76em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+
+/* Настройки */
+.sets{grid-template-columns:minmax(0,11em) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.setnav{padding:.4em;gap:.3em;overflow:auto}
+.setnav .btn{justify-content:flex-start;min-height:2.8em;flex:none;text-transform:none;letter-spacing:.02em;font-size:1.02em}
+.setbody{flex:1;min-height:0;overflow:auto;padding:.3em .5em}
+.setbody dl{padding:.5em .4em;max-width:34em}
+.pt{width:100%;border-collapse:separate;border-spacing:.25em;font:500 .9em var(--f-txt)}
+.pt thead th{font:700 1.25em var(--f-ui);color:var(--acc);text-align:center;position:sticky;top:0;background:var(--surf);z-index:1;padding:.2em 0}
+.pt thead th.off{color:var(--faint)}
+.pt tbody th{text-align:left;font:500 .95em/1.2 var(--f-txt);color:var(--fg);padding:0 .6em 0 .2em;cursor:pointer;min-width:8em}
+.pt tbody th small{display:block;color:var(--dim);font-size:.8em}
+.pt tbody th.h{color:var(--acc)}
+.pt td{padding:0;width:13%}
+.pt td .btn{width:100%;min-height:2.55em;padding:0 .25em;font:500 .95em var(--f-num);text-transform:none;letter-spacing:0}
+.pt td .btn.rev{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.pt td .btn.yes{color:var(--ok)}
+.pt td .btn.chg{box-shadow:inset 0 0 0 .14em var(--info)}
+.pt td .btn.offax{opacity:.4}
+.sethelp{border-top:1px solid var(--line);padding:.5em .8em;font:500 .86em/1.4 var(--f-txt);color:var(--dim);min-height:4.1em;flex:none}
+.sethelp b{color:var(--fg)}
+.sethelp code{font:400 .92em var(--f-num);color:var(--fg)}
+.setfoot{display:flex;gap:.5em;justify-content:flex-end;align-items:center;padding:.45em .6em;border-top:1px solid var(--line);flex:none}
+.setfoot .note{margin-right:auto;font:500 .85em var(--f-txt);color:var(--info);min-width:0}
+.sets dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:.35em .8em;font:500 .86em var(--f-txt)}
+.sets dt{color:var(--dim)}
+.sets dd{margin:0;text-align:right;font:400 .95em var(--f-num)}
+
+.navbar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.35em;padding:.45em .6em;background:var(--surf);border-top:1px solid var(--line)}
+.navbar .btn{min-height:3.3em;font-size:1.02em;letter-spacing:.07em;flex-direction:column;gap:.2em}
+.navbar .btn svg{width:1.3em;height:1.3em}
+
+@media (prefers-reduced-motion:reduce){.pill.estop,.mdi-in .caret{animation:none}}
+</style>
+
+<div class="page">
+  <header class="toolbar">
+    <div>
+      <h1>CNC операторски панел</h1>
+      <p>Интерактивен макет за HDMI екран с USB тъч. Машината и данните са симулирани.</p>
+    </div>
+    <div class="resbox" role="group" aria-label="Резолюция на екрана">
+      <span>Резолюция</span>
+      <button class="resbtn" data-res="600x1024" type="button">600×1024</button>
+      <button class="resbtn on" data-res="800x1280" type="button">800×1280</button>
+      <button class="resbtn" data-res="1080x1920" type="button">1080×1920</button>
+      <i class="sep"></i>
+      <button class="resbtn" data-res="1024x600" type="button">1024×600</button>
+      <button class="resbtn" data-res="1280x800" type="button">1280×800</button>
+      <button class="resbtn" data-res="1920x1080" type="button">1920×1080</button>
+    </div>
+  </header>
+
+  <div class="viewport" id="viewport">
+    <div class="panel" id="panel">
+      <div class="statusbar">
+        <div class="sb-l">
+          <span class="brand">CNC</span>
+          <span class="pill idle" id="sbState">ГОТОВ</span>
+          <span class="chip" id="sbMode">АВТО</span>
+          <span class="chip"><b>G54</b> G17 G21 G90</span>
+          <span class="chip" id="sbTool">T5</span>
+          <span class="chip"><i class="led on" id="sbLinkLed"></i>MCU 1 kHz</span>
+        </div>
+        <div class="sb-msg" id="sbMsg"></div>
+        <div class="sb-r">
+          <span class="clock" id="clock">--:--</span>
+          <button class="btn" data-act="reset" type="button">Нулиране</button>
+          <button class="btn estop" data-act="estop" type="button">Авариен стоп</button>
+        </div>
+      </div>
+
+      <main class="screens">
+        <!-- РАБОТА -->
+        <section class="screen run" data-screen="run">
+          <div class="card">
+            <div class="card-h"><span>Позиция</span>
+              <div class="grp">
+                <button class="btn sm homebtn" data-act="home" data-v="all" id="btnHomeMain" type="button">Home</button>
+                <button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button>
+                <div class="seg"><button class="btn sm on" data-act="coord" data-v="work" type="button">Раб.</button><button class="btn sm" data-act="coord" data-v="mach" type="button">Маш.</button></div>
+              </div>
+            </div>
+            <div class="dro" data-dro="full"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span class="ttl">Траектория</span>
+              <div class="seg vseg" id="viewSeg"><button class="btn sm on" data-act="view" data-v="iso" type="button">3D</button><button class="btn sm" data-act="view" data-v="top" type="button">XY</button><button class="btn sm" data-act="view" data-v="front" type="button">XZ</button><button class="btn sm" data-act="view" data-v="side" type="button">YZ</button><button class="btn sm" data-act="view" data-v="fit" type="button">Побери</button></div>
+            </div>
+            <div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
+            <div class="slbar" id="slBar" hidden><span>Старт от ред <b id="slN"></b></span><button class="btn sm" data-act="sl-clr" type="button">Отказ</button></div>
+            <div class="gc-list" id="gcList"></div>
+          </div>
+          <div class="ctrl">
+            <div class="card ov"><div class="card-b">
+              <div class="ovtop"><span class="lab">Подаване</span><span class="ovs" id="fProg">F1200 мм/мин</span></div>
+              <div class="ovv" id="fAct">0</div>
+              <div class="ovrow"><button class="btn" data-act="fov" data-v="-10" type="button">−</button><button class="btn pct" data-act="fov" data-v="0" id="fOv" type="button">100%</button><button class="btn" data-act="fov" data-v="10" type="button">+</button></div>
+            </div></div>
+            <div class="card ov"><div class="card-b">
+              <div class="ovtop"><span class="lab">Шпиндел</span><span class="ovs" id="sProg">S0 · спрян</span></div>
+              <div class="ovv" id="sAct">0</div>
+              <div class="ovrow"><button class="btn" data-act="sov" data-v="-10" type="button">−</button><button class="btn pct" data-act="sov" data-v="0" id="sOv" type="button">100%</button><button class="btn" data-act="sov" data-v="10" type="button">+</button></div>
+            </div></div>
+            <div class="card ov"><div class="card-b">
+              <div class="ovtop"><span class="lab">Бърз ход</span><span class="ovs">G0</span></div>
+              <div class="ovv" id="rAct">100%</div>
+              <div class="seg" id="rapSeg"><button class="btn sm" data-act="rap" data-v="25" type="button">25</button><button class="btn sm" data-act="rap" data-v="50" type="button">50</button><button class="btn sm on" data-act="rap" data-v="100" type="button">100</button></div>
+            </div></div>
+            <div class="cycle">
+              <div class="info">
+                <button class="btn ghost" data-act="single" id="btnSingle" type="button">Единичен блок</button>
+                <button class="btn ghost on" data-act="cool" id="btnCool" type="button">Охлаждане M8</button>
+                <span class="tm" id="runTime" title="Време на изпълнение">00:00</span>
+              </div>
+              <button class="btn go" data-act="start" type="button">Цикъл старт</button>
+              <button class="btn hold" data-act="hold" type="button">Пауза</button>
+              <button class="btn stop" data-act="stop" type="button">Стоп</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- РЪЧНО -->
+        <section class="screen jog" data-screen="jog" hidden>
+          <div class="card">
+            <div class="card-h"><span>Работна позиция · G54</span><div class="grp"><button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button><button class="btn sm" data-act="zero-all" type="button">XYZ = 0</button></div></div>
+            <div class="dro" data-dro="zero"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Ръчно движение</span><span class="r" id="jogHint">стъпка 0.100 мм</span></div>
+            <div class="card-b">
+              <div class="pad">
+                <span></span><button class="btn" data-jog="Y+" type="button">Y+</button><span></span><button class="btn" data-jog="Z+" type="button">Z+</button>
+                <button class="btn" data-jog="X-" type="button">X−</button><span class="lbl">XY</span><button class="btn" data-jog="X+" type="button">X+</button><span class="lbl">Z</span>
+                <span></span><button class="btn" data-jog="Y-" type="button">Y−</button><span></span><button class="btn" data-jog="Z-" type="button">Z−</button>
+              </div>
+              <div class="rot">
+                <button class="btn" data-jog="A-" type="button">A−</button><button class="btn" data-jog="A+" type="button">A+</button>
+                <button class="btn" data-jog="B-" type="button">B−</button><button class="btn" data-jog="B+" type="button">B+</button>
+                <button class="btn" data-jog="C-" type="button">C−</button><button class="btn" data-jog="C+" type="button">C+</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Параметри</span></div>
+            <div class="card-b">
+              <span class="lab">Стъпка, мм</span>
+              <div class="grid3" id="incSeg">
+                <button class="btn sm" data-act="inc" data-v="0.001" type="button">0.001</button>
+                <button class="btn sm" data-act="inc" data-v="0.01" type="button">0.01</button>
+                <button class="btn sm on" data-act="inc" data-v="0.1" type="button">0.1</button>
+                <button class="btn sm" data-act="inc" data-v="1" type="button">1</button>
+                <button class="btn sm" data-act="inc" data-v="10" type="button">10</button>
+                <button class="btn sm" data-act="inc" data-v="cont" type="button">Непрек.</button>
+              </div>
+              <span class="lab">Скорост, мм/мин</span>
+              <div class="stepper"><button class="btn" data-act="jogf" data-v="-1" type="button">−</button><span class="v" id="jogF">1000</span><button class="btn" data-act="jogf" data-v="1" type="button">+</button></div>
+              <span class="lab">Реферирване</span>
+              <div class="seg" id="refSeg"><button class="btn sm on" data-act="refmode" data-v="sensor" type="button">С датчик</button><button class="btn sm" data-act="refmode" data-v="manual" type="button">Ръчно, тук</button></div>
+              <div class="refgrid">
+                <button class="btn sm" data-act="home" data-v="X" type="button">X</button><button class="btn sm" data-act="home" data-v="Y" type="button">Y</button><button class="btn sm" data-act="home" data-v="Z" type="button">Z</button>
+                <button class="btn sm all" data-act="home" data-v="all" id="btnHomeAll" type="button">Всички оси</button>
+                <button class="btn sm" data-act="home" data-v="A" type="button">A</button><button class="btn sm" data-act="home" data-v="B" type="button">B</button><button class="btn sm" data-act="home" data-v="C" type="button">C</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MDI -->
+        <section class="screen mdi" data-screen="mdi" hidden>
+          <div class="card">
+            <div class="card-h"><span>Работна позиция</span></div>
+            <div class="dro" data-dro="compact"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Команда</span></div>
+            <div class="card-b">
+              <div class="mdi-in" id="mdiIn"></div>
+              <div class="grid3" style="grid-template-columns:1fr 1fr 2fr">
+                <button class="btn" data-act="mdi-clr" type="button">Изчисти</button>
+                <button class="btn" data-act="mdi-nl" type="button">Нов ред</button>
+                <button class="btn go" data-act="mdi-run" type="button">Изпълни</button>
+              </div>
+              <span class="lab">История</span>
+              <div class="hist" id="mdiHist"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Клавиатура</span></div>
+            <div class="card-b"><div class="keys" id="keys"></div></div>
+          </div>
+        </section>
+
+        <!-- ИНСТРУМЕНТИ -->
+        <section class="screen tools" data-screen="tools" hidden>
+          <div class="card">
+            <div class="card-h"><span>Таблица на инструментите</span><span class="r" id="toolCnt">12 гнезда</span></div>
+            <div class="tbl-wrap"><table class="tt"><thead><tr><th>T</th><th>Описание</th><th class="n">Дължина</th><th class="n">Ø</th><th class="n">Износв.</th></tr></thead><tbody id="toolBody"></tbody></table></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span id="magTitle">Магазин · карусел</span><span class="r" id="magPos">гнездо 5</span></div>
+            <div class="card-b">
+              <div class="mag" id="mag"><div class="ring"></div><span class="mk">▼ смяна</span><div class="hub"><span>шпиндел</span><b id="hubT">T5</b></div><div class="spm" id="spm"><span id="spmT">T5</span><span>▼</span></div></div>
+              <div class="atc" id="atc"><i class="led on"></i><span>Магазинът е готов</span></div>
+              <div class="grid3" style="grid-template-columns:1fr 1fr">
+                <button class="btn on" data-act="tool-change" id="btnTc" type="button">Смени с T3</button>
+                <button class="btn" data-act="tool-measure" type="button">Измери дължина</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ПРОБИНГ -->
+        <section class="screen probe" data-screen="probe" hidden>
+          <div class="card">
+            <div class="card-h"><span>Входове за измерване</span></div>
+            <div class="inp"><i class="led" id="ledPrb"></i><span class="nm">3D пробник</span><button class="btn sm" data-act="test" data-v="prb" type="button">Тест</button><span class="mt" id="mtPrb">PRB1 · NO · 24 V · 0 сраб.</span></div>
+            <div class="inp"><i class="led" id="ledTs"></i><span class="nm">Toolsetter</span><button class="btn sm" data-act="test" data-v="ts" type="button">Тест</button><span class="mt" id="mtTs">PRB2 · NC · 24 V · 0 сраб.</span></div>
+            <div class="card-b">
+              <span class="lab">Последно събитие (latch от енкодер)</span>
+              <div class="res" id="evBox"><div><span>Няма събития</span></div></div>
+              <span class="lab">Toolsetter</span>
+              <div class="kv">Позиция (маш.)<b id="tsPos">X -20.000 Y -20.000</b></div>
+              <button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button>
+              <button class="btn" data-act="tool-measure" type="button">Измери текущия инструмент</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Цикли с 3D пробник</span><span class="r">сфера Ø2.000</span></div>
+            <div class="card-b">
+              <div class="crn"><span class="lab">Ъгъл</span><div class="seg" id="crnSeg">
+                <button class="btn sm" data-act="corner" data-v="bl" type="button">↖ Заден ляв</button><button class="btn sm" data-act="corner" data-v="br" type="button">↗ Заден десен</button>
+                <button class="btn sm on" data-act="corner" data-v="fl" type="button">↙ Преден ляв</button><button class="btn sm" data-act="corner" data-v="fr" type="button">↘ Преден десен</button>
+              </div></div>
+              <div class="cycs" id="cycs"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Резултат</span></div>
+            <div class="card-b" id="prbRes"></div>
+          </div>
+        </section>
+
+        <!-- ДИАГНОСТИКА -->
+        <section class="screen diag" data-screen="diag" hidden>
+          <div class="card">
+            <div class="card-h"><span>Енкодери и следяща грешка</span><button class="btn sm" data-act="sim-alarm" type="button">Симулирай аларма по Y</button></div>
+            <div class="tbl-wrap"><table class="tt"><thead><tr><th>Ос</th><th>Контур</th><th class="n">Заповядана</th><th class="n">Енкодер</th><th class="n">Грешка</th><th class="n">Лимит</th><th>Статус</th></tr></thead><tbody id="encBody"></tbody></table></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span>Входове · изходи</span></div>
+            <div class="io" id="ioBox"></div>
+          </div>
+          <div class="link">
+            <div class="card"><div class="card-b"><span>SPI връзка</span><b>16 MHz</b></div></div>
+            <div class="card"><div class="card-b"><span>Цикъл</span><b id="lkCyc">1.000 kHz</b></div></div>
+            <div class="card"><div class="card-b"><span>Буфер сегменти</span><b id="lkBuf">0 %</b></div></div>
+            <div class="card"><div class="card-b"><span>CRC грешки</span><b>0</b></div></div>
+            <div class="card"><div class="card-b"><span>Watchdog</span><b id="lkWd">ОК · 1 ms</b></div></div>
+          </div>
+        </section>
+
+        <!-- ПРОГРАМИ -->
+        <section class="screen files" data-screen="files" hidden>
+          <div class="card">
+            <div class="card-h"><span>Програми</span><button class="btn sm" data-act="go" data-v="run" type="button">← Назад</button></div>
+            <div class="card-b">
+              <div class="seg" id="srcSeg"><button class="btn sm on" data-act="src" data-v="mem" type="button">Памет</button><button class="btn sm" data-act="src" data-v="usb" type="button">USB</button><button class="btn sm" data-act="src" data-v="net" type="button">Мрежа</button></div>
+              <div class="flist" id="flist"></div>
+              <button class="btn" data-act="upload" type="button">Качи файл от компютъра</button>
+              <input type="file" id="fileIn" accept=".nc,.ngc,.gcode,.tap,.cnc,.txt" hidden>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><span class="gcn" id="fpName">—</span><span class="r" id="fpSize"></span></div>
+            <div class="canvas-wrap fp-cv"><canvas id="fpCv"></canvas></div>
+            <div class="fpinfo" id="fpInfo"></div>
+            <div class="fpbtns"><button class="btn" data-act="f-fromline" type="button">Изпълни от ред…</button><button class="btn go" data-act="f-load" type="button">Зареди</button></div>
+          </div>
+        </section>
+
+        <!-- НАСТРОЙКИ -->
+        <section class="screen sets" data-screen="set" hidden>
+          <div class="card setnav" id="setNav"></div>
+          <div class="card setmain">
+            <div class="card-h"><span id="setTitle">Оси и мотори</span><span class="r" id="setDirty"></span></div>
+            <div class="setbody" id="setBody"></div>
+            <div class="sethelp" id="setHelp"></div>
+            <div class="setfoot" id="setFoot">
+              <span class="note" id="setNote"></span>
+              <button class="btn" data-act="cfg-revert" type="button">Отмени промените</button>
+              <button class="btn go" data-act="cfg-save" type="button">Запиши</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="modal" id="modal" hidden>
+        <div class="dlg" role="dialog" aria-label="Задаване на позиция">
+          <div class="dlg-h"><b id="dlgT">Задай позиция</b><span id="dlgCur"></span></div>
+          <div class="seg" id="dlgAx">
+            <button class="btn sm" data-act="dlg-ax" data-v="X" type="button">X</button><button class="btn sm" data-act="dlg-ax" data-v="Y" type="button">Y</button><button class="btn sm" data-act="dlg-ax" data-v="Z" type="button">Z</button>
+            <button class="btn sm" data-act="dlg-ax" data-v="A" type="button">A</button><button class="btn sm" data-act="dlg-ax" data-v="B" type="button">B</button><button class="btn sm" data-act="dlg-ax" data-v="C" type="button">C</button>
+          </div>
+          <div class="seg" id="dlgTgt"><button class="btn sm on" data-act="dlg-tgt" data-v="work" type="button">Работна · G54</button><button class="btn sm" data-act="dlg-tgt" data-v="mach" type="button">Машинна · реф. точка</button></div>
+          <div class="mdi-in" id="dlgIn"></div>
+          <div class="dlg-note" id="dlgNote"></div>
+          <div class="dk">
+            <button class="btn" data-act="dk" data-v="7" type="button">7</button><button class="btn" data-act="dk" data-v="8" type="button">8</button><button class="btn" data-act="dk" data-v="9" type="button">9</button><button class="btn" data-act="dk" data-v="bs" type="button">⌫</button>
+            <button class="btn" data-act="dk" data-v="4" type="button">4</button><button class="btn" data-act="dk" data-v="5" type="button">5</button><button class="btn" data-act="dk" data-v="6" type="button">6</button><button class="btn" data-act="dk" data-v="pm" type="button">±</button>
+            <button class="btn" data-act="dk" data-v="1" type="button">1</button><button class="btn" data-act="dk" data-v="2" type="button">2</button><button class="btn" data-act="dk" data-v="3" type="button">3</button><button class="btn" data-act="dk" data-v="." type="button">.</button>
+            <button class="btn" data-act="dk" data-v="0" type="button">0</button><button class="btn w2" data-act="dk" data-v="cur" type="button">Текущата</button><button class="btn" data-act="dk" data-v="clr" type="button">C</button>
+          </div>
+          <div class="grid3" style="grid-template-columns:1fr 1fr 1.6fr">
+            <button class="btn" data-act="dlg-cancel" type="button">Отказ</button>
+            <button class="btn" data-act="dlg-zero" type="button">Задай 0</button>
+            <button class="btn go" data-act="dlg-ok" type="button">Задай</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal" id="numDlg" hidden>
+        <div class="dlg" role="dialog" aria-label="Въвеждане на стойност">
+          <div class="dlg-h"><b id="ndT"></b><span id="ndCur"></span></div>
+          <div class="mdi-in" id="ndIn"></div>
+          <div class="dlg-note" id="ndNote"></div>
+          <div class="dk">
+            <button class="btn" data-act="nk" data-v="7" type="button">7</button><button class="btn" data-act="nk" data-v="8" type="button">8</button><button class="btn" data-act="nk" data-v="9" type="button">9</button><button class="btn" data-act="nk" data-v="bs" type="button">⌫</button>
+            <button class="btn" data-act="nk" data-v="4" type="button">4</button><button class="btn" data-act="nk" data-v="5" type="button">5</button><button class="btn" data-act="nk" data-v="6" type="button">6</button><button class="btn" data-act="nk" data-v="pm" type="button">±</button>
+            <button class="btn" data-act="nk" data-v="1" type="button">1</button><button class="btn" data-act="nk" data-v="2" type="button">2</button><button class="btn" data-act="nk" data-v="3" type="button">3</button><button class="btn" data-act="nk" data-v="." type="button">.</button>
+            <button class="btn" data-act="nk" data-v="0" type="button">0</button><button class="btn w2" data-act="nk" data-v="cur" type="button">Текущата</button><button class="btn" data-act="nk" data-v="clr" type="button">C</button>
+          </div>
+          <div class="grid3" style="grid-template-columns:1fr 1.6fr">
+            <button class="btn" data-act="nd-cancel" type="button">Отказ</button>
+            <button class="btn go" data-act="nd-ok" type="button">Готово</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal" id="txtDlg" hidden>
+        <div class="dlg tdlg" role="dialog" aria-label="Въвеждане на текст">
+          <div class="dlg-h"><b id="tdT"></b><span id="tdCur"></span></div>
+          <div class="mdi-in" id="tdIn"></div>
+          <div class="dlg-note" id="tdNote"></div>
+          <div class="tk" id="tkeys"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1.6fr">
+            <button class="btn" data-act="td-cancel" type="button">Отказ</button>
+            <button class="btn go" data-act="td-ok" type="button">Готово</button>
+          </div>
+        </div>
+      </div>
+
+      <nav class="navbar" id="nav">
+        <button class="btn on" data-act="go" data-v="run" type="button">Работа</button>
+        <button class="btn" data-act="go" data-v="jog" type="button">Ръчно</button>
+        <button class="btn" data-act="go" data-v="mdi" type="button">MDI</button>
+        <button class="btn" data-act="go" data-v="tools" type="button">Инструменти</button>
+        <button class="btn" data-act="go" data-v="probe" type="button">Пробинг</button>
+        <button class="btn" data-act="go" data-v="diag" type="button">Диагностика</button>
+        <button class="btn" data-act="go" data-v="set" type="button">Настройки</button>
+      </nav>
+    </div>
+  </div>
+
+  <section class="notes">
+    <div>
+      <h2>Какво да пробваш</h2>
+      <ul>
+        <li><b>Работа</b>: „Цикъл старт“ пуска демо програмата. Следи реда, траекторията и следящата грешка до всяка ос.</li>
+        <li><b>Ръчно</b> и <b>MDI</b>: движение със стъпка или непрекъснато, нулиране на G54, команди като <code>G0 X10 Y10</code>.</li>
+        <li><b>Инструменти</b>: избери ред и „Смени“. Ще видиш последователността на смяната.</li>
+        <li><b>Пробинг</b>: първо зареди T10, после пусни цикъл. Пробникът (PRB1) и toolsetter-ът (PRB2) са отделни входове.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Съответствие в LVGL</h2>
+      <ul>
+        <li>Екраните са <code>lv_obj</code> с grid/flex оформление, а навигацията е <code>lv_btnmatrix</code>.</li>
+        <li>Позициите са <code>lv_label</code> с моноширинен шрифт, а лентите за грешка са <code>lv_bar</code>.</li>
+        <li>Траекторията се рисува в <code>lv_canvas</code>, а G-code списъкът е <code>lv_list</code> или <code>lv_table</code>.</li>
+        <li>Индикаторите на входовете са <code>lv_led</code>, а MDI клавиатурата е <code>lv_btnmatrix</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Шрифтове</h2>
+      <ul>
+        <li>Barlow Condensed за надписи и Barlow за текст. За цифрите е JetBrains Mono, защото знаците са с еднаква ширина и позициите не „скачат“.</li>
+        <li>И трите шрифта са с OFL лиценз и се конвертират с <code>lv_font_conv</code>, включително кирилицата.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(()=>{
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const AX=['X','Y','Z','A','B','C'], ROT={A:1,B:1,C:1};
+const RAPID=6000, SIMX=2.5, FERR_LIM=50, SAFE_Z=5;
+const TS={X:-20,Y:-20,TOP:-180};
+const PRB={fast:300,slow:30,back:1,ball:2};
+const css=getComputedStyle(document.documentElement);
+const C={}; ['panel','surf','line','fg','dim','faint','acc','ok','warn','bad','info','path','rapid'].forEach(k=>C[k]=css.getPropertyValue('--'+k).trim());
+
+const TOOLS=[
+ {t:1,d:'Фреза 2Z',dia:6,len:72.315,w:0},
+ {t:2,d:'Фреза 3Z',dia:10,len:84.902,w:0.004},
+ {t:3,d:'Сферична R3',dia:6,len:77.120,w:0},
+ {t:4,d:'Свредло',dia:8.5,len:118.440,w:0},
+ {t:5,d:'Фреза 3Z ALU',dia:10,len:92.405,w:0.002},
+ {t:6,d:'Метчик M10',dia:10,len:96.770,w:0},
+ {t:7,d:'Центрово 90°',dia:6,len:68.050,w:0},
+ {t:8,d:'Челна фреза',dia:50,len:61.230,w:0.010},
+ {t:9,d:'Гравьор 30°',dia:3,len:70.880,w:0},
+ {t:10,d:'3D пробник',dia:2,len:104.600,w:0},
+ {t:11,d:'Фаска 45°',dia:12,len:80.310,w:0},
+ {t:12,d:'Фреза 4Z',dia:16,len:99.015,w:0.006},
+];
+const toolOf=t=>{
+ if(!(t>=1&&t<=S.cfg.mag.mn))return undefined;
+ let x=TOOLS.find(o=>o.t===t);if(!x){x={t,d:'Празно гнездо',dia:0,len:0,w:0,empty:1};TOOLS.push(x)}
+ return x};
+
+const S={
+ state:'idle', alarm:'', screen:'run', coord:'work',
+ mach:{X:-250,Y:-180,Z:-70,A:0,B:0,C:0}, off:{X:-250,Y:-180,Z:-95,A:0,B:0,C:0},
+ vel:{X:0,Y:0,Z:0,A:0,B:0,C:0}, ferr:{X:0,Y:0,Z:0,A:0,B:0,C:0},
+ homed:{X:false,Y:false,Z:false,A:false,B:false,C:false}, refMode:'sensor',
+ active:{X:true,Y:true,Z:true,A:true,B:true,C:true},
+ corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'ax', setHelp:null, nd:{a:'X',k:'spm',txt:''},
+ dlg:{ax:'X',tgt:'work',txt:''},
+ feedOv:100, spOv:100, rapOv:100, F:0, progF:0,
+ sp:{cmd:0,act:0,on:false,dir:'CW'}, coolant:false, airBlast:false,
+ tool:5, sel:3, magPos:5, magRot:120, clamped:true, orient:false, magMoving:false,
+ queue:[], cur:null, runKind:null, curPi:-1, progLine:-1, single:false, runTime:0,
+ jogInc:0.1, jogF:1000, jogHold:null,
+ mdi:'', mdiHist:['G0 X0 Y0 Z5','G1 Z-1 F200','M3 S8000','T3 M6'],
+ actLabel:'', toast:'', toastUntil:0,
+ flash:{prb:0,ts:0}, cnt:{prb:0,ts:0}, lastEv:null, prbRes:null, prbWarn:false
+};
+const work=()=>{const o={};AX.forEach(a=>o[a]=S.mach[a]-S.off[a]);return o};
+const setWork=w=>AX.forEach(a=>S.mach[a]=w[a]+S.off[a]);
+const toast=(t,ms=3500)=>{S.toast=t;S.toastUntil=performance.now()+ms};
+const set=(el,t)=>{if(el&&el.textContent!==t)el.textContent=t};
+const f3=(v,w=9)=>{const s=Math.abs(v)<0.0005?0:v;return((s<0?'-':'')+Math.abs(s).toFixed(3)).padStart(w,' ')};
+const f4=v=>(v<0?'-':'')+Math.abs(v).toFixed(4);
+const mmss=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');
+
+/* ---------- Програма ---------- */
+function buildProgram(){
+ const L=['(ДЕМО: ДЖОБ, ОТВОР И КОНТУР)','(ДЕТАЙЛ 80 X 50 MM, AL 6082)','G21 G90 G17 G40 G49','G54','T5 M6','S12000 M3','M8','G0 Z5.000','G0 X5.000 Y5.000','G1 Z-2.000 F300','(ДЖОБ, СТЪПКА 5 MM)'];
+ let y=5,dir=1;
+ while(y<=45.0001){L.push(`G1 X${dir>0?'75.000':'5.000'} F1200`);y+=5;if(y<=45.0001)L.push(`G1 Y${y.toFixed(3)}`);dir=-dir}
+ L.push('G0 Z5.000','(ОТВОР Ø40)','G0 X20.000 Y25.000','G1 Z-4.000 F300','G2 X20.000 Y25.000 I20.000 J0 F900','G0 Z5.000',
+  '(КОНТУР R15)','G0 X10.000 Y-5.000','G1 Z-5.000 F300','G1 X70.000 F1000','G3 X85.000 Y10.000 I0 J15.000','G1 Y40.000',
+  'G3 X70.000 Y55.000 I-15.000 J0','G1 X10.000','G3 X-5.000 Y40.000 I0 J-15.000','G1 Y10.000','G3 X10.000 Y-5.000 I15.000 J0',
+  'G0 Z25.000','M9','M5','G0 X0 Y0','M30');
+ return L;
+}
+function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
+  const M=S.cfg.mag,x=toolOf(T);
+  if(T===S.tool){toast('T'+T+' вече е в шпиндела');return}
+  if(!x){toast('Няма гнездо '+T+'. Магазинът има '+M.mn+' гнезда.');return}
+  if(x.empty){toast('Гнездо '+T+' е празно');return}
+  const old=S.tool,L='Смяна на инструмент T'+T+': ',ops=[];
+  const act=(l,d,f)=>ops.push({type:'act',line,dur:d,fn:f,label:l?L+l:undefined});
+  const mv=(l,fn,rapid=true)=>ops.push({type:'line',line,tgtFn:fn,rapid,feed:2000,label:L+l});
+  const toW=o=>{const r={};for(const k in o)r[k]=o[k]-S.off[k];return r};
+  act('спиране на шпиндела',.4,()=>{S.sp.on=false});
+  act('ориентация на шпиндела на '+M.mor.toFixed(1)+'°',.6,()=>{S.orient=true});
+  if(M.mtype==='linear'){
+   const pp=i=>{const o={X:M.m1x,Y:M.m1y};o[M.maxis]+=(i-1)*M.mpitch;return o};
+   mv('Z нагоре',()=>toW({Z:0}));
+   if(old){
+    mv('шпинделът към гнездо '+old,()=>toW(pp(old)));act('',0,()=>{S.magPos=old});
+    mv('Z надолу до '+M.mz.toFixed(3),()=>toW({Z:M.mz}),false);
+    act('освобождаване на T'+old,.6,()=>{S.clamped=false;S.tool=0});
+    mv('Z нагоре без инструмент',()=>toW({Z:0}));
+   }
+   mv('шпинделът към гнездо '+T,()=>toW(pp(T)));act('',0,()=>{S.magPos=T});
+   mv('Z надолу до '+M.mz.toFixed(3),()=>toW({Z:M.mz}),false);
+   act('затягане на T'+T,.6,()=>{S.tool=T;S.clamped=true});
+   mv('Z нагоре',()=>toW({Z:0}));
+  }else{
+   const nm=M.mtype==='chain'?'веригата':'магазинът',N=M.mn;
+   const dist=(a,b)=>{const d=Math.abs(a-b)%N;return Math.min(d,N-d)};
+   let at=S.magPos;
+   if(old){act(nm+' към гнездо '+old,Math.max(.3,dist(at,old)*M.msp),()=>{S.magPos=old;S.magMoving=true});at=old;
+           act('освобождаване на T'+old,.6,()=>{S.magMoving=false;S.clamped=false;S.tool=0})}
+   act(nm+' към гнездо '+T,Math.max(.3,dist(at,T)*M.msp),()=>{S.magPos=T;S.magMoving=true});
+   act('затягане на T'+T,.6,()=>{S.magMoving=false;S.tool=T;S.clamped=true});
+  }
+  act('корекция на дължината G43 H'+T,.3,()=>{S.orient=false});
+  S.queue.unshift(...ops);
+}}}
+function parse(lines){
+ const out=[];let mode=0,F=1000,T=null,inc=false,u=1,cyc=0,cR=0,cZ=0,cP=0,cInit=25,ret=98;
+ const pos={X:0,Y:0,Z:25,A:0,B:0,C:0};
+ lines.forEach((raw,li)=>{
+  const code=raw.replace(/\(.*?\)/g,'').replace(/;.*/,'').toUpperCase().trim();if(!code||code[0]==='%'||code[0]==='O')return;
+  const w={},gs=[],ms=[];
+  code.replace(/([A-Z])\s*([-+]?\d*\.?\d+)/g,(_,l,n)=>{n=parseFloat(n);if(l==='G')gs.push(n);else if(l==='M')ms.push(n);else w[l]=n;return''});
+  if(gs.includes(20))u=25.4;if(gs.includes(21))u=1;
+  if(gs.includes(90))inc=false;if(gs.includes(91))inc=true;
+  if(gs.includes(98))ret=98;if(gs.includes(99))ret=99;
+  gs.forEach(g=>{if(g===0||g===1||g===2||g===3){mode=g;cyc=0}if(g===81||g===82||g===83){cyc=g;cInit=pos.Z}if(g===80)cyc=0});
+  for(const k of['X','Y','Z','I','J','K','R'])if(w[k]!==undefined)w[k]*=u;
+  if(w.F!==undefined)F=w.F*u;
+  if(w.T!==undefined)T=w.T;
+  if(w.S!==undefined){const s=w.S;out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.cmd=s}})}
+  if(ms.includes(6)&&T!=null)out.push(atcOp(T,li));
+  if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
+  if(ms.includes(8))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=true}});
+  if(ms.includes(9))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=false}});
+  if(gs.includes(4)){const d=w.P!==undefined?(w.P>=100?w.P/1000:w.P):0;out.push({type:'act',line:li,dur:d,label:'Пауза G4 '+d.toFixed(2)+' s'})}
+  const tgt={};let has=false;AX.forEach(a=>{if(w[a]!==undefined&&!(cyc&&a==='Z')){tgt[a]=w[a];has=true}});
+  if(gs.includes(53)&&has){const t={...tgt};out.push({type:'line',line:li,rapid:mode!==1,feed:F,tgtFn:()=>{const r={};for(const k in t)r[k]=t[k]-S.off[k];return r}});}
+  else if(gs.includes(28)){const ax=has?Object.keys(tgt):['Z'];out.push({type:'line',line:li,rapid:true,tgtFn:()=>{const r={};ax.forEach(k=>r[k]=0-S.off[k]);return r},label:'G28: към машинна нула'});}
+  else if(cyc){
+   if(w.R!==undefined)cR=w.R;if(w.Z!==undefined)cZ=w.Z;if(w.P!==undefined)cP=w.P;
+   if(has){const xy={};if(tgt.X!==undefined)xy.X=inc?pos.X+tgt.X:tgt.X;if(tgt.Y!==undefined)xy.Y=inc?pos.Y+tgt.Y:tgt.Y;
+    const lb='Цикъл G'+cyc+' ред '+(li+1);
+    out.push({type:'line',line:li,tgt:xy,rapid:true,feed:F},{type:'line',line:li,tgt:{Z:cR},rapid:true,feed:F},{type:'line',line:li,tgt:{Z:cZ},feed:F,label:lb});
+    if(cyc===82&&cP)out.push({type:'act',line:li,dur:cP>=100?cP/1000:cP,label:lb+': пауза'});
+    const zr=ret===98?Math.max(cInit,cR):cR;out.push({type:'line',line:li,tgt:{Z:zr},rapid:true,feed:F});
+    Object.assign(pos,xy);pos.Z=zr;}
+  }else if(has){
+   const k=inc?'rel':'tgt';
+   if(mode<=1)out.push({type:'line',line:li,[k]:tgt,rapid:mode===0,feed:F});
+   else out.push({type:'arc',line:li,[k]:tgt,cw:mode===2,I:w.I||0,J:w.J||0,R:w.I===undefined&&w.J===undefined?w.R:undefined,feed:F});
+   for(const a in tgt)pos[a]=inc?pos[a]+tgt[a]:tgt[a];
+  }
+  if(ms.includes(5))out.push({type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
+  if(ms.includes(30)||ms.includes(2))out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});
+ });
+ return out;
+}
+let PROG=[],PROG_OPS=[],PROG_ID=0,PROG_NAME='';
+
+/* ---------- Геометрия ---------- */
+function prepare(m,p){
+ m.from={...p};m.s=0;m.trig_done=false;
+ if(m.type==='act')return m;
+ if(m.tgtFn)m.tgt=m.tgtFn();
+ const t={...p};if(m.tgt)Object.assign(t,m.tgt);if(m.rel)for(const k in m.rel)t[k]=p[k]+m.rel[k];
+ m.to=t;
+ if(m.type==='arc'){
+  if(m.R!==undefined){const dx=t.X-p.X,dy=t.Y-p.Y,d=Math.hypot(dx,dy)||1e-9,R=Math.abs(m.R),h=Math.sqrt(Math.max(0,R*R-d*d/4)),sg=(m.cw?-1:1)*(m.R>0?1:-1),mx=(p.X+t.X)/2,my=(p.Y+t.Y)/2;m.I=mx-sg*h*dy/d-p.X;m.J=my+sg*h*dx/d-p.Y}
+  const cx=p.X+m.I,cy=p.Y+m.J,r=Math.hypot(p.X-cx,p.Y-cy);
+  const a0=Math.atan2(p.Y-cy,p.X-cx),a1=Math.atan2(t.Y-cy,t.X-cx);let sw=a1-a0;
+  if(m.cw){if(sw>=-1e-9)sw-=2*Math.PI}else{if(sw<=1e-9)sw+=2*Math.PI}
+  Object.assign(m,{cx,cy,r,a0,sw});m.len=Math.hypot(r*Math.abs(sw),t.Z-p.Z)||1e-6;
+ }else m.len=Math.hypot(...AX.map(a=>t[a]-p[a]))||1e-6;
+ return m;
+}
+function posAt(m,f){
+ const o={};for(const a of AX)o[a]=m.from[a]+(m.to[a]-m.from[a])*f;
+ if(m.type==='arc'){const g=m.a0+m.sw*f;o.X=m.cx+m.r*Math.cos(g);o.Y=m.cy+m.r*Math.sin(g)}
+ return o;
+}
+let PREV=[],BOUNDS={x0:-10,x1:10,y0:-10,y1:10},PREVMAP=new Map();
+function analyze(ops){
+ let p={X:0,Y:0,Z:25,A:0,B:0,C:0},curT=0;const segs=[],tools=[];
+ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9,len=0,t=0;
+ ops.forEach(op=>{
+  if(op.type==='act'){if(op.tool){if(!tools.includes(op.tool))tools.push(op.tool);curT=op.tool;t+=8}else t+=op.dur||0;return}
+  const m=prepare({...op},p);
+  const n=m.type==='arc'?Math.max(8,Math.ceil(Math.abs(m.sw)/(2*Math.PI)*72)):1,pts=[];
+  for(let k=0;k<=n;k++){const q=posAt(m,k/n);pts.push([q.X,q.Y,q.Z]);if(q.X<x0)x0=q.X;if(q.X>x1)x1=q.X;if(q.Y<y0)y0=q.Y;if(q.Y>y1)y1=q.Y}
+  z0=Math.min(z0,m.from.Z,m.to.Z);z1=Math.max(z1,m.from.Z,m.to.Z);
+  segs.push({pi:op.pi,pts,rapid:!!m.rapid,tool:curT,from:{...m.from}});len+=m.len;t+=m.len/((m.rapid?RAPID:Math.max(1,m.feed))/60);p=m.to;
+ });
+ if(x0>x1){x0=-10;x1=10;y0=-10;y1=10;z0=z1=0}
+ if(x1-x0<2){x0-=5;x1+=5}if(y1-y0<2){y0-=5;y1+=5}
+ return{segs,bounds:{x0,x1,y0,y1},z0,z1,len,t,tools};
+}
+function compile(text){
+ const lines=text.split(/\r?\n/);while(lines.length&&lines[lines.length-1].trim()==='')lines.pop();
+ const ops=parse(lines);ops.forEach((o,i)=>{o.pi=i;o.prog=true});
+ return{lines,ops,info:analyze(ops)};
+}
+
+
+/* ---------- Изпълнение ---------- */
+function runOps(ops,kind){S.queue=ops.map(o=>({...o}));S.cur=null;S.runKind=kind;S.state='run'}
+function canMove(){
+ if(S.state==='estop'){toast('Аварийният стоп е натиснат. Освободете го и натиснете НУЛИРАНЕ.');return false}
+ if(S.state==='alarm'){toast('Има активна аларма. Отстранете причината и натиснете НУЛИРАНЕ.');return false}
+ if(S.state!=='idle'){toast('Машината се движи. Изчакайте или натиснете СТОП.');return false}
+ return true;
+}
+function halt(){S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
+function finishRun(){
+ const k=S.runKind;S.state='idle';S.runKind=null;S.cur=null;S.actLabel='';S.F=0;
+ if(k==='prog'){S.curPi=Infinity;toast('Програмата приключи за '+mmss(S.runTime))}
+ if(k==='mdi')toast('MDI командата е изпълнена');
+}
+function begin(m){
+ prepare(m,work());
+ if(m.prog){S.curPi=m.pi;S.progLine=m.line}
+ if(m.label)S.actLabel=m.label;else if(m.type!=='act')S.actLabel='';
+ if(m.type==='act'&&m.fn)m.fn();
+}
+function trigger(m){
+ const lm={};AX.forEach(a=>lm[a]=S.mach[a]-Math.sign(S.vel[a])*Math.abs(S.ferr[a])/1000);
+ const lw={};AX.forEach(a=>lw[a]=lm[a]-S.off[a]);
+ const inp=m.input||'prb';S.flash[inp]=performance.now();S.cnt[inp]++;
+ S.lastEv={inp,lm};
+ if(m.onTrig)m.onTrig(lm,lw);
+}
+function stepQueue(dt){
+ let b=dt,guard=0;
+ while(b>0&&S.state==='run'&&guard++<400){
+  if(!S.cur){if(!S.queue.length){finishRun();return}S.cur=S.queue.shift();begin(S.cur);if(S.state!=='run')return}
+  const m=S.cur;
+  if(m.type==='act'){m.el=(m.el||0)+b;if(m.el<m.dur)return;b=m.el-m.dur;S.cur=null;continue}
+  const feed=m.rapid?RAPID*S.rapOv/100:m.feed*S.feedOv/100;S.F=feed;if(m.prog||S.runKind==='mdi')S.progF=m.rapid?0:m.feed;
+  const v=Math.max(feed,1)/60*SIMX;
+  if(m.type==='probe'&&m.s+v*b>=m.trig){m.s=m.trig;setWork(posAt(m,m.s/m.len));trigger(m);S.cur=null;b=0;return}
+  const need=(m.len-m.s)/v;
+  if(need<=b){
+   m.s=m.len;setWork(posAt(m,1));b-=need;S.cur=null;
+   if(m.type==='probe'){S.state='alarm';S.alarm='Пробникът не сработи в зададения ход. Проверете позицията и входа '+(m.input==='ts'?'PRB2':'PRB1')+'.';halt();return}
+   if(S.single&&m.prog&&S.queue.length){S.state='hold';toast('Единичен блок: натиснете ЦИКЪЛ СТАРТ за следващия ред');return}
+   continue;
+  }
+  m.s+=v*b;setWork(posAt(m,m.s/m.len));b=0;
+ }
+}
+function tick(dt){
+ const before={...S.mach};
+ if(S.state==='run'){if(S.runKind==='prog')S.runTime+=dt;stepQueue(dt)}
+ if(S.jogHold&&S.state==='idle'){const{a,d}=S.jogHold;S.mach[a]+=d*S.jogF/60*dt;
+  if(S.homed[a]){const c=S.cfg[a];if(S.mach[a]>c.max||S.mach[a]<c.min){S.mach[a]=Math.max(c.min,Math.min(c.max,S.mach[a]));S.jogHold=null;toast('Софтуерен лимит на '+a+' ('+(d>0?'макс. ':'мин. ')+(d>0?c.max:c.min).toFixed(3)+')')}}}
+ AX.forEach(a=>{
+  const v=(S.mach[a]-before[a])/Math.max(dt,1e-4);S.vel[a]=v;
+  if(S.state==='alarm'&&a==='Y'&&S.alarmY)return;
+  const tgt=v*0.11+(Math.random()-.5)*(ROT[a]?0.5:0.7);
+  S.ferr[a]+=(tgt-S.ferr[a])*Math.min(1,dt*8);
+ });
+ const tsp=(S.sp.on&&S.state!=='estop')?S.sp.cmd*S.spOv/100:0;
+ const d=tsp-S.sp.act,st=9000*dt;S.sp.act+=Math.abs(d)<st?d:Math.sign(d)*st;
+ if(S.state!=='run'&&!S.jogHold)S.F=0;
+}
+
+/* ---------- DRO ---------- */
+const DROS=[];
+function buildDro(el,kind){
+ const compact=kind!=='full',zero=kind==='zero';const rows={};
+ AX.forEach(a=>{
+  const r=document.createElement('div');r.className='dro-row'+(compact?' compact':'');
+  r.innerHTML=`<div class="ax">${a}<i class="hm"></i></div><div class="val">0.000</div><div class="unit">${ROT[a]?'°':'мм'}</div>`+
+   (compact?(zero?`<div class="zb"><button class="btn sm" data-act="zero" data-v="${a}" type="button">${a} = 0</button><button class="btn sm" data-act="setv" data-v="${a}" type="button">Задай</button></div>`:''):
+   `<div class="sub"><span class="s-m"></span><span class="s-d"></span><span class="ferr"><i><b></b></i><em></em></span></div>`);
+  if(!compact){r.dataset.act='setv';r.dataset.v=a}
+  el.appendChild(r);
+  rows[a]={row:r,val:$('.val',r),sm:$('.s-m',r),sd:$('.s-d',r),fb:$('.ferr b',r),fe:$('.ferr em',r),hm:$('.hm',r)};
+ });
+ DROS.push({compact,rows});
+}
+$$('[data-dro]').forEach(el=>buildDro(el,el.dataset.dro));
+function updDro(){
+ const w=work(),to=S.cur&&S.cur.to?S.cur.to:null;
+ DROS.forEach(d=>{for(const a in d.rows){const r=d.rows[a];
+  const mach=!d.compact&&S.coord==='mach';
+  set(r.val,f3(mach?S.mach[a]:w[a]));
+  if(r.sm){set(r.sm,(mach?'РАБ':'МАШ')+f3(mach?w[a]:S.mach[a],9));set(r.sd,'ОСТ'+f3(to?to[a]-w[a]:0,9));
+   const e=Math.abs(S.ferr[a]);r.fb.style.width=Math.min(100,e/FERR_LIM*100)+'%';
+   r.fb.style.background=e>40?C.bad:e>25?C.warn:C.ok;set(r.fe,e.toFixed(1)+(ROT[a]?' ″':' µm'))}
+  r.row.hidden=!S.active[a];
+  r.hm.classList.toggle('on',S.homed[a]==='sensor');r.hm.classList.toggle('man',S.homed[a]==='manual');
+ }});
+}
+
+/* ---------- G-code списък ---------- */
+const gcList=$('#gcList');let gcIn=null,lastWin='',lastLine=-2;
+function hl(s){
+ const esc=s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ if(/^\s*[(;]/.test(s))return`<span class="cm">${esc}</span>`;
+ return esc.replace(/\b(G\d+)/g,'<span class="g">$1</span>').replace(/\b(M\d+)/g,'<span class="m">$1</span>').replace(/\b(T\d+)/g,'<span class="t">$1</span>');
+}
+const glh=()=>parseFloat(getComputedStyle(gcList).fontSize)*1.7||14;
+function renderGc(){gcList.innerHTML='<div class="gc-in"></div>';gcIn=gcList.firstChild;gcList.scrollTop=0;lastWin='';lastLine=-2;winGc()}
+function winGc(){
+ if(!gcIn)return;const L=glh(),n=PROG.length;gcIn.style.height=n*L+'px';
+ const st=gcList.scrollTop,h=gcList.clientHeight||L*20;
+ const a=Math.max(0,Math.floor(st/L)-6),b=Math.min(n,Math.ceil((st+h)/L)+6);
+ const key=a+'|'+b+'|'+S.progLine+'|'+S.startLine+'|'+L;if(key===lastWin)return;lastWin=key;
+ let html='';for(let i=a;i<b;i++)html+=`<div class="gl${i===S.progLine?' c':''}${i===S.startLine?' sl':''}" data-act="gline" data-v="${i}" style="top:${i*L}px"><span>${i+1}</span><span>${hl(PROG[i])}</span></div>`;
+ gcIn.innerHTML=html;
+}
+gcList.addEventListener('scroll',()=>winGc(),{passive:true});
+function updGc(){
+ if(S.progLine!==lastLine){lastLine=S.progLine;if(lastLine>=0)gcList.scrollTop=Math.max(0,lastLine*glh()-gcList.clientHeight*.35)}
+ winGc();
+ set($('#gcPos'),(S.progLine>=0?S.progLine+1:0)+' / '+PROG.length);
+ const sb=$('#slBar');sb.hidden=S.startLine==null;if(S.startLine!=null)set($('#slN'),String(S.startLine+1));
+}
+
+/* ---------- Програми ---------- */
+const FILES={mem:[],usb:[],net:[]};let LOADED=null;
+const fdate=d=>String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+const fsize=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+const ftime=t=>{t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
+function addFile(src,name,text,date){FILES[src].push({name,text,size:new Blob([text]).size,date:date||fdate(new Date())})}
+function genFlange(){
+ const L=['(ФЛАНЕЦ Ø80, 6 ОТВОРА Ø8.5 НА ДЕЛИТЕЛНА Ø60)','(ПРОБИВАНЕ С G81, КОНТУР С ДЪГА)','G21 G90 G17 G40 G49','G54','T4 M6','S2200 M3','M8','G0 X30.000 Y0 Z25.000'];
+ for(let i=0;i<6;i++){const a=i*Math.PI/3,x=(30*Math.cos(a)).toFixed(3),y=(30*Math.sin(a)).toFixed(3);L.push(i?`X${x} Y${y}`:`G98 G81 X${x} Y${y} Z-12.000 R2.000 F150`)}
+ L.push('G80','G0 Z25.000','T2 M6','S9000 M3','G0 X-45.000 Y0','G0 Z2.000','G1 Z-6.000 F300','G2 X-45.000 Y0 I45.000 J0 F800','G0 Z25.000','M9','M5','G0 X0 Y0','M30');return L.join('\n');
+}
+function genFacing(){
+ const L=['(ПЛАНИРАНЕ 150 X 100, ЧЕЛНА ФРЕЗА Ø50)','G21 G90 G17','G54','T8 M6','S4500 M3','M8','G0 Z5.000','G0 X-30.000 Y-10.000','G1 Z-0.500 F400'];let d=1;
+ for(let y=-10;y<=111;y+=35){L.push(`G1 X${d>0?'180.000':'-30.000'} F1500`);if(y+35<=111)L.push(`G1 Y${(y+35).toFixed(3)}`);d=-d}
+ L.push('G0 Z25.000','M9','M5','M30');return L.join('\n');
+}
+function genSpiral(){
+ const L=['(ГРАВИРАНЕ: СПИРАЛА С R ДЪГИ, РАМКА В G91)','G21 G90 G17','G54','T9 M6','S18000 M3','G0 Z3.000','G0 X42.000 Y40.000','G1 Z-0.200 F120'];let x=42;
+ for(let k=0;k<14;k++){const dx=4+1.5*k,nx=k%2?x+dx:x-dx;L.push(`G3 X${nx.toFixed(3)} Y40.000 R${(dx/2).toFixed(3)}${k?'':' F600'}`);x=nx}
+ L.push('G0 Z3.000','G0 X5.000 Y5.000','G1 Z-0.200 F120','G91','G1 X70.000 F600','G1 Y70.000','G1 X-70.000','G1 Y-70.000','G90','G0 Z25.000','M5','M30');return L.join('\n');
+}
+function genCover(){
+ const L=['(КАПАК НА КОРПУС: ДЖОБ 120 X 80 НА 2 ПРОХОДА)','G21 G90 G17','G54','T2 M6','S9500 M3','M8'];
+ for(const z of[-2,-4]){L.push('G0 Z3.000','G0 X5.000 Y5.000',`G1 Z${z.toFixed(3)} F250`);let d=1;
+  for(let y=5;y<=75.001;y+=7){L.push(`G1 X${d>0?'115.000':'5.000'} F1100`);if(y+7<=75.001)L.push(`G1 Y${(y+7).toFixed(3)}`);d=-d}}
+ L.push('G0 Z25.000','M9','M5','M30');return L.join('\n');
+}
+addFile('mem','demo_dzhob.nc',buildProgram().join('\n'),'28.10.2026 14:12');
+addFile('mem','flanets_d80.nc',genFlange(),'29.10.2026 09:40');
+addFile('mem','planirane_150x100.nc',genFacing(),'30.10.2026 16:05');
+addFile('mem','gravirane_spirala.nc',genSpiral(),'31.10.2026 11:27');
+addFile('usb','kapak_korpus.nc',genCover(),'19.10.2026 18:52');
+addFile('net','skoba_L_60x40.nc',['(СКОБА L 60 X 40, КОНТУР НА 3 ПРОХОДА)','G21 G90 G17','G54','T12 M6','S8000 M3','M8',...[-3,-6,-9].flatMap(z=>['G0 Z3.000','G0 X-8.000 Y-8.000',`G1 Z${z.toFixed(3)} F250`,'G1 X68.000 F900','G1 Y12.000','G1 X12.000','G1 Y48.000','G1 X-8.000','G1 Y-8.000']),'G0 Z25.000','M9','M5','M30'].join('\n'),'31.10.2026 17:03');
+addFile('net','demo_dzhob_v2.nc',buildProgram().join('\n').replace('F1200','F1500'),'01.11.2026 08:15');
+const netReady=()=>S.cfg.net.shOn&&S.netOk;
+const curFile=()=>S.src==='net'&&!netReady()?null:FILES[S.src][S.fsel];
+function loadProgram(f){
+ if(!f.c)f.c=compile(f.text);
+ PROG=f.c.lines;PROG_OPS=f.c.ops;PINFO=f.c.info;TCOL=toolColors(PINFO.tools);PREV=f.c.info.segs;BOUNDS=f.c.info.bounds;PREVMAP=new Map(PREV.map(sg=>[sg.pi,sg]));
+ PROG_ID++;PROG_NAME=f.name;LOADED=f;S.curPi=-1;S.progLine=-1;S.startLine=null;S.runTime=0;
+ set($('#gcName'),f.name);renderGc();renderLegend();
+}
+function fromLine(L){
+ const ops=[];let first=true;
+ for(const o of PROG_OPS){
+  if(o.line<L){if(o.type==='act')ops.push(o.tool?o:{...o,dur:0,label:undefined});continue}
+  if(first&&o.type!=='act'){first=false;const sg=PREVMAP.get(o.pi);
+   if(sg){const st=sg.from,lb='Подход към ред '+(L+1)+': ';
+    ops.push({type:'line',tgtFn:()=>({Z:0-S.off.Z}),rapid:true,label:lb+'Z нагоре'},
+             {type:'line',tgt:{X:st.X,Y:st.Y,A:st.A,B:st.B,C:st.C},rapid:true,label:lb+'X Y'},
+             {type:'line',tgt:{Z:st.Z},feed:500,label:lb+'Z надолу'})}}
+  ops.push(o);
+ }
+ return ops;
+}
+function renderFiles(){
+ segOn('#srcSeg .btn',S.src);const el=$('#flist');
+ if(S.src==='net'&&!netReady()){el.innerHTML=`<div class="warnbox"><span>${S.cfg.net.shOn?'Мрежовият дял не е свързан.':'Мрежовият дял е изключен.'} Настройва се от Настройки → Мрежа.</span><button class="btn on" data-act="go-net" type="button">Към мрежовите настройки</button></div>`;return}
+ const L=FILES[S.src];
+ if(!L.length){el.innerHTML='<div class="res"><div><span>Няма файлове.</span></div></div>';return}
+ if(S.fsel>=L.length)S.fsel=0;
+ el.innerHTML=L.map((f,i)=>`<button class="btn fi${i===S.fsel?' on':''}" data-act="fsel" data-v="${i}" type="button"><b>${f.name.replace(/</g,'&lt;')}</b>${f===LOADED?'<span class="badge">заредена</span>':''}<small>${fsize(f.size)} · ${f.date}</small></button>`).join('');
+}
+function previewFile(){
+ const f=curFile(),cvs=$('#fpCv'),wrap=cvs.parentElement,dpr=window.devicePixelRatio||1;
+ const W=Math.round(wrap.clientWidth*dpr),H=Math.round(wrap.clientHeight*dpr);
+ if(!W||!H)return;cvs.width=W;cvs.height=H;const ctx=cvs.getContext('2d'),em=parseFloat(panel.style.fontSize)/16*dpr;
+ if(!f){ctx.fillStyle=C.surf;ctx.fillRect(0,0,W,H);set($('#fpName'),'—');set($('#fpSize'),'');$('#fpInfo').innerHTML='';return}
+ if(!f.c)f.c=compile(f.text);const I=f.c.info,b=I.bounds,rg=(a,c)=>a.toFixed(1)+' … '+c.toFixed(1);
+ const tc=toolColors(I.tools);paintScene(ctx,W,H,makeProj(W,H,I,VIEWS.iso),I,em,tc,false);
+ set($('#fpName'),f.name);set($('#fpSize'),fsize(f.size));
+ const inf=[['Редове',String(f.c.lines.length)],['Инструменти',I.tools.length?I.tools.map(t=>`<em style="font-style:normal;color:${colOf(tc,t)}">T${t}</em>`).join(' '):'—'],['Време (прибл.)',ftime(I.t)],['X',rg(b.x0,b.x1)],['Y',rg(b.y0,b.y1)],['Z',rg(I.z0,I.z1)]];
+ $('#fpInfo').innerHTML=inf.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('');
+}
+$('#fileIn').addEventListener('change',e=>{
+ const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+ if(f.size>30e6){toast('Файлът е над 30 MB. За макета използвайте по-малък файл.');return}
+ const r=new FileReader();
+ r.onload=()=>{addFile('mem',f.name,String(r.result));S.src='mem';S.fsel=FILES.mem.length-1;renderFiles();previewFile();toast('Качен: '+f.name)};
+ r.onerror=()=>toast('Файлът не може да бъде прочетен');
+ r.readAsText(f);
+});
+
+/* ---------- Траектория (3D) ---------- */
+const PAL=['#59aee6','#3dbb7e','#e47ab3','#ff9447','#a78bfa','#4fd1c5','#d9e45a','#f07167'];
+let PINFO={segs:[],bounds:{x0:-10,x1:10,y0:-10,y1:10},z0:0,z1:0,tools:[]},TCOL=new Map();
+const toolColors=tools=>{const m=new Map();tools.forEach((t,i)=>m.set(t,PAL[i%PAL.length]));return m};
+const colOf=(m,t)=>m.get(t)||C.acc;
+const VIEWS={iso:{yaw:-Math.PI/6,pitch:Math.PI/3},top:{yaw:0,pitch:0},front:{yaw:0,pitch:Math.PI/2},side:{yaw:-Math.PI/2,pitch:Math.PI/2}};
+S.view={...VIEWS.iso,zoom:1,name:'iso'};
+function makeProj(W,H,info,vw){
+ const b=info.bounds,z0=info.z0,z1=info.z1,cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,cz=(z0+z1)/2;
+ const cyw=Math.cos(vw.yaw),syw=Math.sin(vw.yaw),cp=Math.cos(vw.pitch),sp=Math.sin(vw.pitch);
+ const raw=(x,y,z)=>{const dx=x-cx,dy=y-cy,dz=z-cz,x1=dx*cyw-dy*syw,y1=dx*syw+dy*cyw;return[x1,-(y1*cp+dz*sp)]};
+ let mx=1e-6,my=1e-6;for(const x of[b.x0,b.x1])for(const y of[b.y0,b.y1])for(const z of[z0,z1]){const[a,c]=raw(x,y,z);mx=Math.max(mx,Math.abs(a));my=Math.max(my,Math.abs(c))}
+ const sc=Math.min(W/2/mx,H/2/my)*.84*(vw.zoom||1);
+ return{sc,P:(x,y,z)=>{const[a,c]=raw(x,y,z);return[W/2+a*sc,H/2+c*sc]}};
+}
+function pathSeg3(ctx,P,pts,k){for(let i=0;i<k;i++){const q=pts[i],[px,py]=P(q[0],q[1],q[2]);i?ctx.lineTo(px,py):ctx.moveTo(px,py)}}
+function paintScene(ctx,W,H,PR,info,em,tc,dim){
+ ctx.fillStyle=C.surf;ctx.fillRect(0,0,W,H);
+ const b=info.bounds,step=[1,2,5,10,20,50,100,200,500].find(v=>v*PR.sc>=14*em)||1000;
+ const gx0=Math.floor(Math.min(b.x0,0)/step)*step,gx1=Math.ceil(Math.max(b.x1,0)/step)*step,gy0=Math.floor(Math.min(b.y0,0)/step)*step,gy1=Math.ceil(Math.max(b.y1,0)/step)*step;
+ if((gx1-gx0)/step<160&&(gy1-gy0)/step<160){
+  ctx.lineWidth=1;ctx.strokeStyle=C.line;ctx.beginPath();
+  for(let x=gx0;x<=gx1;x+=step){const[a,c]=PR.P(x,gy0,0),[d,e]=PR.P(x,gy1,0);ctx.moveTo(a,c);ctx.lineTo(d,e)}
+  for(let y=gy0;y<=gy1;y+=step){const[a,c]=PR.P(gx0,y,0),[d,e]=PR.P(gx1,y,0);ctx.moveTo(a,c);ctx.lineTo(d,e)}
+  ctx.stroke();
+ }
+ const L=28*em/PR.sc,[ox,oy]=PR.P(0,0,0);ctx.lineWidth=1.6*em;ctx.font=`600 ${11*em}px "Barlow Condensed",sans-serif`;
+ [['X',C.bad,[L,0,0]],['Y',C.ok,[0,L,0]],['Z',C.info,[0,0,L]]].forEach(([n,col,v])=>{const[ex,ey]=PR.P(...v);
+  if(Math.hypot(ex-ox,ey-oy)<2*em)return;ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ex,ey);ctx.stroke();
+  ctx.fillStyle=col;ctx.fillText(n,ex+(ex-ox)*.12-3*em,ey+(ey-oy)*.12+4*em)});
+ const segs=info.segs,groups=new Map();
+ segs.forEach(sg=>{const k=sg.rapid?'r':'t'+sg.tool;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(sg)});
+ groups.forEach((list,k)=>{const rap=k==='r';
+  ctx.globalAlpha=rap?1:(dim?.32:1);ctx.strokeStyle=rap?C.rapid:colOf(tc,list[0].tool);ctx.lineWidth=(rap?1:1.7)*em;ctx.setLineDash(rap?[4*em,4*em]:[]);
+  ctx.beginPath();list.forEach(sg=>pathSeg3(ctx,PR.P,sg.pts,sg.pts.length));ctx.stroke()});
+ ctx.globalAlpha=1;ctx.setLineDash([]);
+}
+function renderLegend(){
+ const T=PINFO.tools.length?PINFO.tools:[0];
+ $('#cvLeg').innerHTML=T.map(t=>{const d=t?toolOf(t):null;return`<span><i style="background:${colOf(TCOL,t)}"></i>${t?'T'+t+(d?' · '+d.d:''):'текущ инструмент'}</span>`}).join('')+'<span><i class="rp"></i>бърз ход</span>';
+}
+const cv=$('#cv');let cvW=0,cvH=0,baseC=null,doneC=null,cacheKey='',donePtr=0,doneTo=-1;
+const mkC=(W,H)=>{const c=document.createElement('canvas');c.width=W;c.height=H;return c};
+function draw(){
+ const wrap=cv.parentElement,dpr=window.devicePixelRatio||1;
+ const W=Math.round(wrap.clientWidth*dpr),H=Math.round(wrap.clientHeight*dpr);
+ if(!W||!H)return;
+ if(W!==cvW||H!==cvH){cv.width=W;cv.height=H;cvW=W;cvH=H}
+ const ctx=cv.getContext('2d'),em=parseFloat(panel.style.fontSize)/16*dpr,vw=S.view,PR=makeProj(W,H,PINFO,vw);
+ const key=PROG_ID+'|'+W+'|'+H+'|'+vw.yaw.toFixed(4)+'|'+vw.pitch.toFixed(4)+'|'+vw.zoom.toFixed(4);
+ if(key!==cacheKey){cacheKey=key;baseC=mkC(W,H);paintScene(baseC.getContext('2d'),W,H,PR,PINFO,em,TCOL,true);doneC=mkC(W,H);donePtr=0;doneTo=-1}
+ if(S.curPi<doneTo){doneC.getContext('2d').clearRect(0,0,W,H);donePtr=0}
+ doneTo=S.curPi;
+ const dc=doneC.getContext('2d');let style=null;
+ while(donePtr<PREV.length&&PREV[donePtr].pi<S.curPi){const sg=PREV[donePtr++],st=sg.rapid?'r':'t'+sg.tool;
+  if(st!==style){if(style)dc.stroke();style=st;dc.beginPath();dc.setLineDash(sg.rapid?[4*em,4*em]:[]);dc.strokeStyle=sg.rapid?C.dim:colOf(TCOL,sg.tool);dc.lineWidth=(sg.rapid?1:2.4)*em}
+  pathSeg3(dc,PR.P,sg.pts,sg.pts.length)}
+ if(style)dc.stroke();
+ ctx.drawImage(baseC,0,0);ctx.drawImage(doneC,0,0);
+ const w=work(),cur=S.cur&&S.cur.prog&&S.cur.type!=='act'?S.cur:null;
+ if(cur){const sg=PREVMAP.get(cur.pi);if(sg){const f=cur.len?cur.s/cur.len:0,k=Math.max(1,Math.floor(f*(sg.pts.length-1))+1);
+  ctx.beginPath();ctx.setLineDash(sg.rapid?[4*em,4*em]:[]);ctx.strokeStyle=sg.rapid?C.dim:colOf(TCOL,sg.tool);ctx.lineWidth=(sg.rapid?1:2.4)*em;
+  pathSeg3(ctx,PR.P,sg.pts,k);const[px,py]=PR.P(w.X,w.Y,w.Z);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([])}}
+ const tl=toolOf(S.tool),[tx,ty]=PR.P(w.X,w.Y,w.Z),[ux,uy]=PR.P(w.X,w.Y,w.Z+(tl?Math.min(40,tl.len*.4):20)),rr=Math.max(3.5*em,(tl?tl.dia:4)/2*PR.sc);
+ ctx.strokeStyle=C.acc;ctx.lineWidth=Math.max(2*em,Math.min(rr*2,10*em));ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(ux,uy);ctx.stroke();ctx.globalAlpha=1;
+ ctx.fillStyle='rgba(242,182,50,.16)';ctx.lineWidth=1.5*em;ctx.beginPath();ctx.arc(tx,ty,rr,0,Math.PI*2);ctx.fill();ctx.stroke();
+ ctx.beginPath();ctx.moveTo(tx-rr-5*em,ty);ctx.lineTo(tx+rr+5*em,ty);ctx.moveTo(tx,ty-rr-5*em);ctx.lineTo(tx,ty+rr+5*em);ctx.stroke();
+ set($('#cvInfo'),`Z${f3(w.Z,9)}   F ${Math.round(S.F)}   T${S.tool||'-'}`);
+}
+{const ptrs=new Map();let pinch0=0,zoom0=1;
+ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y)||1;zoom0=S.view.zoom}});
+ cv.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  if(ptrs.size===1){S.view.yaw+=dx*.01;S.view.pitch=Math.max(0,Math.min(Math.PI/2,S.view.pitch+dy*.01));S.view.name='free';segOn('#viewSeg .btn','')}
+  else if(ptrs.size===2){const[a,b]=[...ptrs.values()];S.view.zoom=Math.max(.3,Math.min(25,zoom0*Math.hypot(a.x-b.x,a.y-b.y)/pinch0))}});
+ ['pointerup','pointercancel','lostpointercapture'].forEach(t=>cv.addEventListener(t,e=>ptrs.delete(e.pointerId)));
+ cv.addEventListener('wheel',e=>{e.preventDefault();S.view.zoom=Math.max(.3,Math.min(25,S.view.zoom*(e.deltaY<0?1.15:1/1.15)))},{passive:false});
+}
+
+/* ---------- Инструменти и магазин ---------- */
+const toolBody=$('#toolBody');
+function renderTools(){
+ const N=S.cfg.mag.mn,rows=[];if(S.sel>N)S.sel=1;
+ for(let i=1;i<=N;i++){const t=toolOf(i);
+  rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td>${t.d}${t.t===S.tool?'<span class="badge">шпиндел</span>':''}${t.t===10?'<span class="badge dimb">PRB1</span>':''}</td><td class="n">${t.empty?'—':t.len.toFixed(3)}</td><td class="n">${t.empty?'—':t.dia.toFixed(3)}</td><td class="n">${t.empty?'—':t.w.toFixed(3)}</td></tr>`)}
+ toolBody.innerHTML=rows.join('');
+ set($('#btnTc'),'Смени с T'+S.sel);set($('#toolCnt'),N+' гнезда');
+}
+const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],magKey='';
+function buildMag(){
+ const M=S.cfg.mag;PK.forEach(p=>p.remove());PK=[];
+ for(let i=1;i<=M.mn;i++){const p=document.createElement('div');p.className='pk';p.textContent=i;mag.appendChild(p);PK.push(p)}
+ mag.className='mag '+M.mtype;S.magPh=S.magPos;set($('#magTitle'),'Магазин · '+MTYPE[M.mtype]);
+}
+function updMag(dt){
+ const M=S.cfg.mag,N=M.mn,key=M.mtype+'|'+N;
+ if(key!==magKey){magKey=key;buildMag()}
+ let d=S.magPos-S.magPh;if(M.mtype!=='linear')d=((d%N)+N*1.5)%N-N/2;
+ const sp=(M.mtype==='linear'?4:1/Math.max(.05,M.msp))*dt;S.magPh+=Math.abs(d)<=sp?d:Math.sign(d)*sp;
+ const ph=S.magPh,W=mag.clientWidth,H=mag.clientHeight,em=parseFloat(panel.style.fontSize);
+ let size,pos;
+ if(M.mtype==='carousel'){
+  const R0=W/2-1.6*em;size=Math.min(2.7*em,2*Math.PI*R0/N*.8);const R=W/2-size/2-.2*em;
+  pos=i=>{const g=(i-ph)/N*2*Math.PI;return[Math.sin(g)*R,-Math.cos(g)*R]};
+ }else if(M.mtype==='chain'){
+  size=2*em;for(let k=0;k<2;k++){const Rr=H/2-size/2-.25*em,L=Math.max(0,W-2*Rr-size-.5*em),P=2*L+2*Math.PI*Rr;size=Math.min(2.4*em,P/N*.78)}
+  const Rr=H/2-size/2-.25*em,L=Math.max(0,W-2*Rr-size-.5*em),P=2*L+2*Math.PI*Rr;
+  pos=i=>{let u=(((i-ph)/N)%1+1)%1*P;
+   if(u<L/2)return[u,-Rr];u-=L/2;
+   if(u<Math.PI*Rr){const g=u/Rr;return[L/2+Math.sin(g)*Rr,-Math.cos(g)*Rr]}u-=Math.PI*Rr;
+   if(u<L)return[L/2-u,Rr];u-=L;
+   if(u<Math.PI*Rr){const g=u/Rr;return[-L/2-Math.sin(g)*Rr,Math.cos(g)*Rr]}u-=Math.PI*Rr;
+   return[-L/2+u,-Rr]};
+ }else{
+  const rows=N>20?2:1,per=Math.ceil(N/rows),cw=W/per;size=Math.min(2.6*em,cw*.82);
+  pos=i=>{const k=i-1,r=Math.floor(k/per),c=k%per;return[(c+.5)*cw-W/2,(rows===1?.6:r?1.35:-.05)*size+H*.1]};
+ }
+ PK.forEach((p,k)=>{const i=k+1,[x,y]=pos(i);
+  p.style.width=p.style.height=size+'px';p.style.margin=(-size/2)+'px 0 0 '+(-size/2)+'px';p.style.fontSize=(size*.38)+'px';
+  p.style.transform=`translate(${x}px,${y}px)`;
+  p.classList.toggle('empty',i===S.tool||!!toolOf(i).empty);
+  p.classList.toggle('top',i===S.magPos&&Math.abs(S.magPh-S.magPos)<.05);
+  p.classList.toggle('sel',i===S.sel&&i!==S.tool)});
+ const spm=$('#spm');spm.hidden=M.mtype!=='linear';
+ if(M.mtype==='linear'){const a=Math.floor(ph),f=ph-a,p0=pos(Math.max(1,a)),p1=pos(Math.min(N,a+1));
+  const x=p0[0]+(p1[0]-p0[0])*f,y=Math.min(p0[1],p1[1])-size*.55-1.9*em;spm.style.transform=`translate(${x}px,${y}px) translateX(-50%)`;set($('#spmT'),S.tool?'T'+S.tool:'празен')}
+ set($('#hubT'),S.tool?'T'+S.tool:'—');set($('#magPos'),'гнездо '+S.magPos);
+ const busy=S.actLabel.startsWith('Смяна');const atc=$('#atc');atc.classList.toggle('busy',busy);
+ const txt=busy?S.actLabel.replace(/^Смяна на инструмент /,''):'Магазинът е готов · инструментът е затегнат';
+ if(atc.dataset.t!==txt){atc.dataset.t=txt;atc.innerHTML=`<i class="led ${busy?'hot':'on'}"></i><span>${txt}</span>`}
+}
+
+/* ---------- Пробинг ---------- */
+const ICON={
+ z:'<svg viewBox="0 0 68 52"><rect x="6" y="36" width="56" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><line x1="34" y1="4" x2="34" y2="26" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="30" r="4" fill="var(--acc)"/><path d="M28 18 L34 26 L40 18" fill="none" stroke="var(--acc)" stroke-width="2"/></svg>',
+ hole:'<svg viewBox="0 0 68 52"><circle cx="34" cy="26" r="20" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="3.5" fill="var(--acc)"/><path d="M38 26 H50 M30 26 H18 M34 22 V10 M34 30 V42" stroke="var(--acc)" stroke-width="2"/></svg>',
+ boss:'<svg viewBox="0 0 68 52"><circle cx="34" cy="26" r="13" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="2" fill="currentColor"/><path d="M4 26 H17 M64 26 H51 M34 0 V9 M34 52 V43" stroke="var(--acc)" stroke-width="2"/></svg>',
+ corner:'<svg viewBox="0 0 68 52"><path d="M24 48 V20 H62" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="3.5" fill="var(--acc)"/><path d="M12 14 V30 M16 10 H40" stroke="var(--acc)" stroke-width="2"/></svg>',
+ icorner:'<svg viewBox="0 0 68 52"><path d="M10 4 V46 H64" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="30" cy="28" r="3.5" fill="var(--acc)"/><path d="M26 28 H14 M30 32 V42" stroke="var(--acc)" stroke-width="2"/></svg>',
+ widthy:'<svg viewBox="0 0 68 52"><path d="M6 6 H62 M6 46 H62" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="3.5" fill="var(--acc)"/><path d="M34 22 V10 M34 30 V42" stroke="var(--acc)" stroke-width="2"/></svg>',
+ width:'<svg viewBox="0 0 68 52"><path d="M10 6 V46 M58 6 V46" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="3.5" fill="var(--acc)"/><path d="M30 26 H14 M38 26 H54" stroke="var(--acc)" stroke-width="2"/></svg>',
+ rot:'<svg viewBox="0 0 68 52"><path d="M8 40 L58 28" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="22" r="3.5" fill="var(--acc)"/><circle cx="48" cy="15" r="3.5" fill="var(--acc)"/><path d="M20 26 V35 M48 19 V28" stroke="var(--acc)" stroke-width="2"/></svg>'
+};
+const CRN={fl:['Преден ляв',1,1],fr:['Преден десен',-1,1],bl:['Заден ляв',1,-1],br:['Заден десен',-1,-1]};
+const sg=d=>d>0?'+':'−';
+function renderCycs(){
+ const[,cx,cy]=CRN[S.corner];
+ const CYCS=[['z','Повърхност Z','G38.2 Z−'],['hole','Център на отвор','4 точки'],['boss','Център на бос','4 точки'],['rot','Ротация на детайла','2 точки по X'],
+  ['corner','Външен ъгъл',`X${sg(cx)} / Y${sg(cy)}`],['icorner','Вътрешен ъгъл',`X${sg(-cx)} / Y${sg(-cy)}`],['width','Ширина на жлеб X','2 точки'],['widthy','Ширина на жлеб Y','2 точки']];
+ const flip=`transform:scale(${S.corner[1]==='r'?-1:1},${S.corner[0]==='b'?-1:1})`;
+ $('#cycs').innerHTML=CYCS.map(([k,n,s])=>`<button class="btn cyc" data-act="cyc" data-v="${k}" type="button">${k.includes('corner')?ICON[k].replace('<svg ',`<svg style="${flip}" `):ICON[k]}<span>${n}</span><small>${s}</small></button>`).join('');
+ segOn('#crnSeg .btn',S.corner);
+}
+function touch(ax,dir,trig,label,onLatch,input,ff=PRB.fast,fs=PRB.slow,travel=trig+15){return[
+ {type:'probe',rel:{[ax]:dir*travel},feed:ff,trig,input,label:label+': търсене'},
+ {type:'line',rel:{[ax]:-dir*PRB.back},feed:1500,label:label+': отдръпване'},
+ {type:'probe',rel:{[ax]:dir*(PRB.back+3)},feed:fs,trig:PRB.back+(Math.random()-.5)*0.004,input,label:label+': измерване',onTrig:onLatch},
+ {type:'line',rel:{[ax]:-dir*PRB.back},feed:1500}]}
+function result(title,rows,note){S.prbRes={title,rows,note};S.prbWarn=false;renderPrb()}
+function runCycle(k){
+ if(!canMove())return;
+ if(S.tool!==10){S.prbWarn=true;renderPrb();return}
+ const w=work(),rb=PRB.ball/2,R={};let ops=[];
+ if(k==='z'){
+  ops=[...touch('Z',-1,6+Math.random()*8,'Повърхност Z',(lm,lw)=>{R.z=lm.Z})];
+  ops.push({type:'act',dur:0,fn:()=>{S.off.Z=R.z;result('Повърхност Z',[['Z маш.',f4(R.z)],['Нов G54 Z',f4(R.z)]],'Работната нула по Z е на повърхността.')}});
+  ops.push({type:'line',rel:{Z:5},rapid:true});
+ }else if(k==='hole'||k==='width'){
+  const Rh=12.5+Math.random()*0.03,ox=(Math.random()-.5)*2,oy=(Math.random()-.5)*2;
+  ops.push(...touch('X',1,ox+Rh-rb,'X+',(lm,lw)=>{R.xp=lw.X}));
+  ops.push({type:'line',tgt:{X:w.X},feed:2000});
+  ops.push(...touch('X',-1,Rh-rb-ox,'X−',(lm,lw)=>{R.xm=lw.X}));
+  ops.push({type:'line',tgtFn:()=>({X:(R.xp+R.xm)/2}),feed:2000,label:'Към центъра по X'});
+  if(k==='hole'){
+   ops.push(...touch('Y',1,oy+Rh-rb,'Y+',(lm,lw)=>{R.yp=lw.Y}));
+   ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
+   ops.push(...touch('Y',-1,Rh-rb-oy,'Y−',(lm,lw)=>{R.ym=lw.Y}));
+   ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2}),feed:2000,label:'Към центъра по Y'});
+  }
+  ops.push({type:'act',dur:0,fn:()=>{
+   const cx=(R.xp+R.xm)/2,dx=R.xp-R.xm+2*rb;
+   if(k==='hole'){const cy=(R.yp+R.ym)/2,dy=R.yp-R.ym+2*rb;S.off.X+=cx;S.off.Y+=cy;
+    result('Център на отвор',[['Център X',f4(cx)],['Център Y',f4(cy)],['Ø по X',f4(dx)],['Ø по Y',f4(dy)],['Овалност',f4(Math.abs(dx-dy))]],'G54 X и Y са преместени в центъра.');}
+   else{S.off.X+=cx;result('Ширина на жлеб X',[['Център X',f4(cx)],['Ширина',f4(dx)]],'G54 X е преместен в центъра на жлеба.')}
+  }});
+ }else if(k==='corner'||k==='icorner'){
+  const[cn,cx,cy]=CRN[S.corner],inner=k==='icorner',sx=inner?-cx:cx,sy=inner?-cy:cy;
+  const nm=(inner?'Вътрешен':'Външен')+' ъгъл · '+cn.toLowerCase();
+  const dx=4+Math.random()*3,dy=4+Math.random()*3;
+  ops.push(...touch('X',sx,dx,'Стена X'+sg(sx),(lm,lw)=>{R.x=lw.X+sx*rb}));
+  ops.push({type:'line',tgt:{X:w.X},feed:2000});
+  ops.push(...touch('Y',sy,dy,'Стена Y'+sg(sy),(lm,lw)=>{R.y=lw.Y+sy*rb}));
+  ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
+  ops.push({type:'act',dur:0,fn:()=>{S.off.X+=R.x;S.off.Y+=R.y;result(nm,[['Ъгъл X',f4(R.x)],['Ъгъл Y',f4(R.y)],['Посоки',`X${sg(sx)} / Y${sg(sy)}`]],inner?'G54 X и Y са в ъгъла на джоба.':'G54 X и Y са в ъгъла на детайла.')}});
+ }else if(k==='widthy'){
+  const Rh=8+Math.random()*0.03,oy=(Math.random()-.5)*2;
+  ops.push(...touch('Y',1,oy+Rh-rb,'Y+',(lm,lw)=>{R.yp=lw.Y}));
+  ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
+  ops.push(...touch('Y',-1,Rh-rb-oy,'Y−',(lm,lw)=>{R.ym=lw.Y}));
+  ops.push({type:'line',tgtFn:()=>({Y:(R.yp+R.ym)/2}),feed:2000,label:'Към центъра по Y'});
+  ops.push({type:'act',dur:0,fn:()=>{const cy=(R.yp+R.ym)/2,dy=R.yp-R.ym+2*rb;S.off.Y+=cy;result('Ширина на жлеб Y',[['Център Y',f4(cy)],['Ширина',f4(dy)]],'G54 Y е преместен в центъра на жлеба.')}});
+ }else{
+  result(k==='boss'?'Център на бос':'Ротация на детайла',[],'Този цикъл е само като изглед в макета.');return;
+ }
+ runOps(ops,'probe');
+}
+function measureTool(){
+ if(!canMove())return;
+ if(!S.tool){toast('В шпиндела няма инструмент');return}
+ if(S.tool===10){toast('3D пробникът не се мери с toolsetter-а');return}
+ const nh=['X','Y','Z'].filter(a=>!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');return}
+ const T=S.cfg.ts,t=toolOf(S.tool),trueLen=t.len+(Math.random()-.5)*0.03,oldLen=t.len;
+ const trig=T.tsz-(T.tstop+trueLen);
+ const ops=[
+  {type:'line',tgtFn:()=>({Z:T.tsz-S.off.Z}),rapid:true,label:'Toolsetter: Z нагоре до '+T.tsz.toFixed(3)},
+  {type:'line',tgtFn:()=>({X:T.tsx-S.off.X,Y:T.tsy-S.off.Y}),rapid:true,label:'Toolsetter: към X '+T.tsx.toFixed(3)+' Y '+T.tsy.toFixed(3)},
+  ...touch('Z',-1,trig>0&&trig<=T.tsmax?trig:1e9,'Toolsetter',(lm)=>{const L=lm.Z-T.tstop;t.len=L;
+    result('Дължина на T'+t.t,[['Нова дължина',f4(L)],['Предишна',f4(oldLen)],['Разлика',f4(L-oldLen)]],'Таблицата на инструментите е обновена.');renderTools()},'ts',T.tsvs,T.tsvl,T.tsmax),
+  {type:'line',tgtFn:()=>({Z:T.tsz-S.off.Z}),rapid:true}];
+ runOps(ops,'probe');toast('Измерване на T'+t.t+' с toolsetter-а');
+}
+function renderTsPos(){const T=S.cfg.ts;set($('#tsPos'),'X '+T.tsx.toFixed(3)+'  Y '+T.tsy.toFixed(3))}
+function renderPrb(){
+ const el=$('#prbRes');
+ if(S.prbWarn){el.innerHTML=`<div class="warnbox"><span>В шпиндела е ${S.tool?'T'+S.tool:'празно'}. Циклите с 3D пробник изискват T10.</span><button class="btn on" data-act="load-t10" type="button">Зареди T10</button></div>`;return}
+ const r=S.prbRes;
+ if(!r){el.innerHTML=`<div class="res"><div><span>Позиционирай пробника над или в детайла и избери цикъл.</span></div></div>`;return}
+ el.innerHTML=`<span class="lab">${r.title}</span><div class="res">${r.rows.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('')}</div><div class="res"><div><span>${r.note}</span></div></div>`;
+}
+
+/* ---------- Диагностика ---------- */
+const MODES={X:'двоен',Y:'двоен',Z:'затворен',A:'затворен',B:'затворен',C:'отворен'};
+const encBody=$('#encBody');
+encBody.innerHTML=AX.map(a=>`<tr><td class="tn">${a}</td><td>${MODES[a]}</td><td class="n" id="ec${a}"></td><td class="n" id="ee${a}"></td><td class="n" id="ef${a}"></td><td class="n">${ROT[a]?'50 ″':'50 µm'}</td><td id="es${a}"></td></tr>`).join('')+
+ `<tr><td class="tn">S</td><td>шпиндел</td><td class="n" id="ecS"></td><td class="n" id="eeS"></td><td class="n" id="efS"></td><td class="n">300 об/мин</td><td id="esS"></td></tr>`;
+const ioBox=$('#ioBox');
+function updDiag(){
+ AX.forEach(a=>{
+  set($('#ec'+a),f3(S.mach[a],0));
+  const open=MODES[a]==='отворен';
+  set($('#ee'+a),open?'—':f3(S.mach[a]-Math.sign(S.vel[a])*Math.abs(S.ferr[a])/1000,0));
+  set($('#ef'+a),open?'—':Math.abs(S.ferr[a]).toFixed(1));
+  const bad=Math.abs(S.ferr[a])>FERR_LIM,es=$('#es'+a),k=open?'off':bad?'bad':'ok';
+  if(es.dataset.k!==k){es.dataset.k=k;es.innerHTML=`<span class="st ${k}">${open?'БЕЗ ЕНКОДЕР':bad?'ГРЕШКА':'ОК'}</span>`}
+ });
+ const sa=Math.round(S.sp.act),sc=Math.round(S.sp.on?S.sp.cmd*S.spOv/100:0);
+ set($('#ecS'),String(sc));set($('#eeS'),String(sa));set($('#efS'),String(sa-sc));
+ const ess=$('#esS'),k=Math.abs(sa-sc)>300?'off':'ok';
+ if(ess.dataset.k!==k){ess.dataset.k=k;ess.innerHTML=`<span class="st ${k}">${k==='ok'?'ОК':'РАМПА'}</span>`}
+ const now=performance.now(),home=a=>Math.abs(S.mach[a])<0.5;
+ const io=[
+  ['Лимити X/Y/Z (NC)','IN0–2',S.state==='estop'?'off':'on'],['Home X','IN3',home('X')?'hot':''],['Home Y','IN4',home('Y')?'hot':''],['Home Z','IN5',home('Z')?'hot':''],
+  ['3D пробник','PRB1',now-S.flash.prb<300?'hot':''],['Toolsetter','PRB2',now-S.flash.ts<300?'hot':''],
+  ['Инструмент затегнат','IN8',S.clamped?'on':''],['Магазин в позиция','IN9',S.magMoving?'':'on'],
+  ['Налягане въздух','IN10','on'],['Врата затворена','IN11','on'],
+  ['Авариен стоп верига','IN12',S.state==='estop'?'bad':'on'],['Аларма драйвер Y','IN13',S.alarmY?'bad':''],
+  ['Enable драйвери','OUT0',S.state==='estop'?'':'on'],['Drawbar (освобождаване)','OUT1',S.clamped?'':'hot'],
+  ['Мотор магазин','OUT2',S.magMoving?'hot':''],['Ориентация шпиндел','OUT3',S.orient?'hot':''],
+  ['Охлаждане','OUT4',S.coolant?'hot':''],['Обдухване','OUT5',S.airBlast?'hot':'']
+ ];
+ const html=io.map(([n,p,s])=>`<div><i class="led ${s}"></i><span>${n}</span><code>${p}</code></div>`).join('');
+ if(ioBox._h!==html){ioBox._h=html;ioBox.innerHTML=html}
+ set($('#lkBuf'),(S.state==='run'&&S.cur&&S.cur.type!=='act'?Math.round(82+Math.random()*12):0)+' %');
+ set($('#lkWd'),S.state==='estop'?'СПРЯН':'ОК · 1 ms');
+}
+
+/* ---------- MDI ---------- */
+const KEYS=['G','M','X','Y','Z','F','S','T','A','B','I','J','7','8','9','4','5','6','1','2','3','-','0','.'];
+$('#keys').innerHTML=KEYS.map(k=>`<button class="btn" data-act="key" data-v="${k}" type="button">${k}</button>`).join('')+
+ `<button class="btn w3" data-act="key" data-v=" " type="button">Интервал</button><button class="btn w3" data-act="mdi-del" type="button">⌫ Изтрий</button>`;
+function renderMdi(){
+ const t=S.mdi.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ $('#mdiIn').innerHTML=t+'<span class="caret"></span>';
+ $('#mdiHist').innerHTML=S.mdiHist.map((h,i)=>`<button class="btn" data-act="hist" data-v="${i}" type="button">${h.replace(/\n/g,' ⏎ ')}</button>`).join('');
+}
+
+/* ---------- Задаване на позиция ---------- */
+function renderDlg(){
+ const d=S.dlg,a=d.ax,w=work(),u=ROT[a]?'°':'мм';
+ segOn('#dlgAx .btn',a);segOn('#dlgTgt .btn',d.tgt);
+ set($('#dlgT'),(d.tgt==='mach'?'Референтна точка · ':'Работна нула G54 · ')+a);
+ set($('#dlgCur'),'раб.'+f3(w[a])+'  маш.'+f3(S.mach[a]));
+ $('#dlgIn').innerHTML=(d.txt||'<span style="color:var(--faint)">'+f3(d.tgt==='mach'?S.mach[a]:w[a]).trim()+'</span>')+' '+u+'<span class="caret"></span>';
+ const n=$('#dlgNote');
+ if(d.tgt==='mach'){n.className='dlg-note w';set(n,`Текущото положение на ${a} получава въведената машинна координата и оста се маркира като ръчно реферирана. G54 остава спрямо машинната нула, така че работната позиция се измества със същата разлика.`)}
+ else{n.className='dlg-note';set(n,`Текущото положение на ${a} получава въведената работна координата в G54. Машинната координата и референтната точка не се променят.`)}
+}
+function homeLabels(){
+ const m=S.refMode==='manual';
+ set($('#btnHomeAll'),m?'Всички оси тук':'Всички оси');
+ set($('#btnHomeMain'),m?'Home тук':'Home');
+}
+function applyDlg(){
+ const d=S.dlg,a=d.ax;
+ if(!S.active[a]){toast('Ос '+a+' е изключена в Настройки → Оси');return}
+ if(d.txt===''||d.txt==='-'||isNaN(+d.txt)){toast('Въведете стойност или натиснете „Задай 0“');return}
+ if(!canMove())return;
+ const val=+d.txt;
+ if(d.tgt==='mach'){S.mach[a]=val;S.homed[a]='manual';toast(`Референтна точка ${a}: машинна позиция = ${val.toFixed(3)}`)}
+ else{S.off[a]=S.mach[a]-val;toast(`G54 ${a}: работна позиция = ${val.toFixed(3)}`)}
+ $('#modal').hidden=true;
+}
+
+/* ---------- Настройки ---------- */
+const P_AX=[
+ {k:'active',n:'Активна',t:'bool',on:'Да',off:'Не',h:'Изключената ос не участва в HOME, ръчното движение и програмата. Ползва се, когато машината няма тази ос.'},
+ {k:'mdir',n:'Посока на мотора',t:'bool',on:'Обратна',off:'Нормална',rev:1,h:'Обръща сигнала DIR към драйвера. Ако при X+ масата тръгне наобратно, сменете тук, без да разменяте проводниците на мотора.',ref:'LinuxCNC: инвертиране на DIR в StepConf · grblHAL: <code>$3</code> · Mach3: Dir Low Active'},
+ {k:'edir',n:'Посока на енкодера',t:'bool',on:'Обратна',off:'Нормална',rev:1,h:'Обръща броенето на енкодера. При затворен контур енкодерът трябва да брои в същата посока като мотора. Иначе грешката расте и контролерът спира с аларма.',ref:'LinuxCNC: отрицателен ENCODER_SCALE'},
+ {k:'spm',n:'Стъпки на единица',u:'стъпки/мм (°)',t:'num',d:3,min:1,max:100000,h:'Колко стъпки са нужни за 1 мм (или 1° при въртяща ос). Пример: 200 стъпки × 8 микростъпки ÷ винт 5 мм = 320.',ref:'LinuxCNC: SCALE · grblHAL: <code>$100–$105</code> · Mach3: Steps per'},
+ {k:'vmax',n:'Макс. скорост',u:'мм/мин',t:'num',d:0,min:1,max:60000,h:'Най-високата скорост на оста. Планерът не я надвишава дори при G0.',ref:'LinuxCNC: MAX_VELOCITY · grblHAL: <code>$110–$115</code>'},
+ {k:'acc',n:'Ускорение',u:'мм/с²',t:'num',d:0,min:1,max:20000,h:'Колко бързо оста набира и сваля скорост. Твърде голямо ускорение води до загубени стъпки и удари в механиката.',ref:'LinuxCNC: MAX_ACCELERATION · grblHAL: <code>$120–$125</code>'},
+ {k:'min',n:'Софт. лимит мин.',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Програмата и ръчното движение не излизат под тази машинна координата. Лимитите работят само след реферирване.',ref:'LinuxCNC: MIN_LIMIT · Mach3: Soft Min'},
+ {k:'max',n:'Софт. лимит макс.',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Програмата и ръчното движение не излизат над тази машинна координата. Лимитите работят само след реферирване.',ref:'LinuxCNC: MAX_LIMIT · Mach3: Soft Max'}
+];
+const P_HOME=[
+ {k:'hsw',n:'Датчик за Home',t:'bool',on:'Да',off:'Не',h:'Ако оста няма датчик, HOME я пропуска и тя се реферира само ръчно: „Ръчно, тук“ или „Задай“ с машинна координата.'},
+ {k:'hdir',n:'Посока на търсене',t:'dir',h:'В коя посока оста тръгва към датчика. Обикновено + за X, Y и Z, към задния и горния край на хода.',ref:'LinuxCNC: знакът на HOME_SEARCH_VEL · grblHAL: <code>$23</code> · Mach3: Home Neg'},
+ {k:'hswp',n:'Позиция на датчика',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Машинната координата, която оста получава в момента на сработване на датчика.',ref:'LinuxCNC: HOME_OFFSET · Mach3: Home Off.'},
+ {k:'hpos',n:'Позиция след Home',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Къде отива оста след реферирането. Обикновено малко встрани от датчика, за да не остане натиснат.',ref:'LinuxCNC: HOME'},
+ {k:'hvs',n:'Скорост на търсене',u:'мм/мин',t:'num',d:0,min:1,max:20000,h:'Бърза скорост, с която оста намира датчика първия път.',ref:'LinuxCNC: HOME_SEARCH_VEL · grblHAL: <code>$25</code> · Mach3: Speed %'},
+ {k:'hvl',n:'Скорост на фиксиране',u:'мм/мин',t:'num',d:0,min:1,max:2000,h:'Бавна скорост при второто докосване. От нея зависи повторяемостта на реферирането.',ref:'LinuxCNC: HOME_LATCH_VEL · grblHAL: <code>$24</code>'},
+ {k:'hpull',n:'Отдръпване',u:'мм',t:'num',d:3,min:0,max:50,h:'Колко се отдръпва оста от датчика след първото докосване, преди бавното.',ref:'grblHAL: <code>$27</code>'},
+ {k:'hidx',n:'Z индекс на енкодера',t:'bool',on:'Да',off:'Не',h:'След датчика оста продължава до първия Z импулс на енкодера. Повторяемостта става от порядъка на микрони.',ref:'LinuxCNC: HOME_USE_INDEX'},
+ {k:'hseq',n:'Ред на реферирване',t:'num',d:0,min:0,max:5,h:'Осите с по-малък номер се реферират първи, а осите с еднакъв номер тръгват заедно. Z обикновено е 0, за да се вдигне преди останалите.',ref:'LinuxCNC: HOME_SEQUENCE'}
+];
+const P_MAG=[
+ {k:'mtype',n:'Тип на магазина',t:'enum',opts:[['carousel','Карусел'],['chain','Верига'],['linear','Линеен']],h:'Карусел: въртящ се диск, гнездото идва при шпиндела. Верига: гнездата са на верига, която се придвижва до позицията за смяна, и побира повече инструменти. Линеен: неподвижна поставка, а шпинделът отива до гнездото с осите X и Y.'},
+ {k:'mn',n:'Брой гнезда',t:'num',d:0,min:4,max:40,h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой.'},
+ {k:'mz',n:'Z за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Височината на шпиндела, при която инструментът се хваща или пуска.'},
+ {k:'mor',n:'Ориентация на шпиндела',u:'°',t:'num',d:1,min:0,max:359.9,h:'Ъгълът, в който шпинделът спира преди смяна, за да влязат шпонките на държача в гнездото.'},
+ {k:'msp',n:'Време за едно гнездо',u:'s',t:'num',d:2,min:.05,max:5,only:['carousel','chain'],h:'Колко време отнема преместването с едно гнездо. Използва се като изчакване и като граница за аларма, ако датчикът за позиция не сработи.'},
+ {k:'m1x',n:'Гнездо 1 · X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната X на гнездо 1. Доведете шпиндела над гнездото и натиснете „Гнездо 1 = текущата X Y“.'},
+ {k:'m1y',n:'Гнездо 1 · Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната Y на гнездо 1.'},
+ {k:'maxis',n:'Гнездата са подредени по',t:'enum',opts:[['X','ос X'],['Y','ос Y']],only:['linear'],h:'По коя ос са наредени гнездата на поставката.'},
+ {k:'mpitch',n:'Стъпка между гнездата',u:'мм',t:'num',d:3,min:-1000,max:1000,only:['linear'],h:'Разстоянието между съседни гнезда. Знакът определя посоката от гнездо 1 нататък.'}
+];
+const P_TS=[
+ {k:'tsx',n:'Позиция X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на сензора по X. Най-лесно: доведете шпиндела над центъра с ръчното движение и натиснете „Вземи текущата X Y“.'},
+ {k:'tsy',n:'Позиция Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на сензора по Y.'},
+ {k:'tsz',n:'Z за начало на търсене',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'От тази височина започва търсенето надолу. Трябва да е над върха на най-дългия инструмент.'},
+ {k:'tstop',n:'Горна точка на сензора',u:'маш. координата Z',t:'num',d:3,min:-99999,max:99999,h:'Машинната Z на повърхността на сензора, измерена с референтен инструмент или с челото на шпиндела. Дължината на инструмента е Z при сработване минус тази стойност.'},
+ {k:'tsmax',n:'Макс. ход на търсене',u:'мм',t:'num',d:3,min:1,max:500,h:'Ако сензорът не сработи в този ход, измерването спира с аларма. Пази от удар при грешна позиция.'},
+ {k:'tsvs',n:'Скорост на търсене',u:'мм/мин',t:'num',d:0,min:1,max:3000,h:'Бърза скорост за първото докосване.'},
+ {k:'tsvl',n:'Скорост на измерване',u:'мм/мин',t:'num',d:0,min:1,max:500,h:'Бавна скорост за второто докосване. От нея зависи точността.'}
+];
+const isSt=D=>D.mode==='static',isSh=D=>!!D.shOn;
+const P_NET=[
+ {t:'hdr',n:'Ethernet'},
+ {k:'host',n:'Име на машината',t:'text',h:'Името, с което контролерът се вижда в мрежата, например cnc-01. Само латински букви, цифри и тире.'},
+ {k:'mode',n:'Адрес',t:'enum',opts:[['dhcp','Автоматично (DHCP)'],['static','Статичен']],h:'При DHCP рутерът дава адреса. Статичният адрес е по-удобен, когато компютърът с CAM изпраща файлове директно към машината.'},
+ {k:'ip',n:'IP адрес',t:'ip',show:isSt,h:'Адрес извън обхвата, който рутерът раздава автоматично, за да няма конфликт.'},
+ {k:'mask',n:'Маска',t:'ip',show:isSt,h:'Обикновено 255.255.255.0.'},
+ {k:'gw',n:'Шлюз',t:'ip',show:isSt,h:'Адресът на рутера.'},
+ {k:'dns',n:'DNS',t:'ip',show:isSt,h:'Нужен е, ако сървърът се задава с име, а не с IP адрес.'},
+ {t:'hdr',n:'Мрежов дял за програми'},
+ {k:'shOn',n:'Използвай мрежов дял',t:'bool',on:'Да',off:'Не',h:'Програмите се четат направо от папка на компютър или сървър и се показват в Програми → Мрежа.'},
+ {k:'shType',n:'Протокол',t:'enum',opts:[['smb','SMB (Windows)'],['nfs','NFS (Linux)']],show:isSh,h:'SMB е споделена папка в Windows. NFS е за Linux сървър или NAS.'},
+ {k:'shSrv',n:'Сървър',t:'ip',show:isSh,h:'IP адресът на компютъра със споделената папка.'},
+ {k:'shPath',n:'Път на дяла',t:'text',show:isSh,h:'Името на споделената папка, например cnc/programi.'},
+ {k:'shUser',n:'Потребител',t:'text',show:D=>isSh(D)&&D.shType==='smb',h:'Потребител в Windows с право да чете папката.'},
+ {k:'shPass',n:'Парола',t:'pass',show:D=>isSh(D)&&D.shType==='smb',h:'Паролата се пази на контролера и не се показва.'},
+ {k:'shMount',n:'Свързвай при старт',t:'bool',on:'Да',off:'Не',show:isSh,h:'Дялът се свързва автоматично при включване на контролера.'},
+ {t:'hdr',n:'Отдалечен достъп'},
+ {k:'ssh',n:'SSH',t:'bool',on:'Включен',off:'Изключен',h:'За обновяване и диагностика от компютър. Изключете го, ако машината е в обща мрежа.'},
+ {k:'web',n:'Уеб наблюдение',t:'bool',on:'Включено',off:'Изключено',h:'Страница само за преглед на състоянието от телефон или компютър в същата мрежа. Машината се управлява само от панела.'}
+];
+const PDEF={};[...P_AX,...P_HOME,...P_MAG,...P_TS,...P_NET].forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={mag:P_MAG,ts:P_TS,net:P_NET};
+PDEF.__line={k:'__line',n:'Изпълни от ред',t:'num',d:0,min:1,max:1,h:'Преди този ред контролерът възстановява инструмента, оборотите и охлаждането, вдига Z, отива над началната точка и чак тогава слиза.'};
+const REHOME=['mdir','edir','spm','hsw','hdir','hswp','hpos','hidx'];
+const clone=o=>JSON.parse(JSON.stringify(o));
+const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
+const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
+S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
+S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
+S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
+S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
+S.netOk=false;
+S.draft=clone(S.cfg);
+function homeOps(axes){
+ const seqs=[...new Set(axes.map(a=>S.cfg[a].hseq))].sort((x,y)=>x-y),ops=[];
+ seqs.forEach(q=>{
+  const g=axes.filter(a=>S.cfg[a].hseq===q),n=g.join(' ');
+  ops.push({type:'line',tgtFn:()=>Object.fromEntries(g.map(a=>[a,S.cfg[a].hswp-S.off[a]])),feed:Math.min(...g.map(a=>S.cfg[a].hvs)),label:'Home '+n+': търсене на датчика'});
+  ops.push({type:'act',dur:.6,label:'Home '+n+': отдръпване и бавно докосване'});
+  if(g.some(a=>S.cfg[a].hidx))ops.push({type:'act',dur:.3,label:'Home '+n+': търсене на Z индекса на енкодера'});
+  ops.push({type:'act',dur:0,fn:()=>g.forEach(a=>S.homed[a]='sensor')});
+  ops.push({type:'line',tgtFn:()=>Object.fromEntries(g.map(a=>[a,S.cfg[a].hpos-S.off[a]])),rapid:true,label:'Home '+n+': към позицията след Home'});
+ });
+ return ops;
+}
+const SECS=[['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
+const STATIC={
+ enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
+ sp:[['Управление','VFD Modbus'],['Порт','RS485 · 19200'],['Адрес','1'],['Обороти','0 … 24000'],['Енкодер','1024 имп/об'],['Ориентация','0.0°']],
+ prb:[['Вход','PRB1 · NO'],['Инструмент','T10'],['Сфера','Ø2.000'],['Търсене','300 мм/мин'],['Измерване','30 мм/мин'],['Отдръпване','1.000']],
+ mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
+ disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
+};
+$('#setNav').innerHTML=SECS.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('');
+function fmtP(p,v){
+ if(p.t==='bool')return v?p.on:p.off;
+ if(p.t==='dir')return v>0?'+':'−';
+ if(p.t==='ip'||p.t==='text')return v===''||v==null?'—':String(v);
+ if(p.t==='pass')return v?'••••••':'не е зададена';
+ return(+v).toFixed(p.d);
+}
+function renderSet(){
+ const sec=S.setSec,tab=sec==='ax'||sec==='home';
+ segOn('#setNav .btn',sec);
+ set($('#setTitle'),SECS.find(s=>s[0]===sec)[1]);
+ const dirty=JSON.stringify(S.cfg)!==JSON.stringify(S.draft);
+ set($('#setDirty'),dirty?'незаписани промени':'');
+ const form=!!FORMS[sec];
+ $('#setFoot').hidden=!(tab||form);
+ set($('#setNote'),dirty?'Промените важат след „Запиши“.':'');
+ const body=$('#setBody'),help=$('#setHelp');
+ if(tab){
+  const P=sec==='ax'?P_AX:P_HOME;
+  body.innerHTML=`<table class="pt"><thead><tr><th></th>${AX.map(a=>`<th class="${S.draft[a].active?'':'off'}">${a}</th>`).join('')}</tr></thead><tbody>`+
+   P.map(p=>`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th>`+AX.map(a=>{
+    const v=S.draft[a][p.k],chg=v!==S.cfg[a][p.k];
+    const cls=[p.rev&&v?'rev':'',p.t==='bool'&&!p.rev&&v?'yes':'',chg?'chg':'',!S.draft[a].active&&p.k!=='active'?'offax':''].join(' ');
+    return`<td><button class="btn ${cls}" data-act="pt" data-a="${a}" data-k="${p.k}" type="button">${fmtP(p,v)}</button></td>`}).join('')+'</tr>').join('')+'</tbody></table>';
+  const h=S.setHelp&&PDEF[S.setHelp];
+  help.innerHTML=h?`<b>${h.n}.</b> ${h.h}${h.ref?`<br>${h.ref}`:''}`:
+   (sec==='ax'?'Натиснете клетка, за да я промените. Числата се въвеждат с клавиатура, а Да/Не и посоките се превключват с едно натискане. Оранжевото означава обърната посока.':'Натиснете име на параметър, за да видите какво прави. Промени в посоката или позициите изискват ново реферирване.');
+  help.hidden=false;
+ }else if(form){
+  const D=S.draft[sec],C=S.cfg[sec];
+  const rows=FORMS[sec].filter(p=>!(p.only&&!p.only.includes(S.draft.mag.mtype))&&!(p.show&&!p.show(D)));
+  body.innerHTML=(sec==='net'?netStatus():'')+`<table class="pf"><tbody>`+rows.map(p=>{
+   if(p.t==='hdr')return`<tr><td class="grp" colspan="2">${p.n}</td></tr>`;
+   const v=D[p.k],chg=v!==C[p.k]?' chg':'';
+   const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
+    :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
+   return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
+   (sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   :`<div class="teach">${S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button></div>`);
+  const h=S.setHelp&&PDEF[S.setHelp];
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+ }else{
+  body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
+  help.innerHTML='Тази секция е само за преглед в макета.';
+ }
+}
+function netStatus(){
+ const N=S.cfg.net,ip=N.mode==='dhcp'?'192.168.1.37 (DHCP)':N.ip+' (статичен)';
+ const sh=!N.shOn?['no','изключен']:S.netOk?['ok','свързан · '+(N.shType==='smb'?'//':'')+N.shSrv+'/'+N.shPath]:['no','не е свързан'];
+ return`<div class="netst"><div><span>Кабел</span><b class="ok">свързан · 100 Mbit/s</b></div><div><span>Текущ адрес</span><b>${ip}</b></div><div><span>MAC</span><b>02:81:3c:5e:1a:7f</b></div><div><span>Мрежов дял</span><b class="${sh[0]}">${sh[1]}</b></div></div>`;
+}
+const TK=['1234567890','qwertyuiop','asdfghjkl-','zxcvbnm._/'];
+function renderTd(){
+ const d=S.td,p=PDEF[d.k];
+ set($('#tdT'),p.n);set($('#tdCur'),p.t==='pass'?'':'сега '+fmtP(p,S.draft[d.a][d.k]));
+ const shown=p.t==='pass'?'•'.repeat(d.txt.length):d.txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ $('#tdIn').innerHTML=shown+'<span class="caret"></span>';set($('#tdNote'),p.h);
+ const up=c=>d.shift?c.toUpperCase():c;
+ $('#tkeys').innerHTML=TK.map(r=>[...r].map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')).join('')+
+  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button><button class="btn" data-act="tk" data-v="@" type="button">@</button><button class="btn" data-act="tk" data-v=":" type="button">:</button><button class="btn" data-act="tk" data-v="\\" type="button">\\</button><button class="btn w4" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
+}
+function renderNd(){
+ const d=S.nd,p=PDEF[d.k];
+ set($('#ndT'),p.n+(AX.includes(d.a)?' · '+d.a:''));
+ const cv0=d.k==='__line'?1:S.draft[d.a][d.k];
+ set($('#ndCur'),d.k==='__line'?d.file.name:'сега '+fmtP(p,cv0)+(p.u?' '+p.u:''));
+ $('#ndIn').innerHTML=(d.txt||'<span style="color:var(--faint)">'+fmtP(p,cv0)+'</span>')+'<span class="caret"></span>';
+ set($('#ndNote'),(p.min!==undefined?`Обхват: ${p.min} … ${p.max}${p.u?' '+p.u:''}. `:'')+p.h);
+}
+
+/* ---------- Статус ---------- */
+const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
+const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
+function updStatus(now){
+ const p=$('#sbState');p.className='pill '+S.state;set(p,STATE_TXT[S.state]);
+ if(MODE_TXT[S.screen])set($('#sbMode'),MODE_TXT[S.screen]);
+ {const hb=$('#btnHomeMain'),need=AX.some(a=>S.active[a]&&!S.homed[a]);hb.classList.toggle('need',need&&S.state==='idle');
+  hb.title=need?'Нереферирани оси: '+AX.filter(a=>S.active[a]&&!S.homed[a]).join(', '):'Всички активни оси са реферирани'}
+ const t=toolOf(S.tool);set($('#sbTool'),S.tool?`T${S.tool} · ${t.d} Ø${t.dia}`:'Без инструмент');
+ const m=$('#sbMsg');let txt='',cls='';
+ if(S.state==='estop'){txt='Аварийният стоп е натиснат. Захранването на драйверите и шпиндела е прекъснато.';cls='bad'}
+ else if(S.state==='alarm'){txt=S.alarm;cls='bad'}
+ else if(now<S.toastUntil){txt=S.toast}
+ else if(S.actLabel&&S.state==='run'){txt=S.actLabel;cls='act'}
+ else if(S.state==='hold'){txt='Пауза. Натиснете ЦИКЪЛ СТАРТ, за да продължите.'}
+ set(m,txt);m.className='sb-msg '+cls;
+ // оверрайди
+ set($('#fAct'),S.F&&S.cur&&S.cur.rapid?'G0 '+String(Math.round(S.F)).padStart(5,' '):String(Math.round(S.F)).padStart(5,' '));
+ set($('#fProg'),'F'+(S.progF||0)+' мм/мин');
+ set($('#fOv'),S.feedOv+'%');set($('#sOv'),S.spOv+'%');set($('#rAct'),S.rapOv+'%');
+ set($('#sAct'),String(Math.round(S.sp.act/10)*10).padStart(5,' '));
+ set($('#sProg'),'S'+S.sp.cmd+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян'));
+ set($('#runTime'),mmss(S.runTime));
+ $('#btnSingle').classList.toggle('on',S.single);$('#btnCool').classList.toggle('on',S.coolant);
+ const pl=$('#mtPrb'),tl=$('#mtTs');
+ set(pl,`PRB1 · NO · 24 V · ${S.cnt.prb} сраб.`);set(tl,`PRB2 · NC · 24 V · ${S.cnt.ts} сраб.`);
+ $('#ledPrb').className='led'+(now-S.flash.prb<300?' hot':'');
+ $('#ledTs').className='led'+(now-S.flash.ts<300?' hot':'');
+ if(S.lastEv&&S.lastEv!==updStatus._ev){updStatus._ev=S.lastEv;const e=S.lastEv;
+  $('#evBox').innerHTML=`<div><span>Вход</span><b>${e.inp==='prb'?'PRB1 · 3D пробник':'PRB2 · toolsetter'}</b></div><div><span>X маш.</span><b>${f4(e.lm.X)}</b></div><div><span>Y маш.</span><b>${f4(e.lm.Y)}</b></div><div><span>Z маш.</span><b>${f4(e.lm.Z)}</b></div>`}
+ const d=new Date();set($('#clock'),String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));
+}
+
+/* ---------- Събития ---------- */
+const panel=$('#panel');
+function go(scr){S.screen=scr;$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
+function segOn(sel,v){$$(sel).forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)))}
+panel.addEventListener('click',e=>{
+ const b=e.target.closest('[data-act]');if(!b)return;const v=b.dataset.v;
+ switch(b.dataset.act){
+  case'go':go(v);break;
+  case'coord':S.coord=v;segOn('[data-act="coord"]',v);break;
+  case'start':
+   if(S.state==='hold'){S.state='run';break}
+   if(!canMove())break;
+   {const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
+   if(!PROG_OPS.length){toast('Няма заредена програма. Натиснете „Отвори“.');break}
+   S.runTime=0;S.curPi=-1;S.progLine=-1;
+   if(S.startLine>0){runOps(fromLine(S.startLine),'prog');toast('Старт от ред '+(S.startLine+1))}else runOps(PROG_OPS,'prog');
+   S.startLine=null;break;
+  case'hold':if(S.state==='run'){S.state='hold';S.F=0}break;
+  case'stop':if(S.state==='run'||S.state==='hold'){halt();S.state='idle';S.coolant=false;toast('Движението е спряно')}break;
+  case'single':S.single=!S.single;break;
+  case'cool':S.coolant=!S.coolant;break;
+  case'fov':S.feedOv=v==='0'?100:Math.max(0,Math.min(150,S.feedOv+ +v));break;
+  case'sov':S.spOv=v==='0'?100:Math.max(50,Math.min(120,S.spOv+ +v));break;
+  case'rap':S.rapOv=+v;segOn('#rapSeg .btn',v);break;
+  case'estop':halt();S.state='estop';S.coolant=false;break;
+  case'reset':
+   if(S.state==='estop'||S.state==='alarm'){S.state='idle';S.alarm='';S.alarmY=false;S.ferr.Y=0;toast('Машината е готова')}
+   break;
+  case'inc':S.jogInc=v==='cont'?'cont':+v;segOn('#incSeg .btn',v);set($('#jogHint'),v==='cont'?'непрекъснато · задръж бутона':'стъпка '+(+v).toFixed(3)+' мм');break;
+  case'jogf':{const st=[100,250,500,1000,2000,3000,5000];let i=st.indexOf(S.jogF);i=Math.max(0,Math.min(st.length-1,i+ +v));S.jogF=st[i];set($('#jogF'),String(S.jogF));break}
+  case'refmode':S.refMode=v;segOn('#refSeg .btn',v);homeLabels();
+   toast(v==='manual'?'Ръчен режим: текущата позиция на оста става машинна нула':'Реферирване с датчик и Z индекс на енкодера');break;
+  case'setsec':S.setSec=v;S.setHelp=null;renderSet();break;
+  case'phelp':S.setHelp=v;renderSet();break;
+  case'pt':{
+   const a=b.dataset.a,k=b.dataset.k,p=PDEF[k],D=S.draft[a];S.setHelp=k;
+   if(p.t==='bool'){
+    if(k==='active'&&D.active&&AX.filter(x=>S.draft[x].active).length===1){toast('Поне една ос трябва да е активна');renderSet();break}
+    D[k]=D[k]?0:1;
+   }else if(p.t==='dir')D[k]=-D[k];
+   else if(p.t==='text'||p.t==='pass'){S.td={a,k,txt:p.t==='pass'?'':String(D[k]||''),shift:false};$('#txtDlg').hidden=false;renderTd()}
+   else{S.nd={a,k,txt:''};$('#numDlg').hidden=false;renderNd()}
+   renderSet();break}
+  case'nk':{const d=S.nd,p=PDEF[d.k];
+   if(p.t==='ip'){
+    if(v==='bs')d.txt=d.txt.slice(0,-1);else if(v==='clr')d.txt='';else if(v==='cur')d.txt=String(S.draft[d.a][d.k]);
+    else if(v==='.'){if(d.txt&&!d.txt.endsWith('.')&&(d.txt.match(/\./g)||[]).length<3)d.txt+='.'}
+    else if(v!=='pm'&&d.txt.length<15)d.txt+=v;
+    renderNd();break}
+   if(v==='bs')d.txt=d.txt.slice(0,-1);else if(v==='clr')d.txt='';
+   else if(v==='pm'){if(p.min===undefined||p.min<0)d.txt=d.txt.startsWith('-')?d.txt.slice(1):'-'+d.txt}
+   else if(v==='cur')d.txt=String(d.k==='__line'?1:S.draft[d.a][d.k]);
+   else if(v==='.'){if(p.d>0&&!d.txt.includes('.'))d.txt+=(d.txt===''||d.txt==='-'?'0.':'.')}
+   else if(d.txt.replace(/[-.]/g,'').length<8)d.txt+=v;
+   renderNd();break}
+  case'nd-cancel':$('#numDlg').hidden=true;break;
+  case'nd-ok':{const d=S.nd,p=PDEF[d.k];
+   if(p.t==='ip'){if(d.txt===''){$('#numDlg').hidden=true;break}
+    if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(d.txt)||d.txt.split('.').some(x=>+x>255)){toast('Невалиден адрес. Пример: 192.168.1.50');break}
+    S.draft[d.a][d.k]=d.txt;$('#numDlg').hidden=true;renderSet();break}
+   if(d.txt===''||d.txt==='-'){$('#numDlg').hidden=true;break}
+   const val=+d.txt;
+   if(isNaN(val)||val<p.min||val>p.max){toast(`Стойността трябва да е между ${p.min} и ${p.max}`);break}
+   if(d.k==='__line'){$('#numDlg').hidden=true;
+    if(S.state==='run'||S.state==='hold'){toast('Спрете текущата програма, преди да заредите нова.');break}
+    const n=Math.round(val);loadProgram(d.file);S.startLine=n>1?n-1:null;go('run');
+    toast('Заредена '+d.file.name+(n>1?'. Старт от ред '+n+' с ЦИКЪЛ СТАРТ.':''));break}
+   S.draft[d.a][d.k]=val;$('#numDlg').hidden=true;renderSet();break}
+  case'pe':S.draft[b.dataset.a][b.dataset.k]=v;S.setHelp=b.dataset.k;renderSet();break;
+  case'teach':{
+   const need=v==='ts-z'||v==='magz'?['Z']:['X','Y'],nh=need.filter(a=>!S.homed[a]);
+   if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Позицията няма да е вярна. Натиснете HOME.');break}
+   const m=S.mach;
+   if(v==='ts-xy'){
+    if(S.screen==='probe'){S.cfg.ts.tsx=S.draft.ts.tsx=+m.X.toFixed(3);S.cfg.ts.tsy=S.draft.ts.tsy=+m.Y.toFixed(3);renderTsPos();toast('Toolsetter: X '+m.X.toFixed(3)+' Y '+m.Y.toFixed(3)+' (записано)');break}
+    S.draft.ts.tsx=+m.X.toFixed(3);S.draft.ts.tsy=+m.Y.toFixed(3)}
+   if(v==='ts-z')S.draft.ts.tsz=+m.Z.toFixed(3);
+   if(v==='mag1'){S.draft.mag.m1x=+m.X.toFixed(3);S.draft.mag.m1y=+m.Y.toFixed(3)}
+   if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
+   renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
+  case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
+  case'tk-sh':S.td.shift=!S.td.shift;renderTd();break;
+  case'tk-bs':S.td.txt=S.td.txt.slice(0,-1);renderTd();break;
+  case'td-cancel':$('#txtDlg').hidden=true;break;
+  case'td-ok':{const d=S.td;
+   if(d.k==='host'&&!/^[A-Za-z0-9-]{1,32}$/.test(d.txt)){toast('Името може да съдържа само латински букви, цифри и тире');break}
+   if(d.k!=='shPass'&&d.k!=='shUser'&&!d.txt.trim()){toast('Полето не може да е празно');break}
+   S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
+  case'net-test':{const N=S.cfg.net;
+   if(JSON.stringify(N)!==JSON.stringify(S.draft.net)){toast('Първо запишете промените');break}
+   if(!N.shOn){toast('Включете „Използвай мрежов дял“ и запишете');break}
+   if(N.shType==='smb'&&!N.shPass){toast('Въведете парола за потребителя '+N.shUser);break}
+   toast('Свързване с '+(N.shType==='smb'?'//':'')+N.shSrv+'/'+N.shPath+' …');
+   setTimeout(()=>{S.netOk=true;renderSet();if(S.screen==='files')renderFiles();toast('Мрежовият дял е свързан. Файловете са в Програми → Мрежа.')},1200);break}
+  case'go-net':go('set');S.setSec='net';S.setHelp=null;renderSet();break;
+  case'cfg-revert':S.draft=clone(S.cfg);renderSet();toast('Промените са отменени');break;
+  case'cfg-save':{
+   if(!canMove())break;
+   if(JSON.stringify(S.cfg.net)!==JSON.stringify(S.draft.net))S.netOk=false;
+   const re=[];AX.forEach(a=>{const o=S.cfg[a],n=S.draft[a];if(REHOME.some(k=>o[k]!==n[k])){re.push(a);S.homed[a]=false}});
+   if(S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
+   S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>S.cfg.mag.mn)S.magPos=1;renderSet();renderTools();renderTsPos();
+   toast(re.length?'Записано. Осите '+re.join(', ')+' трябва да се реферират отново.':'Настройките са записани',6000);break}
+  case'axact':{
+   if(!canMove())break;
+   if(S.active[v]&&AX.filter(a=>S.active[a]).length===1){toast('Поне една ос трябва да е активна');break}
+   S.active[v]=!S.active[v];b.classList.toggle('on',S.active[v]);
+   toast('Ос '+v+(S.active[v]?' е активна':' е изключена: не участва в HOME, ръчното движение и нулирането'));break}
+  case'home':{
+   if(!canMove())break;
+   if(v!=='all'&&!S.active[v]){toast('Ос '+v+' е изключена в Настройки → Оси');break}
+   const axes=v==='all'?['Z','X','Y','A','B','C'].filter(a=>S.active[a]):[v];
+   if(S.refMode==='manual'){
+    if(v==='all'&&b.dataset.armed!=='1'){b.dataset.armed='1';set(b,'Потвърди');b.classList.add('on');
+     toast('Ръчна реф. точка за '+axes.join(', ')+': натиснете пак за потвърждение');
+     setTimeout(()=>{if(b.dataset.armed!=='1')return;b.dataset.armed='';b.classList.remove('on');homeLabels()},3000);break}
+    if(v==='all'){b.dataset.armed='';b.classList.remove('on');homeLabels()}
+    axes.forEach(a=>{S.mach[a]=0;S.homed[a]='manual'});toast('Ръчна референтна точка: '+axes.join(', ')+' = 0 (маш.)');break}
+   const noSw=axes.filter(a=>!S.cfg[a].hsw),use=axes.filter(a=>S.cfg[a].hsw);
+   if(!use.length){toast((v==='all'?'Нито една активна ос':'Ос '+v)+' няма датчик за Home. Използвайте „Ръчно, тук“ в екрана Ръчно.');break}
+   const ops=homeOps(use);
+   ops.push({type:'act',dur:0,fn:()=>toast('Реферирането завърши: '+use.join(', ')+(noSw.length?'. Без датчик (реферирайте ръчно): '+noSw.join(', '):''),6000)});
+   use.forEach(a=>S.homed[a]=false);runOps(ops,'home');break}
+  case'gozero':{
+   if(!canMove())break;
+   const nh=AX.filter(a=>S.active[a]&&!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}
+   const ops=[];
+   if(S.active.Z)ops.push({type:'line',tgtFn:()=>({Z:0-S.off.Z}),rapid:true,label:'Go to 0: Z нагоре до машинна нула'});
+   const t={};['X','Y','A','B','C'].filter(a=>S.active[a]).forEach(a=>t[a]=0);
+   if(Object.keys(t).length)ops.push({type:'line',tgt:t,rapid:true,label:'Go to 0: '+Object.keys(t).join(' ')+' към програмната нула'});
+   if(S.active.Z)ops.push({type:'line',tgtFn:()=>({Z:Math.min(SAFE_Z,0-S.off.Z)}),rapid:true,label:'Go to 0: Z до безопасна височина'});
+   ops.push({type:'act',dur:0,fn:()=>toast('На програмната нула G54. Z е на '+SAFE_Z.toFixed(3)+' над детайла.')});
+   runOps(ops,'jog');break}
+  case'zero':if(!canMove())break;if(!S.active[v]){toast('Ос '+v+' е изключена');break}S.off[v]=S.mach[v];toast('G54 '+v+' = 0');break;
+  case'setv':S.dlg={ax:v,tgt:'work',txt:''};$('#modal').hidden=false;renderDlg();break;
+  case'dlg-ax':S.dlg.ax=v;S.dlg.txt='';renderDlg();break;
+  case'dlg-tgt':S.dlg.tgt=v;renderDlg();break;
+  case'dk':{const d=S.dlg;
+   if(v==='bs')d.txt=d.txt.slice(0,-1);else if(v==='clr')d.txt='';
+   else if(v==='pm')d.txt=d.txt.startsWith('-')?d.txt.slice(1):'-'+d.txt;
+   else if(v==='cur'){const w=work();d.txt=(d.tgt==='mach'?S.mach[d.ax]:w[d.ax]).toFixed(3)}
+   else if(v==='.'){if(!d.txt.includes('.'))d.txt+=(d.txt===''||d.txt==='-'?'0.':'.')}
+   else if(d.txt.replace(/[-.]/g,'').length<8)d.txt+=v;
+   renderDlg();break}
+  case'dlg-cancel':$('#modal').hidden=true;break;
+  case'dlg-zero':S.dlg.txt='0';applyDlg();break;
+  case'dlg-ok':applyDlg();break;
+  case'zero-all':if(!canMove())break;['X','Y','Z'].filter(a=>S.active[a]).forEach(a=>S.off[a]=S.mach[a]);toast('G54 X, Y, Z = 0');break;
+  case'key':S.mdi+=v;renderMdi();break;
+  case'mdi-del':S.mdi=S.mdi.slice(0,-1);renderMdi();break;
+  case'mdi-clr':S.mdi='';renderMdi();break;
+  case'mdi-nl':if(S.mdi&&!S.mdi.endsWith('\n'))S.mdi+='\n';renderMdi();break;
+  case'hist':S.mdi=S.mdiHist[+v];renderMdi();break;
+  case'mdi-run':{
+   const txt=S.mdi.trim();if(!txt){toast('Въведете команда, например G0 X10 Y10');break}
+   if(!canMove())break;
+   const ops=parse(txt.split('\n'));if(!ops.length){toast('Няма движение или команда в този ред');break}
+   S.mdiHist=[txt,...S.mdiHist.filter(h=>h!==txt)].slice(0,8);S.mdi='';renderMdi();runOps(ops,'mdi');break}
+  case'tsel':S.sel=+v;renderTools();break;
+  case'tool-change':if(!canMove())break;runOps([atcOp(S.sel)],'atc');break;
+  case'tool-measure':measureTool();break;
+  case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
+  case'cyc':runCycle(v);break;
+  case'view':if(v==='fit')S.view.zoom=1;else{Object.assign(S.view,VIEWS[v]);S.view.name=v;S.view.zoom=1}segOn('#viewSeg .btn',v==='fit'?S.view.name:v);break;
+  case'src':S.src=v;S.fsel=0;renderFiles();previewFile();break;
+  case'fsel':S.fsel=+v;renderFiles();previewFile();break;
+  case'upload':$('#fileIn').click();break;
+  case'f-load':{const f=curFile();if(!f){toast('Изберете файл');break}
+   if(S.state==='run'||S.state==='hold'){toast('Спрете текущата програма, преди да заредите нова.');break}
+   loadProgram(f);go('run');toast('Заредена: '+f.name);break}
+  case'f-fromline':{const f=curFile();if(!f){toast('Изберете файл');break}
+   if(!f.c)f.c=compile(f.text);PDEF.__line.max=f.c.lines.length;S.nd={a:'__',k:'__line',txt:'',file:f};$('#numDlg').hidden=false;renderNd();break}
+  case'gline':{if(S.state!=='idle'){toast('Ред за старт се избира, когато машината е спряна');break}
+   const i=+v;S.startLine=S.startLine===i?null:i;lastWin='';
+   if(S.startLine!=null)toast('Ред '+(i+1)+' е избран за старт. Натиснете ЦИКЪЛ СТАРТ.');break}
+  case'sl-clr':S.startLine=null;lastWin='';break;
+  case'corner':S.corner=v;renderCycs();break;
+  case'test':S.flash[v]=performance.now();S.cnt[v]++;S.lastEv={inp:v,lm:{...S.mach}};break;
+  case'sim-alarm':if(S.state==='estop')break;halt();S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
+ }
+});
+// ръчно движение
+panel.addEventListener('pointerdown',e=>{
+ const b=e.target.closest('[data-jog]');if(!b)return;
+ const a=b.dataset.jog[0],d=b.dataset.jog[1]==='+'?1:-1;
+ if(!S.active[a]){toast('Ос '+a+' е изключена в Настройки → Оси');return}
+ if(S.jogInc==='cont'){if(S.state!=='idle'){canMove();return}S.jogHold={a,d};b.setPointerCapture&&b.setPointerCapture(e.pointerId)}
+ else{if(!canMove())return;let dl=d*S.jogInc;
+  if(S.homed[a]){const c=S.cfg[a],t=Math.max(c.min,Math.min(c.max,S.mach[a]+dl));if(t!==S.mach[a]+dl)toast('Софтуерен лимит на '+a);dl=t-S.mach[a];if(Math.abs(dl)<1e-9)return}
+  runOps([{type:'line',rel:{[a]:dl},feed:S.jogF}],'jog')}
+});
+['pointerup','pointercancel','lostpointercapture'].forEach(t=>panel.addEventListener(t,()=>{S.jogHold=null}));
+
+/* ---------- Мащаб ---------- */
+const vp=$('#viewport');let RES=[800,1280];
+function fit(){
+ const[W,H]=RES,portrait=H>W;panel.classList.toggle('portrait',portrait);
+ panel.style.width=W+'px';panel.style.height=H+'px';panel.style.fontSize=(Math.min(W,H)/800*16)+'px';
+ const availH=Math.max(480,window.innerHeight-32);
+ const s=Math.min(1,vp.clientWidth/W,portrait?availH/H:1);panel.style.transform=`scale(${s})`;
+ panel.style.left=Math.max(0,(vp.clientWidth-W*s)/2)+'px';vp.style.height=Math.ceil(H*s)+'px';
+ if(S.screen==='files')requestAnimationFrame(previewFile);
+}
+document.querySelectorAll('.resbtn').forEach(b=>b.addEventListener('click',()=>{
+ RES=b.dataset.res.split('x').map(Number);document.querySelectorAll('.resbtn').forEach(x=>x.classList.toggle('on',x===b));
+ set($('#setRes'),RES.join('×'));fit();
+}));
+new ResizeObserver(fit).observe(vp);window.addEventListener('resize',fit);
+
+/* ---------- Цикъл ---------- */
+loadProgram(FILES.mem[0]);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
+let last=performance.now(),acc=0;
+function frame(now){
+ const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);acc+=dt;
+ updDro();updStatus(now);
+ if(S.screen==='run'){updGc();draw()}
+ if(S.screen==='tools')updMag(dt);
+ if(S.screen==='diag'&&acc>.1){acc=0;updDiag()}
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>

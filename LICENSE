@@ -1,0 +1,36 @@
+Copyright (c) 2026 ageorgiev86. Всички права запазени.
+
+Този софтуер, неговият изходен код, документацията, макетите на интерфейса,
+схемите и всички свързани материали („Софтуерът“) са собственост на
+притежателя на авторските права.
+
+Без предварително писмено разрешение от притежателя на авторските права е
+забранено Софтуерът или части от него да бъдат копирани, променяни,
+разпространявани, публикувани, сублицензирани, продавани или използвани
+по какъвто и да е начин, освен в машини, произведени или доставени от
+притежателя на авторските права.
+
+Софтуерът се предоставя „такъв, какъвто е“, без каквито и да е гаранции,
+изрични или подразбиращи се. Притежателят на авторските права не носи
+отговорност за щети, произтичащи от използването му.
+
+Компонентите на трети страни, включени в Софтуера или използвани заедно с
+него, са под собствените си лицензи. Списъкът е в THIRD_PARTY_NOTICES.md.
+
+---
+
+Copyright (c) 2026 ageorgiev86. All rights reserved.
+
+This software, its source code, documentation, user interface mockups,
+schematics and all related materials (the "Software") are proprietary.
+No part of the Software may be copied, modified, distributed, published,
+sublicensed, sold or otherwise used without prior written permission from
+the copyright holder, except as part of machines manufactured or supplied
+by the copyright holder.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+Third-party components are licensed under their own terms; see
+THIRD_PARTY_NOTICES.md.
