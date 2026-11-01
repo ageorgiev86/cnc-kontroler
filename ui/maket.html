@@ -922,7 +922,7 @@ function parse(lines){
   else if(ms.includes(6)&&T!=null)out.push(atcOp(T,li));
   if((ms.includes(3)||ms.includes(4))&&mt==='laser'){const m4=ms.includes(4);out.push({type:'act',line:li,dur:0,label:'Лазер вкл. ('+(m4?'M4 динамична':'M3 постоянна')+')',fn:()=>{S.sp.on=true;S.sp.dir=m4?'M4':'M3';if(S.cfg.mach.lzAir)S.airBlast=true}})}
   else if((ms.includes(3)||ms.includes(4))&&mt==='plasma'){const P=S.cfg.mach;out.push({type:'act',line:li,dur:.6,label:'Плазма: намиране на листа ('+(P.plIhs==='ohm'?'омичен контакт':'плаващ датчик')+')'},{type:'act',line:li,dur:P.plDelay+.2,label:'Плазма: пробиване на '+P.plPierce.toFixed(1)+' мм, забавяне '+P.plDelay.toFixed(2)+' s',fn:()=>{S.sp.on=true}},{type:'act',line:li,dur:.2,label:'Плазма: височина на рязане '+P.plCut.toFixed(1)+' мм'})}
-  else if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
+  else if(ms.includes(3)||ms.includes(4)){const ccw=ms.includes(4);out.push({type:'act',line:li,dur:.8,durFn:spWaitDur,label:'Шпинделът набира обороти',fn:()=>{if(S.tool===10){toast('Шпинделът не се пуска с 3D пробник в него');return}S.sp.on=true;S.sp.dir=ccw?'CCW':'CW'}})}
   if(ms.includes(8))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=true}});
   if(ms.includes(9))out.push({type:'act',line:li,dur:0,fn:()=>{S.coolant=false}});
   if(gs.includes(4)){const d=w.P!==undefined?(w.P>=100?w.P/1000:w.P):0;out.push({type:'act',line:li,dur:d,label:'Пауза G4 '+d.toFixed(2)+' s'})}
@@ -1009,11 +1009,16 @@ function finishRun(){
  if(k==='prog'){S.curPi=Infinity;toast('Програмата приключи за '+mmss(S.runTime))}
  if(k==='mdi')toast('MDI командата е изпълнена');
 }
+function spWaitDur(){const SP=S.cfg.sp;if(SP.spWait==='time')return SP.spDelay;
+ const tgt=Math.max(SP.spMin,Math.min(SP.spMax,S.sp.cmd*S.spOv/100));return Math.min(30,Math.abs(tgt-S.sp.act)/(SP.spMax/Math.max(.1,SP.spRamp))+.2)}
+function spOutTxt(){const SP=S.cfg.sp;if(SP.spCtl==='modbus')return'Modbus #'+SP.spAddr;
+ const r=S.sp.act<=0?0:SP.spPwmMin+(SP.spPwmMax-SP.spPwmMin)*(S.sp.act-SP.spMin)/Math.max(1,SP.spMax-SP.spMin);return'PWM '+Math.max(0,Math.min(100,r)).toFixed(0)+' %'}
 function begin(m){
  prepare(m,work());
  if(m.prog){S.curPi=m.pi;S.progLine=m.line}
  if(m.label)S.actLabel=m.label;else if(m.type!=='act')S.actLabel='';
  if(m.type==='act'&&m.fn)m.fn();
+ if(m.type==='act'&&m.durFn)m.dur=m.durFn();
 }
 function trigger(m){
  const lm={};AX.forEach(a=>lm[a]=S.mach[a]-Math.sign(S.vel[a])*Math.abs(S.ferr[a])/1000);
@@ -1056,8 +1061,9 @@ function tick(dt){
  if(MT()==='plasma'){const c=S.cur,cut=S.sp.on&&S.state==='run'&&c&&c.type!=='act'&&!c.rapid,tv=cut?S.cfg.mach.plV+(Math.random()-.5)*3:0;
   S.arcV=(S.arcV||0)+(tv-(S.arcV||0))*Math.min(1,dt*6);
   if(cut&&S.cfg.mach.plThc&&!thcLocked())S.thcZ=Math.max(-1.5,Math.min(1.5,(S.thcZ||0)+(Math.random()-.5)*.08));}
- const tsp=(S.sp.on&&S.state!=='estop'&&MT()!=='plasma')?S.sp.cmd*S.spOv/100:0;
- const d=tsp-S.sp.act,st=9000*dt;S.sp.act+=Math.abs(d)<st?d:Math.sign(d)*st;
+ const SP=S.cfg.sp,raw=(S.sp.on&&S.state!=='estop'&&MT()!=='plasma')?S.sp.cmd*S.spOv/100:0;
+ const tsp=MT()==='laser'?raw:raw>0?Math.max(SP.spMin,Math.min(SP.spMax,raw)):0;
+ const d=tsp-S.sp.act,st=(MT()==='laser'?1e9:SP.spMax/Math.max(.1,SP.spRamp))*dt;S.sp.act+=Math.abs(d)<st?d:Math.sign(d)*st;
  if(S.state!=='run'&&!S.jogHold)S.F=0;
 }
 
@@ -1597,7 +1603,38 @@ const P_MACH=[
  {k:'ltTur',n:'Позиции на револвера',t:'num',d:0,min:4,max:16,show:isT('lathe'),h:'Колко ножа побира револверната глава. Таблицата на инструментите следва този брой.'}
 ];
 const PDEF={};[...P_AX,...P_HOME,...P_MAG,...P_TS,...P_NET,...P_MACH].forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH};
+const isMb=D=>D.spCtl==='modbus',isPw=D=>D.spCtl==='pwm';
+const P_SP=[
+ {k:'spCtl',n:'Управление',t:'enum',opts:[['modbus','Modbus RS485 (VFD)'],['pwm','PWM + посока']],h:'Modbus: контролерът изпраща оборотите и посоката цифрово по RS485 и чете обратно реалната честота, тока и грешките на честотния регулатор. PWM + посока: аналогов сигнал за оборотите и отделен изход за посоката. По-просто, но без обратна връзка от VFD-то.'},
+ {t:'hdr',n:'Modbus RS485',show:isMb},
+ {k:'spVfd',n:'Честотен регулатор',t:'enum',opts:[['huanyang','Huanyang HY'],['h100','H100'],['yl620','YL620'],['generic','Общ Modbus']],show:isMb,h:'Готов профил с регистрите на популярните китайски VFD. „Общ Modbus“ е за всеки друг регулатор: регистрите се въвеждат ръчно от документацията му.'},
+ {k:'spPort',n:'Порт',t:'enum',opts:[['uart1','UART1'],['uart2','UART2'],['usb','USB-RS485']],show:isMb,h:'Към кой сериен порт е свързан RS485 преобразувателят (MAX485 / THVD1450 или USB адаптер).'},
+ {k:'spBaud',n:'Скорост',u:'bit/s',t:'enum',opts:[['9600','9600'],['19200','19200'],['38400','38400'],['115200','115200']],show:isMb,h:'Трябва да съвпада с настройката в самия VFD.'},
+ {k:'spPar',n:'Формат',t:'enum',opts:[['8N1','8N1'],['8E1','8E1'],['8O1','8O1'],['8N2','8N2']],show:isMb,h:'Битове данни, четност и стоп битове. Трябва да съвпада с VFD-то.'},
+ {k:'spAddr',n:'Адрес на VFD',t:'num',d:0,min:1,max:247,show:isMb,h:'Modbus адресът на регулатора (по подразбиране обикновено 1).'},
+ {k:'spRegCmd',n:'Регистър команда',u:'десетично',t:'num',d:0,min:0,max:65535,show:D=>isMb(D)&&D.spVfd==='generic',h:'Регистърът за старт, стоп и посока от документацията на VFD-то.'},
+ {k:'spRegFreq',n:'Регистър честота',u:'десетично',t:'num',d:0,min:0,max:65535,show:D=>isMb(D)&&D.spVfd==='generic',h:'Регистърът, в който се записва зададената честота.'},
+ {k:'spRegFb',n:'Регистър обратна връзка',u:'десетично',t:'num',d:0,min:0,max:65535,show:D=>isMb(D)&&D.spVfd==='generic',h:'Регистърът, от който се чете реалната изходна честота.'},
+ {k:'spPoll',n:'Период на опит',u:'ms',t:'num',d:0,min:20,max:1000,show:isMb,h:'Колко често контролерът пита VFD-то за състоянието. При липса на отговор над 5 периода машината спира с аларма.'},
+ {t:'hdr',n:'PWM + посока',show:isPw},
+ {k:'spOut',n:'Изход',t:'enum',opts:[['v010','0–10 V (преобразувател)'],['pwm','PWM директно']],show:isPw,h:'Повечето VFD приемат 0–10 V. Тогава PWM сигналът минава през преобразувател PWM → 0–10 V. Някои шпиндели и драйвери (например BLDC) приемат PWM директно.'},
+ {k:'spPwmF',n:'PWM честота',u:'Hz',t:'num',d:0,min:100,max:50000,show:isPw,h:'За преобразувател 0–10 V обикновено 1–5 kHz (по документацията на преобразувателя).'},
+ {k:'spPwmMin',n:'PWM при мин. обороти',u:'%',t:'num',d:0,min:0,max:100,show:isPw,h:'Коефициентът на запълване, който отговаря на минималните обороти.'},
+ {k:'spPwmMax',n:'PWM при макс. обороти',u:'%',t:'num',d:0,min:0,max:100,show:isPw,h:'Коефициентът на запълване, който отговаря на максималните обороти. Използва се и за калибриране.'},
+ {k:'spInv',n:'PWM сигнал',t:'bool',on:'Обърнат',off:'Нормален',show:isPw,h:'Обръща сигнала, ако преобразувателят или драйверът работи с активно ниско ниво.'},
+ {k:'spDirCW',n:'Посока CW при',t:'enum',opts:[['low','Ниско ниво'],['high','Високо ниво']],show:isPw,h:'Какво ниво на изхода за посока означава въртене по часовника (M3).'},
+ {k:'spEn',n:'Изход Enable',t:'bool',on:'Да',off:'Не',show:isPw,h:'Отделен изход за пускане и спиране (FWD/RUN на VFD-то). Без него шпинделът спира само с PWM 0 %.'},
+ {t:'hdr',n:'Общи'},
+ {k:'spMin',n:'Мин. обороти',u:'об/мин',t:'num',d:0,min:0,max:100000,h:'Под тези обороти шпинделът не се върти, дори ако програмата иска по-малко (например заради охлаждането на мотора).'},
+ {k:'spMax',n:'Макс. обороти',u:'об/мин',t:'num',d:0,min:100,max:100000,h:'Горна граница на оборотите.'},
+ {k:'spRamp',n:'Време за ускорение',u:'s',t:'num',d:1,min:.1,max:60,h:'За колко време шпинделът стига от 0 до максималните обороти. Трябва да отговаря на настройката във VFD-то.'},
+ {k:'spWait',n:'Изчакване до оборотите',t:'enum',opts:[['fb','По обратна връзка'],['time','По време']],h:'По обратна връзка: програмата чака, докато реалните обороти (от Modbus или енкодера) стигнат зададените. По време: чака фиксирано време.'},
+ {k:'spDelay',n:'Време за изчакване',u:'s',t:'num',d:1,min:0,max:60,show:D=>D.spWait==='time',h:'Колко секунди чака програмата след M3/M4.'},
+ {k:'spEnc',n:'Енкодер на шпиндела',t:'bool',on:'Има',off:'Няма',h:'Нужен е за ориентация при смяна на инструмента и за нарязване на резба. Свързва се към TIM23 на STM32.'},
+ {k:'spPpr',n:'Импулси на оборот',t:'num',d:0,min:1,max:100000,show:D=>!!D.spEnc,h:'Резолюцията на енкодера на шпиндела.'}
+];
+P_SP.forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
 const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
@@ -1613,6 +1650,7 @@ const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,spm:320,vmax:6000,acc:800,min,
 const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
 S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
 S.cfg.mach={type:'mill',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
+S.cfg.sp={spCtl:'modbus',spVfd:'huanyang',spPort:'uart1',spBaud:'19200',spPar:'8N1',spAddr:1,spRegCmd:8192,spRegFreq:8193,spRegFb:12288,spPoll:100,spOut:'v010',spPwmF:2000,spPwmMin:0,spPwmMax:100,spInv:0,spDirCW:'low',spEn:1,spMin:6000,spMax:24000,spRamp:4,spWait:'fb',spDelay:3,spEnc:1,spPpr:1024};
 S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -1633,7 +1671,6 @@ function homeOps(axes){
 const SECS=[['mach','Машина'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
 const STATIC={
  enc:[['Контур X, Y','двоен (серво + линийка)'],['Контур Z, A, B','затворен'],['Контур C','отворен'],['Лимит на грешката','50 µm'],['Макс. корекция','0.200 мм'],['Вход','RS422 A/B/Z']],
- sp:[['Управление','VFD Modbus'],['Порт','RS485 · 19200'],['Адрес','1'],['Обороти','0 … 24000'],['Енкодер','1024 имп/об'],['Ориентация','0.0°']],
  prb:[['Вход','PRB1 · NO'],['Инструмент','T10'],['Сфера','Ø2.000'],['Търсене','300 мм/мин'],['Измерване','30 мм/мин'],['Отдръпване','1.000']],
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
  disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
@@ -1677,10 +1714,10 @@ function renderSet(){
    const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
-   (sec==='mach'?'':sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   (sec==='mach'||sec==='sp'?'':sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button></div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
-  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
@@ -1796,7 +1833,7 @@ function updStatus(now){
  if(mt==='laser'){set($('#sLab'),'Лазер');set($('#sAct'),lzPow(now).toFixed(0).padStart(4,' ')+' %');set($('#sProg'),'S'+S.sp.cmd+' · '+(S.sp.on?S.sp.dir:'изкл.'))}
  else if(mt==='plasma'){set($('#sLab'),'Дъга');set($('#sAct'),String(Math.round(S.arcV||0)).padStart(4,' ')+' V');set($('#sProg'),'цел '+S.cfg.mach.plV+' V · THC '+(S.cfg.mach.plThc?'вкл.':'изкл.'))}
  else{set($('#sLab'),'Шпиндел');set($('#sAct'),String(Math.round(S.sp.act/10)*10).padStart(5,' '));
-  set($('#sProg'),(mt==='lathe'?(S.sp.css?'G96 '+S.sp.css+' м/мин':'G97 S'+S.sp.cmd):'S'+S.sp.cmd)+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян'))}
+  set($('#sProg'),(mt==='lathe'?(S.sp.css?'G96 '+S.sp.css+' м/мин':'G97 S'+S.sp.cmd):'S'+S.sp.cmd)+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян')+' · '+spOutTxt())}
  set($('#runTime'),mmss(S.runTime));
  $('#btnSingle').classList.toggle('on',S.single);$('#btnCool').classList.toggle('on',S.coolant);
  const pl=$('#mtPrb'),tl=$('#mtTs');
