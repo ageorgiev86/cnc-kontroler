@@ -1,0 +1,21 @@
+{
+  // Дебъг през ST-LINK с разширението Cortex-Debug.
+  // ST-LINK_gdbserver и STM32CubeProgrammer идват със STM32CubeCLT.
+  // Разширението STM32Cube for VS Code може да създаде и собствена конфигурация.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "STM32H723 (ST-LINK)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "stlink",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Debug/cnc_mcu.elf",
+      "device": "STM32H723ZG",
+      "interface": "swd",
+      "runToEntryPoint": "main",
+      "svdFile": "${env:STM32CLT_PATH}/STMicroelectronics_CMSIS_SVD/STM32H723.svd",
+      "preLaunchTask": "CMake: build"
+    }
+  ]
+}

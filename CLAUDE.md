@@ -16,7 +16,7 @@
 - **ОС:** Armbian Minimal (Debian), собствено ядро с `PREEMPT_RT`, без X сървър. На Raspberry Pi: Raspberry Pi OS Lite.
 - **Linux платката е сменяема** (Orange Pi или Raspberry Pi; списък в `docs/platki.md`). Само стандартни интерфейси (DRM/KMS, libinput, spidev, libgpiod); всичко зависимо от платката е в `board/*.conf`; компилира се за armhf и arm64. За серийните машини целта е Compute Module 4/5 върху собствена платка.
 - **Платка за STM32:** WAVGAT STM32H723ZGT6 core board (AliExpress), не Nucleo. Няма вграден ST-LINK (нужен е външен, напр. ST-LINK V3MINIE); кварцът, пинът на светодиода и захранването на ядрото (LDO) се проверяват по платката.
-- **Среда за STM32:** VS Code на Windows 10 + разширение STM32Cube for VS Code, STM32CubeCLT, STM32CubeMX (проект с CMake).
+- **Среда за STM32:** VS Code на Windows 10 + разширение STM32Cube for VS Code, STM32CubeCLT (проект с CMake). Проектът е в `firmware/stm32/`: написан на ръка (без .ioc), библиотеките на ST са git подмодули; всичко зависимо от платката е в `Core/Inc/board.h`. Компилира се без предупреждения; така трябва и да остане.
 - **Разделение:** Linux чете G-code, интерпретира и планира (look-ahead, S-крива). STM32 получава готови сегменти по SPI и генерира стъпки, затваря контура по енкодерите, засича пробника хардуерно и следи безопасността (watchdog, плавно спиране).
 - **MCU:** STM32H723ZG, не ESP32 (детерминизъм, таймери с encoder mode, input capture, много GPIO).
 - **Енкодери:** 6 оси + шпиндел = 7 канала на хардуерни таймери. Стъпките се генерират с един таймер + DMA към GPIO, за да останат таймерите за енкодерите.
