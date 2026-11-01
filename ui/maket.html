@@ -947,7 +947,8 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
 function parse(lines){
  const out=[],mt=MT();let mode=0,F=1000,T=null,fpr=false,css=false,inc=false,u=1,cyc=0,cR=0,cZ=0,cP=0,cInit=25,ret=98;
  const pos={X:0,Y:0,Z:25,A:0,B:0,C:0};
- lines.forEach((raw,li)=>{
+ const subs={};lines.forEach((r,i)=>{const m=/^\s*(?:N\d+\s*)?O0*(\d+)/i.exec(r);if(m&&subs[+m[1]]===undefined)subs[+m[1]]=i});
+ const step=(raw,li)=>{
   const code=raw.replace(/\(.*?\)/g,'').replace(/;.*/,'').toUpperCase().trim();if(!code||code[0]==='%'||code[0]==='O')return;
   const w={},gs=[],ms=[];
   code.replace(/([A-Z])\s*([-+]?\d*\.?\d+)/g,(_,l,n)=>{n=parseFloat(n);if(l==='G')gs.push(n);else if(l==='M')ms.push(n);else w[l]=n;return''});
@@ -989,8 +990,24 @@ function parse(lines){
   if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
   for(const mc of[62,63,64,65])if(ms.includes(mc)&&w.P!==undefined){const n=Math.round(w.P),on=mc===62||mc===64;out.push({type:'act',line:li,dur:0,label:'M'+mc+' P'+n+': OUT'+n+(on?' вкл.':' изкл.'),fn:()=>{S.uOut[n]=on?1:0}})}
   if(ms.includes(66)&&w.P!==undefined){const n=Math.round(w.P),q=w.Q!==undefined?w.Q:10;out.push({type:'act',line:li,dur:q,label:'M66: чака IN'+n,until:()=>n>=1&&n<=32&&inVal(n-1),onTimeout:()=>toast('M66: IN'+n+' не се включи за '+q+' s')})}
-  if(ms.includes(30)||ms.includes(2))out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});
- });
+  if(ms.includes(30)||ms.includes(2)){out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});return'end'}
+  if(ms.includes(98)&&w.P!==undefined)return{call:Math.round(w.P),rep:Math.max(1,Math.round(w.L||w.K||1))};
+  if(ms.includes(99))return'ret';
+ };
+ /* изпълнение като контролер: M98 P(n) L(k) вика O(n), M99 връща, M30/M2 спира */
+ let pc=0,cnt=0;const stack=[];
+ const err=(li,t)=>out.push({type:'act',line:li,dur:0,label:t,fn:()=>toast(t)});
+ while(pc<lines.length){
+  if(++cnt>4e6){err(pc,'Спряно: над 4 милиона изпълнени реда (безкраен цикъл?)');break}
+  const r=step(lines[pc],pc);
+  if(r==='end')break;
+  if(r==='ret'){if(!stack.length)break;const f=stack[stack.length-1];if(--f.rep>0){pc=f.start+1;continue}stack.pop();pc=f.ret;continue}
+  if(r&&r.call!==undefined){const st=subs[r.call];
+   if(st===undefined){err(pc,'Липсва подпрограма O'+r.call);pc++;continue}
+   if(stack.length>=16){err(pc,'Твърде дълбоко влагане на подпрограми');pc++;continue}
+   stack.push({ret:pc+1,start:st,rep:r.rep});pc=st+1;continue}
+  pc++;
+ }
  return out;
 }
 let PROG=[],PROG_OPS=[],PROG_ID=0,PROG_NAME='';
@@ -1024,8 +1041,9 @@ function analyze(ops){
   if(op.type==='act'){if(op.tool){if(!tools.includes(op.tool))tools.push(op.tool);curT=op.tool;t+=8}else t+=op.dur||0;return}
   const m=prepare({...op},p);
   const n=m.type==='arc'?Math.max(8,Math.ceil(Math.abs(m.sw)/(2*Math.PI)*72)):1,pts=[];
-  for(let k=0;k<=n;k++){const q=posAt(m,k/n);pts.push([q.X,q.Y,q.Z]);if(q.X<x0)x0=q.X;if(q.X>x1)x1=q.X;if(q.Y<y0)y0=q.Y;if(q.Y>y1)y1=q.Y}
-  z0=Math.min(z0,m.from.Z,m.to.Z);z1=Math.max(z1,m.from.Z,m.to.Z);
+  const mb=!op.tgtFn; /* ходове в машинни координати (G53/G28) не влизат в размера */
+  for(let k=0;k<=n;k++){const q=posAt(m,k/n);pts.push([q.X,q.Y,q.Z]);if(mb&&(!m.rapid||k===n)){if(q.X<x0)x0=q.X;if(q.X>x1)x1=q.X;if(q.Y<y0)y0=q.Y;if(q.Y>y1)y1=q.Y}}
+  if(mb){z0=Math.min(z0,m.to.Z,m.rapid?m.to.Z:m.from.Z);z1=Math.max(z1,m.to.Z,m.rapid?m.to.Z:m.from.Z)}
   segs.push({pi:op.pi,pts,rapid:!!m.rapid,tool:curT,from:{...m.from}});len+=m.len;t+=m.len/((m.rapid?RAPID:Math.max(1,m.feed))/60);p=m.to;
  });
  if(x0>x1){x0=-10;x1=10;y0=-10;y1=10;z0=z1=0}
