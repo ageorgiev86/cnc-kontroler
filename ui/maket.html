@@ -1575,12 +1575,14 @@ const isT=t=>D=>D.type===t;
 const P_MACH=[
  {k:'type',n:'Вид на машината',t:'enum',opts:[['mill','Фреза / рутер'],['laser','Лазер'],['plasma','Плазма'],['lathe','Струг']],h:'Определя екраните, активните оси, изгледа на траекторията и как се разбират S, M3/M4 и T в програмата. При смяна всички оси стават нереферирани.'},
  {t:'hdr',n:'Лазер',show:isT('laser')},
+ {k:'lzAx',n:'Оси',t:'enum',opts:[['3','XYZ'],['4a','XYZ + A'],['5ac','XYZ + A C'],['5bc','XYZ + B C'],['5ab','XYZ + A B']],show:isT('laser'),h:'XYZ + A е за рязане на тръби и профили с въртящ патронник. Вариантите с 5 оси са за накланяща се глава (обемни детайли, скосени ръбове).'},
  {k:'lzMax',n:'Макс. мощност',u:'%',t:'num',d:0,min:1,max:100,show:isT('laser'),h:'Горна граница на мощността, независимо от S в програмата (S1000 = 100 %).'},
  {k:'lzPwm',n:'PWM честота',u:'Hz',t:'num',d:0,min:100,max:50000,show:isT('laser'),h:'Честотата на сигнала към захранването на лазера. Взима се от документацията на захранването: CO2 обикновено 1–20 kHz, диодни лазери 1–5 kHz.'},
  {k:'lzAir',n:'Обдухване',t:'bool',on:'С лъча',off:'Ръчно',show:isT('laser'),h:'Включва обдухването заедно с лъча (M3/M4) и го изключва с M5.'},
  {k:'lzTpw',n:'Тест импулс · мощност',u:'%',t:'num',d:0,min:1,max:100,show:isT('laser'),h:'Мощност на краткия импулс за проверка на фокуса и пътя на лъча.'},
  {k:'lzTms',n:'Тест импулс · време',u:'ms',t:'num',d:0,min:1,max:2000,show:isT('laser'),h:'Продължителност на тестовия импулс.'},
  {t:'hdr',n:'Плазма',show:isT('plasma')},
+ {k:'plAx',n:'Оси',t:'enum',opts:[['3','XYZ'],['4a','XYZ + A'],['5ac','XYZ + A C'],['5bc','XYZ + B C'],['5ab','XYZ + A B']],show:isT('plasma'),h:'XYZ + A е за рязане на тръби и профили. Вариантите с 5 оси са за накланяща се горелка, например фаски за заваряване (bevel).'},
  {k:'plV',n:'Напрежение на дъгата',u:'V',t:'num',d:0,min:50,max:250,show:isT('plasma'),h:'Целево напрежение за THC. Взима се от таблицата на производителя на плазмата за дебелината и тока.'},
  {k:'plThc',n:'THC',t:'bool',on:'Включен',off:'Изключен',show:isT('plasma'),h:'Контрол на височината по напрежението на дъгата. Поддържа постоянна височина при огънат или неравен лист.'},
  {k:'plIhs',n:'Намиране на листа (IHS)',t:'enum',opts:[['ohm','Омичен контакт'],['float','Плаващ датчик']],show:isT('plasma'),h:'Как се намира повърхността преди пробиване. Омичният е по-точен, но не работи с ръждив или боядисан лист.'},
@@ -1589,6 +1591,7 @@ const P_MACH=[
  {k:'plCut',n:'Височина на рязане',u:'мм',t:'num',d:1,min:.5,max:10,show:isT('plasma'),h:'Началната височина след пробиване. После THC я поддържа.'},
  {k:'plAd',n:'Anti-dive',u:'% от подаването',t:'num',d:0,min:0,max:100,show:isT('plasma'),h:'Под тази скорост (ъгли, малки отвори) THC се заключва, за да не забие горелката в листа.'},
  {t:'hdr',n:'Струг',show:isT('lathe')},
+ {k:'ltY',n:'Ос Y',t:'bool',on:'Има',off:'Няма',show:isT('lathe'),h:'Струг с ос Y (обработващ център с въртящи се инструменти). Включва Y в позициите, ръчното движение и HOME.'},
  {k:'ltDia',n:'X в диаметър',t:'bool',on:'Да',off:'Не (радиус)',show:isT('lathe'),h:'Позицията и програмата по X са в диаметър, както е прието при струговете.'},
  {k:'ltMax',n:'Макс. обороти при G96',u:'об/мин',t:'num',d:0,min:100,max:10000,show:isT('lathe'),h:'При постоянна скорост на рязане оборотите растат към центъра. Това е горната граница, като G50 S.'},
  {k:'ltTur',n:'Позиции на револвера',t:'num',d:0,min:4,max:16,show:isT('lathe'),h:'Колко ножа побира револверната глава. Таблицата на инструментите следва този брой.'}
@@ -1600,7 +1603,8 @@ const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','
 const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
 const VSEG={mill:[['iso','3D'],['top','XY'],['front','XZ'],['side','YZ']],laser:[['top','XY'],['iso','3D']],plasma:[['top','XY'],['iso','3D']],lathe:[['lathe','XZ'],['iso','3D']]};
 const DEFV={mill:'iso',laser:'top',plasma:'top',lathe:'lathe'};
-const AXPROF={mill:['X','Y','Z','A','B','C'],laser:['X','Y','Z'],plasma:['X','Y','Z'],lathe:['X','Z']};
+const AXK={'3':[],'4a':['A'],'5ac':['A','C'],'5bc':['B','C'],'5ab':['A','B']};
+const axProf=D=>D.type==='mill'?['X','Y','Z','A','B','C']:D.type==='lathe'?(D.ltY?['X','Y','Z']:['X','Z']):['X','Y','Z',...AXK[D.type==='laser'?D.lzAx:D.plAx]];
 const SECX={mill:[],laser:['mag','prb','ts','sp'],plasma:['mag','prb','ts','sp'],lathe:['mag','prb','ts']};
 PDEF.__line={k:'__line',n:'Изпълни от ред',t:'num',d:0,min:1,max:1,h:'Преди този ред контролерът възстановява инструмента, оборотите и охлаждането, вдига Z, отива над началната точка и чак тогава слиза.'};
 const REHOME=['mdir','edir','spm','hsw','hdir','hswp','hpos','hidx'];
@@ -1608,7 +1612,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
 const rot=()=>({active:1,mdir:0,edir:0,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
 S.cfg={X:lin(-600,0,1),Y:lin(-400,0,1),Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:rot()};
-S.cfg.mach={type:'mill',lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
+S.cfg.mach={type:'mill',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
 S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -1905,13 +1909,15 @@ panel.addEventListener('click',e=>{
    if(JSON.stringify(S.cfg.net)!==JSON.stringify(S.draft.net))S.netOk=false;
    const re=[];AX.forEach(a=>{const o=S.cfg[a],n=S.draft[a];if(REHOME.some(k=>o[k]!==n[k])){re.push(a);S.homed[a]=false}});
    const tCh=S.cfg.mach.type!==S.draft.mach.type,mCh=JSON.stringify(S.cfg.mach)!==JSON.stringify(S.draft.mach);
-   if(tCh){const pr=AXPROF[S.draft.mach.type];AX.forEach(a=>S.draft[a].active=pr.includes(a)?1:0)}
+   const axCh=tCh||['lzAx','plAx','ltY'].some(k=>S.cfg.mach[k]!==S.draft.mach[k]);
+   if(axCh){const pr=axProf(S.draft.mach);AX.forEach(a=>{const on=pr.includes(a)?1:0;if(S.draft[a].active!==on){S.draft[a].active=on;S.homed[a]=false}})}
    if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
    S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>magCfg().mn)S.magPos=1;
-   if(tCh){applyType(true);renderSet();toast('Машината е „'+MTN[MT()]+'“. Активни оси: '+AXPROF[MT()].join(', ')+'. Натиснете HOME.',7000);break}
+   if(tCh){applyType(true);renderSet();toast('Машината е „'+MTN[MT()]+'“. Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Натиснете HOME.',7000);break}
+   if(axCh)toast('Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Новите оси трябва да се реферират.',7000);
    if(mCh){['mem','usb','net'].forEach(k=>FILES[k].forEach(f=>delete f.c));if(LOADED)loadProgram(LOADED);applyType(false)}
    renderSet();renderTools();renderTsPos();
-   toast(re.length?'Записано. Осите '+re.join(', ')+' трябва да се реферират отново.':'Настройките са записани',6000);break}
+   if(!axCh)toast(re.length?'Записано. Осите '+re.join(', ')+' трябва да се реферират отново.':'Настройките са записани',6000);break}
   case'axact':{
    if(!canMove())break;
    if(S.active[v]&&AX.filter(a=>S.active[a]).length===1){toast('Поне една ос трябва да е активна');break}
