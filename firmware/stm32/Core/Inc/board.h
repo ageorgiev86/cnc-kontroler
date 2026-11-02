@@ -158,11 +158,14 @@
 #define BOARD_SPINDLE_DIR       GPIOC, GPIO_PIN_4
 #define BOARD_SPINDLE_EN        GPIOC, GPIO_PIN_5
 
-/* Аналогови входове за опитите (вграденият ADC) */
+/* Аналогови входове (4) и изходи (2) за опитите: вградените ADC и DAC.
+ * На машината са зад изолатора по SPI2 (BOARD_IO_ADC_CS, BOARD_IO_DAC_CS). */
 #define BOARD_AIN1              GPIOC, GPIO_PIN_0    /* ADC1_INP10 */
 #define BOARD_AIN2              GPIOC, GPIO_PIN_1    /* ADC1_INP11 */
 #define BOARD_AIN3_ADC3_CH      0                    /* PC2_C, ADC3_INP0 (само аналогов) */
 #define BOARD_AIN4_ADC3_CH      1                    /* PC3_C, ADC3_INP1 (само аналогов) */
+#define BOARD_AOUT1             GPIOA, GPIO_PIN_4    /* DAC1_OUT1; на конектора CAMERA */
+#define BOARD_AOUT2             GPIOA, GPIO_PIN_5    /* DAC1_OUT2; на конектора CAMERA */
 
 /* Резерв: PA3 (ADC1_INP15, TIM5_CH4); PD0/PD1 FDCAN1 RX/TX (AF9) */
 
