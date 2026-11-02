@@ -429,6 +429,24 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 
 /* Настройки */
 .sets{grid-template-columns:minmax(0,11em) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.sets.login{grid-template-columns:minmax(0,1fr)}
+.sets.login .setnav{display:none}
+.setnav .btn.lk{opacity:.4}
+.lgn{display:flex;flex-direction:column;align-items:center;gap:.8em;padding:1.2em .6em;max-width:26em;margin:0 auto;width:100%}
+.lgn p{margin:0;text-align:center;font:500 .92em/1.45 var(--f-txt);color:var(--dim)}
+.lgn .lv{display:grid;grid-template-columns:1fr 1fr;gap:.5em;width:100%}
+.lgn .lv .btn{min-height:4em;flex-direction:column;gap:.15em;text-transform:none;letter-spacing:.02em;font-size:1.05em}
+.lgn .lv .btn small{font:500 .72em var(--f-txt);color:var(--dim)}
+.lgn .lv .btn.on small{color:var(--acc-ink)}
+.pin{font:600 2em/1 var(--f-num);letter-spacing:.35em;min-height:1.6em;padding:.3em .6em;border:1px solid var(--line);border-radius:.35em;background:var(--panel);width:100%;text-align:center}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:.4em;width:100%}
+.pinpad .btn{min-height:3.4em;font:600 1.4em var(--f-num)}
+.lgn .lnk{background:none;border:0;color:var(--info);font:500 .85em var(--f-txt);text-decoration:underline;cursor:pointer}
+.acclog{width:100%;border-collapse:collapse;font:400 .82em var(--f-num)}
+.acclog td,.acclog th{padding:.35em .5em;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.acclog th{font:600 .8em var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.who{display:flex;align-items:center;gap:.4em}
+.who b{font:600 .95em var(--f-ui);letter-spacing:.06em;color:var(--acc);text-transform:uppercase}
 .setnav{padding:.4em;gap:.3em;overflow:auto}
 .setnav .btn{justify-content:flex-start;min-height:2.8em;flex:none;text-transform:none;letter-spacing:.02em;font-size:1.02em}
 .setbody{flex:1;min-height:0;overflow:auto;padding:.3em .5em}
@@ -571,7 +589,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
                 <button class="btn" data-jog="X-" type="button">X−</button><span class="lbl">XY</span><button class="btn" data-jog="X+" type="button">X+</button><span class="lbl">Z</span>
                 <span></span><button class="btn" data-jog="Y-" type="button">Y−</button><span></span><button class="btn" data-jog="Z-" type="button">Z−</button>
               </div>
-              <div class="rot">
+              <div class="rot" id="rotRow">
                 <button class="btn" data-jog="A-" type="button">A−</button><button class="btn" data-jog="A+" type="button">A+</button>
                 <button class="btn" data-jog="B-" type="button">B−</button><button class="btn" data-jog="B+" type="button">B+</button>
                 <button class="btn" data-jog="C-" type="button">C−</button><button class="btn" data-jog="C+" type="button">C+</button>
@@ -782,7 +800,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <section class="screen sets" data-screen="set" hidden>
           <div class="card setnav" id="setNav"></div>
           <div class="card setmain">
-            <div class="card-h"><span id="setTitle">Оси и мотори</span><span class="r" id="setDirty"></span></div>
+            <div class="card-h"><span id="setTitle">Оси и мотори</span><span class="r"><span id="setDirty"></span><span id="setWho"></span></span></div>
             <div class="setbody" id="setBody"></div>
             <div class="sethelp" id="setHelp"></div>
             <div class="setfoot" id="setFoot">
@@ -951,7 +969,7 @@ const S={
  mach:{X:-250,Y:-180,Z:-70,A:0,B:0,C:0}, off:{X:-250,Y:-180,Z:-95,A:0,B:0,C:0},
  vel:{X:0,Y:0,Z:0,A:0,B:0,C:0}, ferr:{X:0,Y:0,Z:0,A:0,B:0,C:0},
  homed:{X:false,Y:false,Z:false,A:false,B:false,C:false}, refMode:'sensor',
- active:{X:true,Y:true,Z:true,A:true,B:true,C:true},
+ active:{X:true,Y:true,Z:true,A:false,B:false,C:false},
  enabled:false, ready:false, resetHoming:false, corner:'fl', src:'mem', fsel:0, startLine:null, setSec:'mach', setHelp:null, nd:{a:'X',k:'spm',txt:''},
  dlg:{ax:'X',tgt:'work',txt:''},
  feedOv:100, spOv:100, rapOv:100, F:0, progF:0,
@@ -1686,7 +1704,7 @@ function renderPrb(){
 /* ---------- Диагностика ---------- */
 const encMode=a=>{const c=S.cfg[a];return!c.encOn?'отворен':c.encMode==='dual'?'двоен':'затворен'};
 const encBody=$('#encBody');
-encBody.innerHTML=AX.map(a=>`<tr><td class="tn">${a}</td><td id="em${a}"></td><td class="n" id="ec${a}"></td><td class="n" id="ee${a}"></td><td class="n" id="ef${a}"></td><td class="n" id="el${a}"></td><td id="es${a}"></td></tr>`).join('')+
+encBody.innerHTML=AX.map(a=>`<tr id="er${a}"><td class="tn">${a}</td><td id="em${a}"></td><td class="n" id="ec${a}"></td><td class="n" id="ee${a}"></td><td class="n" id="ef${a}"></td><td class="n" id="el${a}"></td><td id="es${a}"></td></tr>`).join('')+
  `<tr><td class="tn">S</td><td>шпиндел</td><td class="n" id="ecS"></td><td class="n" id="eeS"></td><td class="n" id="efS"></td><td class="n">300 об/мин</td><td id="esS"></td></tr>`;
 const ioBox=$('#ioBox');
 function updDiag(){
@@ -1821,6 +1839,8 @@ const isT=t=>D=>D.type===t;
 const P_MACH=[
  {k:'type',n:'Вид на машината',t:'enum',opts:[['mill','Фреза / рутер'],['laser','Лазер'],['plasma','Плазма'],['lathe','Струг']],h:'Определя екраните, активните оси, изгледа на траекторията и как се разбират S, M3/M4 и T в програмата. При смяна всички оси стават нереферирани.'},
  {t:'hdr',n:'Лазер',show:isT('laser')},
+ {t:'hdr',n:'Фреза / рутер',show:isT('mill')},
+ {k:'miAx',n:'Оси',t:'enum',opts:[['3','XYZ'],['4a','XYZ + A'],['5ac','XYZ + A C'],['5bc','XYZ + B C'],['5ab','XYZ + A B'],['6','XYZ + A B C']],show:isT('mill'),h:'Кои оси са активни. Въртящите оси се показват на основния екран, в ръчното движение и в диагностиката само когато са активни. Всяка ос може да се включи и поотделно от „Оси и мотори“.'},
  {k:'lzAx',n:'Оси',t:'enum',opts:[['3','XYZ'],['4a','XYZ + A'],['5ac','XYZ + A C'],['5bc','XYZ + B C'],['5ab','XYZ + A B']],show:isT('laser'),h:'XYZ + A е за рязане на тръби и профили с въртящ патронник. Вариантите с 5 оси са за накланяща се глава (обемни детайли, скосени ръбове).'},
  {k:'lzMax',n:'Макс. мощност',u:'%',t:'num',d:0,min:1,max:100,show:isT('laser'),h:'Горна граница на мощността, независимо от S в програмата (S1000 = 100 %).'},
  {k:'lzPwm',n:'PWM честота',u:'Hz',t:'num',d:0,min:100,max:50000,show:isT('laser'),h:'Честотата на сигнала към захранването на лазера. Взима се от документацията на захранването: CO2 обикновено 1–20 kHz, диодни лазери 1–5 kHz.'},
@@ -1929,22 +1949,24 @@ PDEF.aMin={k:'aMin',n:'Долна граница',t:'num',d:2,min:-100000,max:10
 PDEF.aMax={k:'aMax',n:'Горна граница',t:'num',d:2,min:-100000,max:100000,h:'Над тази стойност следва избраното действие (например прегряване).'};
 PDEF.aFlt={k:'aFlt',n:'Филтър',u:'ms',t:'num',d:0,min:1,max:10000,h:'Изглажда смущенията. По-голяма стойност означава по-спокойно, но по-бавно показание.'};
 PDEF.aU={k:'aU',n:'Мерна единица',t:'text',h:'Например bar, °C, %, л/мин.'};
+PDEF.accPin={k:'accPin',n:'Нов PIN',t:'num',d:0,min:0,max:99999999,h:'От 4 до 8 цифри. Не използвайте 0000, 1234 и рождени дати.'};
+PDEF.accTmo={k:'accTmo',n:'Автоматичен изход',u:'мин',t:'num',d:0,min:1,max:120,h:'След толкова минути без действие настройките се затварят сами.'};
 PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
 const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
 const VSEG={mill:[['iso','3D'],['top','XY'],['front','XZ'],['side','YZ']],laser:[['top','XY'],['iso','3D']],plasma:[['top','XY'],['iso','3D']],lathe:[['lathe','XZ'],['iso','3D']]};
 const DEFV={mill:'iso',laser:'top',plasma:'top',lathe:'lathe'};
-const AXK={'3':[],'4a':['A'],'5ac':['A','C'],'5bc':['B','C'],'5ab':['A','B']};
-const axProf=D=>D.type==='mill'?['X','Y','Z','A','B','C']:D.type==='lathe'?(D.ltY?['X','Y','Z']:['X','Z']):['X','Y','Z',...AXK[D.type==='laser'?D.lzAx:D.plAx]];
+const AXK={'6':['A','B','C'],'3':[],'4a':['A'],'5ac':['A','C'],'5bc':['B','C'],'5ab':['A','B']};
+const axProf=D=>D.type==='mill'?['X','Y','Z',...AXK[D.miAx]]:D.type==='lathe'?(D.ltY?['X','Y','Z']:['X','Z']):['X','Y','Z',...AXK[D.type==='laser'?D.lzAx:D.plAx]];
 const SECX={mill:[],laser:['mag','prb','ts','sp'],plasma:['mag','prb','ts','sp'],lathe:['mag','prb','ts']};
 PDEF.__line={k:'__line',n:'Изпълни от ред',t:'num',d:0,min:1,max:1,h:'Преди този ред контролерът възстановява инструмента, оборотите и охлаждането, вдига Z, отива над началната точка и чак тогава слиза.'};
 const REHOME=['mdir','edir','encRes','spm','hsw','hdir','hswp','hpos','hidx'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 const lin=(min,max,seq)=>({active:1,mdir:0,edir:0,encOn:1,encMode:'closed',encRes:400,encFerr:50,encCorr:.2,spm:320,vmax:6000,acc:800,min,max,hsw:1,hdir:1,hswp:0,hpos:-2,hvs:1500,hvl:50,hpull:2,hidx:1,hseq:seq});
-const rot=()=>({active:1,mdir:0,edir:0,encOn:1,encMode:'closed',encRes:11.111,encFerr:50,encCorr:.2,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
+const rot=()=>({active:0,mdir:0,edir:0,encOn:1,encMode:'closed',encRes:11.111,encFerr:50,encCorr:.2,spm:44.444,vmax:7200,acc:1500,min:-99999,max:99999,hsw:1,hdir:1,hswp:0,hpos:0,hvs:1800,hvl:90,hpull:3,hidx:1,hseq:2});
 S.cfg={X:{...lin(-600,0,1),encMode:'dual',encRes:1000},Y:{...lin(-400,0,1),encMode:'dual',encRes:1000},Z:{...lin(-250,0,0)},A:rot(),B:{...rot(),min:-120,max:120},C:{...rot(),encOn:0}};
-S.cfg.mach={type:'mill',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
+S.cfg.mach={type:'mill',miAx:'3',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lzAir:1,lzTpw:10,lzTms:50,plV:115,plThc:1,plIhs:'ohm',plPierce:3.8,plDelay:.5,plCut:1.5,plAd:80,ltDia:1,ltMax:3000,ltTur:8};
 S.cfg.sp={spCtl:'modbus',spVfd:'huanyang',spPort:'uart1',spBaud:'19200',spPar:'8N1',spAddr:1,spRegCmd:8192,spRegFreq:8193,spRegFb:12288,spPoll:100,spOut:'v010',spPwmF:2000,spPwmMin:0,spPwmMax:100,spInv:0,spDirCW:'low',spEn:1,spMin:6000,spMax:24000,spRamp:4,spWait:'fb',spDelay:3,spEnc:1,spPpr:1024};
 S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Налягане въздух','air'],['Ниво масло','oil'],['Бутон Старт (пулт)','start'],['Бутон Пауза (пулт)','hold'],['Детайл затегнат','clamp'],['Вакуум ОК','vac'],['Палет на място','pallet'],['Контейнер за стружки пълен','chip']];
  const O=[['Охлаждане','cool'],['Мъгла','mist'],['Обдухване','air'],['Мазане','lube'],['Аспирация','dust'],['Сигнална колона: зелено','lgreen'],['Сигнална колона: жълто','lyellow'],['Сигнална колона: червено','lred'],['Стяга','clamp'],['Вакуумна маса: зона 1','vac1'],['Вакуумна маса: зона 2','vac2'],['Транспортьор стружки','conv']];
@@ -1970,7 +1992,9 @@ function homeOps(axes){
  });
  return ops;
 }
-const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей']];
+const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1};
+const LVN=['Оператор','Настройчик','Производител'];
+const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['acc','Достъп']];
 const STATIC={
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
  disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
@@ -1985,8 +2009,13 @@ function fmtP(p,v){
  return(+v).toFixed(p.d);
 }
 function renderSet(){
- {const L=SECS.filter(x=>!SECX[MT()].includes(x[0]));if(!L.some(x=>x[0]===S.setSec))S.setSec='mach';$('#setNav').innerHTML=L.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('')}
+ $('.screen.sets').classList.toggle('login',S.acc.level===0);
+ if(S.acc.level===0){renderLogin();return}
+ {const L=SECS.filter(x=>!SECX[MT()].includes(x[0])),need=k=>SEC_LVL[k]||2,ok=k=>S.acc.level>=need(k);
+  if(!L.some(x=>x[0]===S.setSec)||!ok(S.setSec))S.setSec=(L.find(x=>ok(x[0]))||L[0])[0];
+  $('#setNav').innerHTML=L.map(([k,n])=>`<button class="btn${ok(k)?'':' lk'}" data-act="setsec" data-v="${k}" type="button">${ok(k)?'':'🔒 '}${n}</button>`).join('')}
  const sec=S.setSec,tab=sec==='ax'||sec==='home'||sec==='enc';
+ set($('#setDirty'),'');$('#setWho').innerHTML=`<span class="who"><b>${LVN[S.acc.level]}</b><button class="btn sm" data-act="logout" type="button">Изход</button></span>`;
  segOn('#setNav .btn',sec);
  set($('#setTitle'),SECS.find(s=>s[0]===sec)[1]);
  const dirty=JSON.stringify(S.cfg)!==JSON.stringify(S.draft);
@@ -1995,6 +2024,7 @@ function renderSet(){
  $('#setFoot').hidden=!(tab||form||sec==='io');
  set($('#setNote'),dirty?'Промените важат след „Запиши“.':'');
  const body=$('#setBody'),help=$('#setHelp');
+ if(sec==='acc'){renderAcc(body,help);$('#setFoot').hidden=true;return}
  if(sec==='io'){renderIoSet(body);help.innerHTML=S.setHelp?S.setHelp:'Името и функцията се виждат в „Диагностика“ и в макросите (по-късно). Инвертирането обръща логическото състояние. Филтърът потиска смущения по входа. „При авария“ определя какво прави изходът при авариен стоп или загуба на връзката с Linux.';help.hidden=false}
  else if(tab){
   const P={ax:P_AX,home:P_HOME,enc:P_ENC}[sec];
@@ -2206,6 +2236,45 @@ function renderIoSet(body){
   `<td class="c">${dir==='in'?`<button class="btn${ch('flt')}" data-act="io-flt" data-v="${i}" type="button">${o.flt} ms</button>`:`<button class="btn${ch('safe')}" data-act="io-safe" data-v="${i}" type="button">${o.safe==='off'?'Изключи':'Запази'}</button>`}</td></tr>`}).join('')+'</tbody></table>';
 }
 
+/* ---------- Нива на достъп ---------- */
+S.acc={level:0,last:0,tmo:10,pins:['','1111','2222'],pick:2,pin:'',bad:0,lockUntil:0,rec:false,log:[]};
+const SERIAL='CNC-2026-0001';
+function logout(why){S.acc.level=0;S.acc.pin='';S.acc.rec=false;if(S.screen==='set')renderSet();toast('Изход от настройките'+(why?' '+why:''))}
+function logChanges(){
+ const L=S.acc.log,who=LVN[S.acc.level],t=new Date(),ts=String(t.getDate()).padStart(2,'0')+'.'+String(t.getMonth()+1).padStart(2,'0')+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+ const walk=(a,b,path)=>{if(a===b)return;if(typeof a!=='object'||a===null||typeof b!=='object'||b===null){if(JSON.stringify(a)!==JSON.stringify(b))L.unshift({ts,who,what:path,from:a,to:b});return}
+  new Set([...Object.keys(a),...Object.keys(b)]).forEach(k=>walk(a[k],b[k],path?path+'.'+k:k))};
+ walk(S.cfg,S.draft,'');if(L.length>200)L.length=200;
+}
+function renderLogin(){
+ const A=S.acc,body=$('#setBody');set($('#setTitle'),'Вход в настройките');set($('#setDirty'),'');$('#setWho').innerHTML='';$('#setFoot').hidden=true;
+ $('#setHelp').innerHTML='Операторът не влиза в настройките. Таблицата на инструментите, нулирането на G54 и пробингът са достъпни без парола.'+'<br><span style="color:var(--faint)">В макета: PIN 1111 за Настройчик и 2222 за Производител.</span>';
+ const now=performance.now(),locked=now<A.lockUntil;
+ if(A.rec){
+  const ch=A.chal;body.innerHTML=`<div class="lgn"><p>Възстановяване на достъпа. Обадете се на производителя и кажете серийния номер и кода. Въведете отговора, който ще получите.</p>
+   <div class="netst" style="width:100%"><div><span>Сериен номер</span><b>${SERIAL}</b></div><div><span>Код</span><b>${ch}</b></div></div>
+   <div class="pin">${A.pin||'&nbsp;'}</div><div class="pinpad">${[1,2,3,4,5,6,7,8,9,'C',0,'⌫'].map(k=>`<button class="btn" data-act="pinkey" data-v="${k}" type="button">${k}</button>`).join('')}</div>
+   <button class="btn go" data-act="rec-ok" type="button" style="width:100%">Потвърди</button><button class="lnk" data-act="rec-cancel" type="button">Назад</button>
+   <p style="color:var(--faint)">В макета отговорът е ${recAnswer(ch)}.</p></div>`;return}
+ body.innerHTML=`<div class="lgn"><div class="lv">${[1,2].map(l=>`<button class="btn${A.pick===l?' on':''}" data-act="lvpick" data-v="${l}" type="button">${LVN[l]}<small>${l===1?'смазване, пробник, toolsetter, мрежа, дисплей':'всички настройки'}</small></button>`).join('')}</div>
+  <div class="pin">${'•'.repeat(A.pin.length)||'&nbsp;'}</div>
+  <div class="pinpad">${[1,2,3,4,5,6,7,8,9,'C',0,'⌫'].map(k=>`<button class="btn" data-act="pinkey" data-v="${k}" type="button">${k}</button>`).join('')}</div>
+  <button class="btn go" data-act="login" type="button" style="width:100%"${locked?' disabled':''}>${locked?'Изчакайте '+Math.ceil((A.lockUntil-now)/1000)+' s':'Вход като '+LVN[A.pick]}</button>
+  <button class="lnk" data-act="rec-start" type="button">Забравен PIN</button></div>`;
+}
+const recAnswer=ch=>{let h=7;for(const c of SERIAL+ch)h=(h*31+c.charCodeAt(0))%1000000;return String(h).padStart(6,'0')};
+function renderAcc(body,help){
+ const A=S.acc;help.innerHTML='PIN кодовете се пазят на контролера само като хеш. Дневникът се пази и след изключване и не може да се изтрие от екрана.';
+ body.innerHTML=`<table class="pf"><tbody>
+  <tr><td class="grp" colspan="2">PIN кодове</td></tr>
+  <tr><th>PIN Настройчик</th><td><button class="btn" data-act="pin-set" data-v="1" type="button">Смени</button></td></tr>
+  <tr><th>PIN Производител</th><td><button class="btn" data-act="pin-set" data-v="2" type="button">Смени</button></td></tr>
+  <tr><th>Автоматичен изход<small>минути без действие</small></th><td><button class="btn" data-act="acc-tmo" type="button">${A.tmo}</button></td></tr>
+  <tr><th>Сериен номер<small>за възстановяване на достъпа</small></th><td><button class="btn" type="button" disabled>${SERIAL}</button></td></tr>
+  <tr><td class="grp" colspan="2">Дневник на промените</td></tr></tbody></table>`+
+  (A.log.length?`<div style="overflow:auto"><table class="acclog"><thead><tr><th>Кога</th><th>Кой</th><th>Какво</th><th>Беше</th><th>Стана</th></tr></thead><tbody>${A.log.slice(0,60).map(e=>`<tr><td>${e.ts}</td><td>${e.who}</td><td>${String(e.what).replace(/</g,'&lt;')}</td><td>${String(JSON.stringify(e.from)).replace(/</g,'&lt;')}</td><td>${String(JSON.stringify(e.to)).replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="txt" style="padding:.4em">Още няма записани промени.</p>');
+}
+
 /* ---------- Статус ---------- */
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
@@ -2262,6 +2331,7 @@ function updStatus(now){
 const panel=$('#panel');
 function go(scr){S.screen=scr;$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
 function segOn(sel,v){$$(sel).forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)))}
+panel.addEventListener('pointerdown',()=>{S.acc.last=performance.now()},true);
 panel.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b)return;const v=b.dataset.v;
  switch(b.dataset.act){
@@ -2318,7 +2388,7 @@ panel.addEventListener('click',e=>{
   case'jogf':{const st=[100,250,500,1000,2000,3000,5000];let i=st.indexOf(S.jogF);i=Math.max(0,Math.min(st.length-1,i+ +v));S.jogF=st[i];set($('#jogF'),String(S.jogF));break}
   case'refmode':S.refMode=v;segOn('#refSeg .btn',v);homeLabels();
    toast(v==='manual'?'Ръчен режим: текущата позиция на оста става машинна нула':'Реферирване с датчик и Z индекс на енкодера');break;
-  case'setsec':S.setSec=v;S.setHelp=null;renderSet();break;
+  case'setsec':if(S.acc.level<(SEC_LVL[v]||2)){toast('Този раздел изисква ниво „'+LVN[SEC_LVL[v]||2]+'“');break}S.setSec=v;S.setHelp=null;renderSet();break;
   case'phelp':S.setHelp=v;renderSet();break;
   case'pt':{
    const a=b.dataset.a,k=b.dataset.k,p=PDEF[k],D=S.draft[a];S.setHelp=k;
@@ -2392,9 +2462,10 @@ panel.addEventListener('click',e=>{
    if(JSON.stringify(S.cfg.net)!==JSON.stringify(S.draft.net))S.netOk=false;
    const re=[];AX.forEach(a=>{const o=S.cfg[a],n=S.draft[a];if(REHOME.some(k=>o[k]!==n[k])){re.push(a);S.homed[a]=false}});
    const tCh=S.cfg.mach.type!==S.draft.mach.type,mCh=JSON.stringify(S.cfg.mach)!==JSON.stringify(S.draft.mach);
-   const axCh=tCh||['lzAx','plAx','ltY'].some(k=>S.cfg.mach[k]!==S.draft.mach[k]);
+   const axCh=tCh||['miAx','lzAx','plAx','ltY'].some(k=>S.cfg.mach[k]!==S.draft.mach[k]);
    if(axCh){const pr=axProf(S.draft.mach);AX.forEach(a=>{const on=pr.includes(a)?1:0;if(S.draft[a].active!==on){S.draft[a].active=on;S.homed[a]=false}})}
    if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
+   logChanges();
    S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>magCfg().mn)S.magPos=1;
    if(tCh){applyType(true);renderSet();toast('Машината е „'+MTN[MT()]+'“. Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Натиснете HOME.',7000);break}
    if(axCh)toast('Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Новите оси трябва да се реферират.',7000);
@@ -2467,6 +2538,17 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'lvpick':S.acc.pick=+v;S.acc.pin='';renderSet();break;
+  case'pinkey':{const A=S.acc;if(v==='C')A.pin='';else if(v==='⌫')A.pin=A.pin.slice(0,-1);else if(A.pin.length<8)A.pin+=v;renderSet();break}
+  case'login':{const A=S.acc;if(performance.now()<A.lockUntil)break;
+   if(A.pin===A.pins[A.pick]){A.level=A.pick;A.pin='';A.bad=0;A.last=performance.now();S.setSec=A.level===1?'lube':'mach';renderSet();toast('Вход като '+LVN[A.level])}
+   else{A.pin='';A.bad++;if(A.bad>=3){A.lockUntil=performance.now()+30000;A.bad=0;toast('3 грешни опита. Изчакайте 30 секунди.');setTimeout(()=>{if(S.screen==='set')renderSet()},30200)}else toast('Грешен PIN');renderSet()}break}
+  case'logout':logout('');break;
+  case'rec-start':S.acc.rec=true;S.acc.pin='';S.acc.chal=Math.random().toString(16).slice(2,8).toUpperCase();renderSet();break;
+  case'rec-cancel':S.acc.rec=false;S.acc.pin='';renderSet();break;
+  case'rec-ok':{const A=S.acc;if(A.pin===recAnswer(A.chal)){A.rec=false;A.pin='';A.level=2;A.last=performance.now();S.setSec='acc';renderSet();toast('Достъпът е възстановен. Сменете PIN кодовете.',7000)}else{A.pin='';toast('Грешен отговор');renderSet()}break}
+  case'pin-set':{const l=+v;S.nd={a:'acc',k:'accPin',txt:'',get:()=>'',set:x=>{const t=String(Math.round(x));if(t.length<4){toast('PIN трябва да е поне 4 цифри');return}S.acc.pins[l]=t;S.acc.log.unshift({ts:'сега',who:LVN[S.acc.level],what:'PIN '+LVN[l],from:'••••',to:'••••'});toast('PIN за '+LVN[l]+' е сменен')},after:renderSet};$('#numDlg').hidden=false;renderNd();break}
+  case'acc-tmo':S.nd={a:'acc',k:'accTmo',txt:'',get:()=>S.acc.tmo,set:x=>{S.acc.tmo=Math.round(x)},after:renderSet};$('#numDlg').hidden=false;renderNd();break;
   case'lube-now':lubePulse('ръчно');break;
   case'lube-reset':S.lu.t=0;S.lu.d=0;toast('Броячът на смазването е нулиран');break;
   case'lube-oil':S.oilLow=!S.oilLow;toast(S.oilLow?'Симулация: ниско ниво на маслото':'Маслото е долято');break;
@@ -2497,6 +2579,7 @@ panel.addEventListener('click',e=>{
   case'io-flt':{const o=S.draft.io.in[+v],F=[1,3,5,10,20,50];o.flt=F[(F.indexOf(o.flt)+1)%F.length];renderSet();break}
   case'io-safe':{const o=S.draft.io.out[+v];o.safe=o.safe==='off'?'keep':'off';renderSet();break}
   case'force':{const i=+v;
+   if(S.acc.level<1){toast('Ръчното включване на изходи изисква вход като Настройчик (Настройки)');break}
    if(!S.enabled){canMove();break}
    if(S.state!=='idle'){toast('Изходите се включват ръчно само когато машината е спряна');break}
    if(S.forceArm!==i){S.forceArm=i;clearTimeout(S.forceT);S.forceT=setTimeout(()=>{S.forceArm=-1},3000);toast('OUT'+(i+1)+': натиснете пак за ръчно '+(outVal(i)?'изключване':'включване'));break}
@@ -2573,6 +2656,8 @@ function frame(now){
  if(S.screen==='tools')updMag(dt);
  if(S.screen==='laser')updLz(now);
  if(S.screen==='set'&&S.setSec==='lube')updLube();
+ if(S.acc.level>0&&now-S.acc.last>S.acc.tmo*60000){logout('поради неактивност')}
+ {const r=$('#rotRow'),any=['A','B','C'].some(a=>S.active[a]);r.hidden=!any;$$('#rotRow .btn').forEach(x=>x.hidden=!S.active[x.dataset.jog[0]]);AX.forEach(a=>{const e=$('#er'+a);if(e)e.hidden=!S.active[a]})}
  if(S.screen==='plasma')updPl();
  if(S.screen==='diag'&&acc>.1){acc=0;updDiag()}
  requestAnimationFrame(frame);
