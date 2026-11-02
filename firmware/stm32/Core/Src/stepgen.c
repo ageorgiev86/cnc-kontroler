@@ -65,16 +65,17 @@ static volatile uint8_t stop_req;
 static uint32_t seg_left;             /* оставащи тактове на сегмента; 0 = няма сегмент */
 static uint16_t seg_flags;
 static volatile uint32_t exec_id;
-static volatile int32_t out_pos0;
+static volatile int32_t out_pos[STEPGEN_AXES];
 static volatile uint32_t blocks;
 static volatile uint32_t fill_max;
 
 /* тестово движение (главен цикъл) */
 static struct {
   int     active;
-  int     sign;
-  double  total, p, v, vmax, a;
-  int64_t start_q16;
+  double  length;                     /* преместване на водещата ос, стъпки */
+  double  ratio[STEPGEN_AXES];        /* преместване на ос i / length */
+  double  p, v, vmax, a;              /* път, скорост и ускорение по водещата ос */
+  int64_t start_q16[STEPGEN_AXES];
   uint32_t id;
 } test;
 
@@ -194,6 +195,7 @@ static uint32_t output_tick(void)
         word |= a->step_clr;                        /* край на импулса */
       }
     }
+    out_pos[i] = a->out;
     if (a->dir_wait > 0) {
       a->dir_wait--;
       continue;
@@ -210,6 +212,7 @@ static uint32_t output_tick(void)
     word   |= a->step_set;
     a->out += a->dir ? 1 : -1;
     a->busy = (uint8_t)(a->step_len + a->step_space);
+    out_pos[i] = a->out;
     if (lag > OVERSPEED_LAG || lag < -OVERSPEED_LAG) {
       /* Поисканото е по-бързо от възможното. Моторът реално е на най-високата
        * честота на генератора, затова рампата започва оттам и от изведената
@@ -220,7 +223,6 @@ static uint32_t output_tick(void)
       set_fault(STEPGEN_FAULT_OVERSPEED);
     }
   }
-  out_pos0 = ax[0].out;
   return word;
 }
 
@@ -425,7 +427,9 @@ void stepgen_clear_fault(void)
 
 void stepgen_get_status(struct stepgen_status *st)
 {
-  st->position        = out_pos0;
+  for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+    st->position[i] = out_pos[i];
+  }
   st->queue_used      = (uint16_t)(q_head - q_tail);
   st->queue_size      = STEPGEN_QUEUE;
   st->fault           = fault;
@@ -435,23 +439,24 @@ void stepgen_get_status(struct stepgen_status *st)
   st->fill_cycles_max = fill_max;
 }
 
-/* Позицията, от която продължава следващият сегмент (Q16). */
-static int64_t end_position_q16(void)
+static int64_t round_i64(double x)
 {
-  int64_t p;
-
-  NVIC_DisableIRQ(DMA1_Stream0_IRQn);
-  p = ax[0].target / 65536;
-  if (state == SG_IDLE && q_head == q_tail) {
-    p = ax[0].pos / 65536;
-  }
-  NVIC_EnableIRQ(DMA1_Stream0_IRQn);
-  return p;
+  return (int64_t)((x >= 0.0) ? x + 0.5 : x - 0.5);
 }
 
-int stepgen_test_move(int32_t steps, int32_t rate, int32_t accel)
+/* Позицията на осите в покой (Q16): оттам започва тестовото движение. */
+static void idle_position_q16(int64_t p[STEPGEN_AXES])
 {
-  uint32_t max_rate = STEPGEN_TICK_HZ / (uint32_t)(cfg[0].step_len + cfg[0].step_space);
+  NVIC_DisableIRQ(DMA1_Stream0_IRQn);
+  for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+    p[i] = ax[i].pos / 65536;
+  }
+  NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+}
+
+int stepgen_test_move(const int32_t steps[STEPGEN_AXES], int32_t rate, int32_t accel)
+{
+  int32_t longest = 0;
 
   if (test.active || state != SG_IDLE || q_head != q_tail) {
     return 1;
@@ -459,18 +464,35 @@ int stepgen_test_move(int32_t steps, int32_t rate, int32_t accel)
   if (fault != STEPGEN_FAULT_NONE) {
     return 2;
   }
-  if (steps == 0 || steps > 100000000 || steps < -100000000 || rate <= 0 ||
-      (uint32_t)rate > max_rate || accel < 0) {
+  for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+    int32_t d = (steps[i] < 0) ? -steps[i] : steps[i];
+    if (d > 100000000) {
+      return 3;
+    }
+    if (d > longest) {
+      longest = d;
+    }
+  }
+  if (longest == 0 || rate <= 0 || accel < 0) {
     return 3;
   }
-  test.sign      = (steps > 0) ? 1 : -1;
-  test.total     = (double)((steps > 0) ? steps : -steps);
-  test.p         = 0.0;
-  test.v         = 0.0;
-  test.vmax      = (double)rate;
-  test.a         = (double)((accel > 0) ? (uint32_t)accel : cfg[0].max_acc);
-  test.start_q16 = end_position_q16();
-  test.active    = 1;
+  /* всяка ос трябва да може да следва своята част от скоростта */
+  for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+    double axis_rate = (double)rate * (double)((steps[i] < 0) ? -steps[i] : steps[i]) / (double)longest;
+    if (axis_rate > (double)(STEPGEN_TICK_HZ / (uint32_t)(cfg[i].step_len + cfg[i].step_space))) {
+      return 4;
+    }
+  }
+  test.length = (double)longest;
+  for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+    test.ratio[i] = (double)steps[i] / test.length;
+  }
+  test.p    = 0.0;
+  test.v    = 0.0;
+  test.vmax = (double)rate;
+  test.a    = (double)((accel > 0) ? (uint32_t)accel : cfg[0].max_acc);
+  idle_position_q16(test.start_q16);
+  test.active = 1;
   return 0;
 }
 
@@ -480,7 +502,7 @@ void stepgen_service(void)
 
   while (test.active && (q_head - q_tail) < TEST_AHEAD) {
     struct stepgen_segment s;
-    double rem = test.total - test.p;
+    double rem = test.length - test.p;
     int last   = 0;
 
     if (rem <= test.v * test.v / (2.0 * test.a)) {
@@ -495,15 +517,17 @@ void stepgen_service(void)
       test.v = test.a * dt;
     }
     test.p += test.v * dt;
-    if (test.p >= test.total) {
-      test.p = test.total;
+    if (test.p >= test.length) {
+      test.p = test.length;
       last   = 1;
     }
 
-    s.id        = ++test.id;
-    s.ticks     = STEPGEN_TICK_HZ / 1000u;
-    s.flags     = last ? SEG_END_OF_MOVE : 0;
-    s.target[0] = test.start_q16 + (int64_t)test.sign * (int64_t)(test.p * 65536.0 + 0.5);
+    s.id    = ++test.id;
+    s.ticks = STEPGEN_TICK_HZ / 1000u;
+    s.flags = last ? SEG_END_OF_MOVE : 0;
+    for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+      s.target[i] = test.start_q16[i] + round_i64(test.ratio[i] * test.p * 65536.0);
+    }
     if (stepgen_push(&s) != 0) {
       test.active = 0;                              /* грешка или спиране */
       return;

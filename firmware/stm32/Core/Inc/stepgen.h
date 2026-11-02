@@ -12,16 +12,17 @@
  * docs/spi-protokol.md, MOTION_SEGMENT). Генераторът интерполира линейно
  * в рамките на сегмента.
  *
- * Засега 1 ос (X: PD4 STEP, PD5 DIR); структурата е за STEPGEN_AXES оси.
- * Всички пинове STEP и DIR са на един порт (BOARD_STEP_PORT, порт D),
- * защото DMA пише в един BSRR. Пиновете са в board.h (BOARD_STEP_PINS).
+ * 6 оси (X, Y, Z, A, B, C). Всички пинове STEP и DIR са на един порт
+ * (BOARD_STEP_PORT, порт D), защото DMA пише в един BSRR: всички оси се
+ * променят в един и същ такт, без разминаване между тях. Пиновете са в
+ * board.h (BOARD_STEP_PINS, BOARD_DIR_PINS).
  */
 #ifndef STEPGEN_H
 #define STEPGEN_H
 
 #include <stdint.h>
 
-#define STEPGEN_AXES       1u
+#define STEPGEN_AXES       6u        /* X, Y, Z, A, B, C */
 #define STEPGEN_TICK_HZ    400000u   /* такт на генератора */
 #define STEPGEN_BLOCK      100u      /* тактове в половин буфер (250 µs) */
 #define STEPGEN_QUEUE      256u      /* сегменти в опашката (степен на 2) */
@@ -51,7 +52,7 @@ struct stepgen_axis_config {
 };
 
 struct stepgen_status {
-  int32_t  position;                 /* изведени стъпки по ос 0 */
+  int32_t  position[STEPGEN_AXES];   /* изведени стъпки */
   uint16_t queue_used;
   uint16_t queue_size;
   uint8_t  fault;
@@ -82,8 +83,10 @@ void stepgen_get_status(struct stepgen_status *st);
 /* Вика се от главния цикъл: подава сегментите на тестовото движение. */
 void stepgen_service(void);
 
-/* Тестово движение по ос 0 с трапецовидна скорост (без Linux), от конзолата.
- * accel = 0 → по подразбиране. Връща 0 или код на отказ. */
-int stepgen_test_move(int32_t steps, int32_t rate, int32_t accel);
+/* Тестово движение (без Linux), от конзолата: права линия по всички оси
+ * едновременно, с трапецовидна скорост. steps[i] е преместването по ос i;
+ * rate е скоростта (стъпки/s) на оста с най-голямо преместване, accel е
+ * нейното ускорение (0 → max_acc от настройката). Връща 0 или код на отказ. */
+int stepgen_test_move(const int32_t steps[STEPGEN_AXES], int32_t rate, int32_t accel);
 
 #endif /* STEPGEN_H */

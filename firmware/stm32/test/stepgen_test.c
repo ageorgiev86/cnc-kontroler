@@ -3,9 +3,10 @@
  * Copyright (c) 2026 ageorgiev86. Всички права запазени.
  *
  * stepgen.c се компилира със заместители на HAL (test/mock/main.h).
- * Думите за BSRR се „изпълняват“ върху симулиран порт и се проверява:
- * броят стъпки, дължината на импулса и паузата, времето между смяна на
- * посоката и импулса, спирането по рампа и грешките.
+ * Думите за BSRR се „изпълняват“ върху симулиран порт D и за всяка от
+ * 6-те оси се проверява: броят стъпки, дължината на импулса и паузата,
+ * времето между смяна на посоката и импулса, съгласуваното движение по
+ * права линия, спирането по рампа и грешките.
  *
  * Компилиране и пускане (Linux, MSYS2 или всеки gcc):
  *   cd firmware/stm32/test && make
@@ -25,76 +26,88 @@ void Error_Handler(void)
   exit(2);
 }
 
-/* ---- симулиран изход ---- */
+#define N STEPGEN_AXES
+static const uint16_t STEP[N] = BOARD_STEP_PINS;
+static const uint16_t DIR[N]  = BOARD_DIR_PINS;
+static const char NAME[N] = { 'X', 'Y', 'Z', 'A', 'B', 'C' };
 
-static struct {
-  uint32_t level;             /* състояние на пиновете */
-  long     tick;
-  long     steps;             /* брой импулси, със знак по посоката */
-  long     rise_tick, fall_tick, dir_tick;
-  long     min_high, min_low, min_dir_setup;
-  long     max_rate_ticks;    /* най-кратък период между импулсите */
-  long     last_rise;
-} sim;
+/* ---- симулиран порт ---- */
 
+struct axis_sim {
+  long steps;
+  long rise, fall, dir_change, last_rise;
+  long min_high, min_low, min_dir_setup, min_period;
+};
+
+static uint32_t level;
+static long tick;
+static struct axis_sim ax_sim[N];
 static int failures;
 
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("  ГРЕШКА: " __VA_ARGS__); printf("\n"); } } while (0)
 
-static void sim_reset(void)
+static void sim_reset_stats(void)
 {
-  memset(&sim, 0, sizeof(sim));
-  sim.min_high = sim.min_low = sim.min_dir_setup = sim.max_rate_ticks = 1L << 30;
-  sim.rise_tick = sim.fall_tick = sim.dir_tick = sim.last_rise = -1000000;
+  for (unsigned i = 0; i < N; i++) {
+    ax_sim[i].min_high = ax_sim[i].min_low = ax_sim[i].min_dir_setup = ax_sim[i].min_period = 1L << 30;
+    ax_sim[i].rise = ax_sim[i].fall = ax_sim[i].dir_change = ax_sim[i].last_rise = -1000000;
+  }
 }
 
 static void apply(uint32_t word)
 {
-  uint32_t prev = sim.level;
+  uint32_t prev = level;
 
-  sim.level |= word & 0xFFFFu;
-  sim.level &= ~(word >> 16);
   if ((word & 0xFFFFu) & (word >> 16)) {
     failures++;
-    printf("  ГРЕШКА: едновременно вдигане и сваляне на пин\n");
+    printf("  ГРЕШКА: едновременно вдигане и сваляне на пин (такт %ld)\n", tick);
   }
-  if ((prev ^ sim.level) & BOARD_AXIS0_DIR_PIN) {
-    CHECK(!(sim.level & BOARD_AXIS0_STEP_PIN), "смяна на посоката по време на импулс (такт %ld)", sim.tick);
-    sim.dir_tick = sim.tick;
+  level |= word & 0xFFFFu;
+  level &= ~(word >> 16);
+
+  for (unsigned i = 0; i < N; i++) {
+    struct axis_sim *s = &ax_sim[i];
+    if ((prev ^ level) & DIR[i]) {
+      CHECK(!(level & STEP[i]), "%c: смяна на посоката по време на импулс (такт %ld)", NAME[i], tick);
+      s->dir_change = tick;
+    }
+    if (!(prev & STEP[i]) && (level & STEP[i])) {
+      long low = tick - s->fall, setup = tick - s->dir_change, period = tick - s->last_rise;
+      if (low < s->min_low) s->min_low = low;
+      if (setup < s->min_dir_setup) s->min_dir_setup = setup;
+      if (period < s->min_period) s->min_period = period;
+      s->rise = s->last_rise = tick;
+      s->steps += (level & DIR[i]) ? 1 : -1;
+    }
+    if ((prev & STEP[i]) && !(level & STEP[i])) {
+      long high = tick - s->rise;
+      if (high < s->min_high) s->min_high = high;
+      s->fall = tick;
+    }
   }
-  if (!(prev & BOARD_AXIS0_STEP_PIN) && (sim.level & BOARD_AXIS0_STEP_PIN)) {
-    long low = sim.tick - sim.fall_tick;
-    long setup = sim.tick - sim.dir_tick;
-    long period = sim.tick - sim.last_rise;
-    if (low < sim.min_low) sim.min_low = low;
-    if (setup < sim.min_dir_setup) sim.min_dir_setup = setup;
-    if (period < sim.max_rate_ticks) sim.max_rate_ticks = period;
-    sim.last_rise = sim.rise_tick = sim.tick;
-    sim.steps += (sim.level & BOARD_AXIS0_DIR_PIN) ? 1 : -1;
-  }
-  if ((prev & BOARD_AXIS0_STEP_PIN) && !(sim.level & BOARD_AXIS0_STEP_PIN)) {
-    long high = sim.tick - sim.rise_tick;
-    if (high < sim.min_high) sim.min_high = high;
-    sim.fall_tick = sim.tick;
-  }
-  sim.tick++;
+  tick++;
 }
 
+/* Наблюдател, викан на всяка 1 ms (за проверка на правата линия). */
+static void (*observer)(void);
+
 /* Пуска генератора за ms милисекунди, както DMA + главния цикъл. */
-static void run_ms(long ms, int feed)
+static void run_ms(long ms)
 {
-  long n = ms * (long)STEPGEN_TICK_HZ / 1000 / STEPGEN_BLOCK;
+  const long per_ms = (long)STEPGEN_TICK_HZ / 1000 / STEPGEN_BLOCK;
+  long n = ms * per_ms;
 
   for (long b = 0; b < n; b++) {
-    if (feed) {
-      stepgen_service();
-    }
-    if ((b & 1) == 0) {
+    stepgen_service();
+    if ((tick / STEPGEN_BLOCK) % 2 == 0) {
       STEP_DMA_HalfCplt(&hdma);
       for (unsigned k = 0; k < STEPGEN_BLOCK; k++) apply(dma_buf[k]);
     } else {
       STEP_DMA_Cplt(&hdma);
       for (unsigned k = 0; k < STEPGEN_BLOCK; k++) apply(dma_buf[STEPGEN_BLOCK + k]);
+    }
+    if (observer && (b % per_ms) == per_ms - 1) {
+      observer();
     }
   }
 }
@@ -103,10 +116,10 @@ static void wait_idle(long max_ms)
 {
   struct stepgen_status st;
   for (long t = 0; t < max_ms; t += 10) {
-    run_ms(10, 1);
+    run_ms(10);
     stepgen_get_status(&st);
     if (!st.running && !test.active) {
-      run_ms(2, 1);             /* изоставането на изхода */
+      run_ms(2);                /* изоставането на изхода */
       return;
     }
   }
@@ -116,122 +129,177 @@ static void report(const char *name)
 {
   struct stepgen_status st;
   stepgen_get_status(&st);
-  printf("%-34s стъпки %7ld, позиция %7ld, импулс ≥ %ld, пауза ≥ %ld, посока→импулс ≥ %ld, период ≥ %ld такта, грешка %u\n",
-         name, sim.steps, (long)st.position, sim.min_high, sim.min_low, sim.min_dir_setup,
-         sim.max_rate_ticks, st.fault);
+  printf("%s (грешка %u)\n", name, st.fault);
+  for (unsigned i = 0; i < N; i++) {
+    if (ax_sim[i].min_high == (1L << 30)) {
+      continue;                 /* оста още не е мърдала */
+    }
+    printf("   %c: позиция %7ld, импулс ≥ %ld, пауза ≥ %ld, посока→импулс ≥ %ld, период ≥ %ld такта\n",
+           NAME[i], ax_sim[i].steps, ax_sim[i].min_high, ax_sim[i].min_low, ax_sim[i].min_dir_setup,
+           ax_sim[i].min_period);
+  }
 }
 
-static void check_timing(void)
+static void check_axes(void)
 {
-  CHECK(sim.min_high >= cfg[0].step_len, "импулсът е по-къс от %u такта", cfg[0].step_len);
-  CHECK(sim.min_low >= cfg[0].step_space, "паузата е по-къса от %u такта", cfg[0].step_space);
-  CHECK(sim.min_dir_setup >= cfg[0].dir_setup, "посоката е сменена по-малко от %u такта преди импулса", cfg[0].dir_setup);
+  struct stepgen_status st;
+  stepgen_get_status(&st);
+  for (unsigned i = 0; i < N; i++) {
+    CHECK(ax_sim[i].min_high >= cfg[i].step_len, "%c: импулсът е по-къс от %u такта", NAME[i], cfg[i].step_len);
+    CHECK(ax_sim[i].min_low >= cfg[i].step_space, "%c: паузата е по-къса от %u такта", NAME[i], cfg[i].step_space);
+    CHECK(ax_sim[i].min_dir_setup >= cfg[i].dir_setup, "%c: посоката е сменена по-малко от %u такта преди импулса",
+          NAME[i], cfg[i].dir_setup);
+    CHECK(ax_sim[i].steps == st.position[i], "%c: симулацията (%ld) и генераторът (%ld) се разминават",
+          NAME[i], ax_sim[i].steps, (long)st.position[i]);
+  }
+}
+
+static int move(int32_t x, int32_t y, int32_t z, int32_t a, int32_t b, int32_t c, int32_t rate, int32_t acc)
+{
+  const int32_t d[N] = { x, y, z, a, b, c };
+  return stepgen_test_move(d, rate, acc);
+}
+
+/* права линия: всяка ос трябва да е на своята част от пътя на водещата (X) */
+static const double *line_ratio;
+static long line_start[N];
+static long line_dev_max;
+
+static void line_observer(void)
+{
+  long lead = ax_sim[0].steps - line_start[0];
+  for (unsigned i = 1; i < N; i++) {
+    double w  = line_ratio[i] * (double)lead;
+    long want = (long)(w >= 0 ? w + 0.5 : w - 0.5);
+    long dev  = labs((ax_sim[i].steps - line_start[i]) - want);
+    if (dev > line_dev_max) {
+      line_dev_max = dev;
+    }
+  }
 }
 
 int main(void)
 {
   struct stepgen_status st;
   struct stepgen_segment s;
-  int r;
+  long before;
 
   stepgen_init();
-  sim_reset();
-  /* в покой: посока назад, без импулс */
-  sim.level = 0;
+  sim_reset_stats();
 
-  /* 1. напред 1000 стъпки */
-  r = stepgen_test_move(1000, 20000, 0);
-  CHECK(r == 0, "отказ %d", r);
+  /* 1. X напред 1000 */
+  CHECK(move(1000, 0, 0, 0, 0, 0, 20000, 0) == 0, "отказ");
   wait_idle(2000);
-  report("1. +1000 при 20 kHz");
-  stepgen_get_status(&st);
-  CHECK(sim.steps == 1000 && st.position == 1000, "очаквани 1000 стъпки");
-  CHECK(st.fault == 0, "неочаквана грешка");
-  check_timing();
+  report("1. X +1000 при 20 kHz");
+  CHECK(ax_sim[0].steps == 1000, "очаквани 1000 стъпки по X");
+  check_axes();
 
-  /* 2. назад 1500 (смяна на посоката) */
-  r = stepgen_test_move(-1500, 30000, 200000);
-  CHECK(r == 0, "отказ %d", r);
+  /* 2. X назад 1500 (смяна на посоката) */
+  CHECK(move(-1500, 0, 0, 0, 0, 0, 30000, 200000) == 0, "отказ");
   wait_idle(2000);
-  report("2. -1500 при 30 kHz");
-  CHECK(sim.steps == -500, "очаквана позиция -500");
-  check_timing();
+  report("2. X -1500 при 30 kHz");
+  CHECK(ax_sim[0].steps == -500, "очаквана позиция -500");
+  check_axes();
 
-  /* 3. най-високата скорост при 2 + 2 такта: 100 kHz */
-  r = stepgen_test_move(50000, 100000, 1000000);
-  CHECK(r == 0, "отказ %d", r);
-  wait_idle(5000);
-  report("3. +50000 при 100 kHz");
-  stepgen_get_status(&st);
-  CHECK(sim.steps == 49500 && st.fault == 0, "очаквани 49500 без грешка");
-  CHECK(sim.max_rate_ticks >= 4, "по-бързо от 100 kHz");
-  check_timing();
+  /* 3. права линия по 6 оси, X водеща при 100 kHz */
+  {
+    static const double ratio[N] = { 1.0, -0.5, 0.25, 0.8, -1.0, 0.1 };
+    const int32_t L = 40000;
+    for (unsigned i = 0; i < N; i++) line_start[i] = ax_sim[i].steps;
+    line_ratio   = ratio;
+    line_dev_max = 0;
+    observer     = line_observer;
+    CHECK(move(L, -L / 2, L / 4, (int32_t)(0.8 * L), -L, L / 10, 100000, 500000) == 0, "отказ");
+    wait_idle(5000);
+    observer = NULL;
+    report("3. права линия по 6 оси, 100 kHz");
+    for (unsigned i = 0; i < N; i++) {
+      long want = line_start[i] + (long)(ratio[i] * L);
+      CHECK(ax_sim[i].steps == want, "%c: очаквани %ld, а са %ld", NAME[i], want, ax_sim[i].steps);
+    }
+    printf("   най-голямо отклонение от правата: %ld стъпки\n", line_dev_max);
+    CHECK(line_dev_max <= 2, "отклонение от правата %ld > 2 стъпки", line_dev_max);
+    check_axes();
+  }
 
-  /* 4. над възможното → отказ */
-  r = stepgen_test_move(1000, 150000, 0);
-  CHECK(r != 0, "150 kHz трябва да се откаже при 2 + 2 такта");
-  printf("4. 150 kHz при 2 + 2 такта: отказ %d (очакван)\n", r);
+  /* 4. над възможното и празно движение → отказ */
+  {
+    int r = move(1000, 0, 0, 0, 0, 0, 150000, 0);
+    CHECK(r == 4, "X при 150 kHz трябва да се откаже (код 4), а е %d", r);
+    r = move(1000, 1000, 0, 0, 0, 0, 120000, 0);
+    CHECK(r == 4, "Y при 120 kHz трябва да се откаже (код 4), а е %d", r);
+    r = move(0, 0, 0, 0, 0, 0, 1000, 0);
+    CHECK(r == 3, "движение без преместване трябва да се откаже (код 3), а е %d", r);
+    printf("4. над възможното и празно движение: отказ\n");
+  }
 
-  /* 5. спиране по рампа по средата */
-  r = stepgen_test_move(100000, 50000, 100000);
-  CHECK(r == 0, "отказ %d", r);
-  run_ms(300, 1);
-  long before = sim.steps;
+  /* 5. спиране по рампа по средата на движение по X и Y */
+  CHECK(move(100000, 50000, 0, 0, 0, 0, 50000, 100000) == 0, "отказ");
+  run_ms(300);
+  before = ax_sim[0].steps;
+  long before_y = ax_sim[1].steps;
   stepgen_stop();
   wait_idle(3000);
   report("5. спиране по рампа");
   stepgen_get_status(&st);
-  /* Рампата е с max_acc от настройката (50000 стъпки/s²), не с ускорението на
-   * тестовото движение. Скоростта към 300 ms е около 30 kHz → v²/2a ≈ 9000. */
+  /* рампа с max_acc = 50000 стъпки/s² за всяка ос; X е на около 30 kHz → v²/2a ≈ 9000,
+   * Y е на половината скорост → около 2250 */
   CHECK(st.fault == 0, "спирането не е грешка");
-  CHECK(sim.steps - before > 8000 && sim.steps - before < 10500, "пътят при спиране %ld е извън 8000–10500", sim.steps - before);
-  CHECK(sim.steps < 49500 + 100000, "не трябва да стигне до края");
-  check_timing();
+  CHECK(ax_sim[0].steps - before > 8000 && ax_sim[0].steps - before < 10500,
+        "X: пътят при спиране %ld е извън 8000–10500", ax_sim[0].steps - before);
+  CHECK(ax_sim[1].steps - before_y > 1500 && ax_sim[1].steps - before_y < 3000,
+        "Y: пътят при спиране %ld е извън 1500–3000", ax_sim[1].steps - before_y);
+  check_axes();
 
-  /* 6. празна опашка по време на движение → UNDERRUN и плавно спиране */
+  /* 6. празна опашка по време на движение на Z → UNDERRUN и плавно спиране */
   {
-    int64_t p = (int64_t)st.position * 65536;
-    for (uint32_t i = 1; i <= 20; i++) {
-      s.id = 1000 + i;
+    int64_t p[N];
+    stepgen_get_status(&st);
+    for (unsigned i = 0; i < N; i++) p[i] = (int64_t)st.position[i] * 65536;
+    for (uint32_t k = 1; k <= 20; k++) {
+      s.id    = 1000 + k;
       s.ticks = 400;
       s.flags = 0;
-      p += (int64_t)20 * 65536;   /* 20 стъпки/ms = 20 kHz */
-      s.target[0] = p;
+      p[2] += (int64_t)20 * 65536;                   /* Z: 20 стъпки/ms = 20 kHz */
+      for (unsigned i = 0; i < N; i++) s.target[i] = p[i];
       CHECK(stepgen_push(&s) == 0, "push");
     }
-    before = sim.steps;
+    before = ax_sim[2].steps;
     wait_idle(2000);
     stepgen_get_status(&st);
     report("6. празна опашка");
     CHECK(st.fault == STEPGEN_FAULT_UNDERRUN, "очаквана грешка UNDERRUN");
-    CHECK(sim.steps - before > 400, "очаквано спиране след 400 стъпки");
+    CHECK(ax_sim[2].steps - before > 400, "очаквано спиране след 400 стъпки");
     CHECK(stepgen_push(&s) == -2, "при грешка сегментите се отказват");
     stepgen_clear_fault();
     stepgen_get_status(&st);
     CHECK(st.fault == 0, "грешката не се изчисти");
-    check_timing();
+    check_axes();
   }
 
-  /* 7. сегмент по-бърз от генератора → OVERSPEED */
-  long before7 = sim.steps;
-  s.id = 2000;
-  s.ticks = 400;
-  s.flags = SEG_END_OF_MOVE;
-  s.target[0] = (int64_t)(st.position + 1000) * 65536;   /* 1000 стъпки за 1 ms */
-  CHECK(stepgen_push(&s) == 0, "push");
-  wait_idle(3000);
-  stepgen_get_status(&st);
-  report("7. твърде бърз сегмент");
-  CHECK(st.fault == STEPGEN_FAULT_OVERSPEED, "очаквана грешка OVERSPEED");
-  CHECK(!st.running, "след OVERSPEED трябва да спре");
-  /* рампа от 100 kHz с 50000 стъпки/s²: до 100000 стъпки */
-  CHECK(sim.steps - before7 < 101000, "спирането след OVERSPEED е твърде дълго (%ld)", sim.steps - before7);
-  check_timing();
+  /* 7. сегмент по-бърз от генератора по ос B → OVERSPEED, спират всички оси */
+  {
+    long before_x = ax_sim[0].steps;
+    before = ax_sim[4].steps;
+    stepgen_get_status(&st);
+    s.id    = 2000;
+    s.ticks = 400;
+    s.flags = SEG_END_OF_MOVE;
+    for (unsigned i = 0; i < N; i++) s.target[i] = (int64_t)st.position[i] * 65536;
+    s.target[0] += (int64_t)10 * 65536;              /* X: 10 стъпки за 1 ms, нормално */
+    s.target[4] += (int64_t)1000 * 65536;            /* B: 1000 стъпки за 1 ms, невъзможно */
+    CHECK(stepgen_push(&s) == 0, "push");
+    wait_idle(3000);
+    stepgen_get_status(&st);
+    report("7. твърде бърз сегмент по B");
+    CHECK(st.fault == STEPGEN_FAULT_OVERSPEED, "очаквана грешка OVERSPEED");
+    CHECK(!st.running, "след OVERSPEED трябва да спре");
+    CHECK(ax_sim[4].steps - before < 101000, "B: спирането е твърде дълго (%ld)", ax_sim[4].steps - before);
+    /* X върви с 10 kHz и спира по своята рампа: v²/2a = 10000² / (2 × 50000) = 1000 стъпки */
+    CHECK(ax_sim[0].steps - before_x <= 1100, "X: спирането е твърде дълго (%ld)", ax_sim[0].steps - before_x);
+    check_axes();
+  }
 
-  /* 8. изведените стъпки съвпадат с позицията на генератора */
-  CHECK(sim.steps == st.position, "симулацията (%ld) и генераторът (%ld) се разминават", sim.steps, (long)st.position);
-
-  printf("Попълване на половин буфер: %lu думи. %s\n", (unsigned long)STEPGEN_BLOCK,
-         failures ? "ИМА ГРЕШКИ" : "Всичко е наред.");
+  printf("%s\n", failures ? "ИМА ГРЕШКИ" : "Всичко е наред.");
   return failures ? 1 : 0;
 }
