@@ -36,6 +36,18 @@
 #define BOARD_SUPPLY          PWR_LDO_SUPPLY
 
 /*
+ * Стъпки и посока. Всички STEP и DIR пинове трябва да са на ЕДИН порт:
+ * DMA пише в един регистър BSRR (до 16 пина = 6 оси × 2 + резерв).
+ * Порт G е избран, защото не се ползва от microSD, USB и SWD.
+ * НЕ Е ПРОВЕРЕНО по схемата: PG2/PG3 трябва да са изведени на конекторите
+ * и да не са вързани към LCD, CAMERA или флаш паметта.
+ */
+#define BOARD_STEP_PORT        GPIOG
+#define BOARD_STEP_CLK_ENABLE() __HAL_RCC_GPIOG_CLK_ENABLE()
+#define BOARD_AXIS0_STEP_PIN   GPIO_PIN_2   /* X STEP */
+#define BOARD_AXIS0_DIR_PIN    GPIO_PIN_3   /* X DIR */
+
+/*
  * USB: PA11 (D−) и PA12 (D+), фиксирани в чипа; описани са в usb_cdc.c.
  */
 

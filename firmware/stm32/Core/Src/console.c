@@ -5,6 +5,7 @@
 #include "console.h"
 #include "main.h"
 #include "usb_cdc.h"
+#include "stepgen.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -56,6 +57,58 @@ static void cmd_info(int argc, char **argv)
   console_printf("USB: изхвърлени %lu байта\r\n", (unsigned long)usb_cdc_dropped());
 }
 
+static void cmd_status(int argc, char **argv)
+{
+  struct stepgen_status st;
+
+  (void)argc;
+  (void)argv;
+  stepgen_get_status(&st);
+  console_printf("ос X: позиция %ld стъпки, опашка %u/%u, грешка %u, %s\r\n",
+                 (long)st.position, st.queue_used, st.queue_size, st.fault,
+                 st.running ? "движи се" : "стои");
+  console_printf("DMA: буфери %lu, най-дълго попълване %lu такта (%lu ns)\r\n",
+                 (unsigned long)st.blocks, (unsigned long)st.fill_cycles_max,
+                 (unsigned long)(st.fill_cycles_max * 1000u / (HAL_RCC_GetSysClockFreq() / 1000000u)));
+}
+
+/* move <стъпки> <стъпки/s>: тестово движение с трапецовидна скорост */
+static void cmd_move(int argc, char **argv)
+{
+  long steps;
+  long rate;
+  int r;
+
+  if (argc < 3) {
+    console_printf("употреба: move <стъпки> <стъпки/s> [ускорение стъпки/s2]\r\n");
+    return;
+  }
+  steps = strtol(argv[1], NULL, 0);
+  rate  = strtol(argv[2], NULL, 0);
+  r     = stepgen_test_move(steps, rate, (argc > 3) ? strtol(argv[3], NULL, 0) : 0);
+  if (r != 0) {
+    console_printf("отказ (%d): извън границите или опашката не е празна\r\n", r);
+  } else {
+    console_printf("ok\r\n");
+  }
+}
+
+static void cmd_stop(int argc, char **argv)
+{
+  (void)argc;
+  (void)argv;
+  stepgen_stop();
+  console_printf("спиране\r\n");
+}
+
+static void cmd_reset(int argc, char **argv)
+{
+  (void)argc;
+  (void)argv;
+  stepgen_clear_fault();
+  console_printf("грешките са изчистени\r\n");
+}
+
 struct command {
   const char *name;
   void (*fn)(int argc, char **argv);
@@ -65,6 +118,10 @@ struct command {
 static const struct command commands[] = {
   { "help",   cmd_help,   "този списък" },
   { "info",   cmd_info,   "такт, чип, USB" },
+  { "status", cmd_status, "състояние на генератора на стъпки" },
+  { "move",   cmd_move,   "move <стъпки> <стъпки/s> [ускорение]: тестово движение по X" },
+  { "stop",   cmd_stop,   "спиране по рампа" },
+  { "reset",  cmd_reset,  "изчистване на грешка" },
 };
 
 static void cmd_help(int argc, char **argv)

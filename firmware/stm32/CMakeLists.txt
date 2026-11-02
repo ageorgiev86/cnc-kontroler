@@ -57,6 +57,7 @@ set(OWN_SOURCES
   Core/Src/syscalls.c
   Core/Src/usb_cdc.c
   Core/Src/console.c
+  Core/Src/stepgen.c
 )
 
 set(APP_SOURCES

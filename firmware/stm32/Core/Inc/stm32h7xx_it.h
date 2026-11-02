@@ -15,5 +15,6 @@ void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
 void OTG_HS_IRQHandler(void);         /* usb_cdc.c */
+void DMA1_Stream0_IRQHandler(void);   /* stepgen.c */
 
 #endif /* STM32H7XX_IT_H */

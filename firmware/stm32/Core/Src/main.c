@@ -5,11 +5,13 @@
  * Етап 0: стартиране, такт 400 MHz от вътрешния осцилатор HSI, кешове, MPU
  * и мигащ светодиод.
  * Етап 1: USB CDC конзола за съобщения при отстраняване на грешки.
+ * Етап 2: генериране на стъпки с TIM15 + DMA за 1 ос (тест от конзолата).
  * Следващите модули (генериране на стъпки, енкодери, SPI към Linux платката,
  * watchdog) се добавят върху тази основа.
  */
 #include "main.h"
 #include "console.h"
+#include "stepgen.h"
 #include "usb_cdc.h"
 
 static void MPU_Config(void);
@@ -27,11 +29,13 @@ int main(void)
   SystemClock_Config();
   LED_Init();
   usb_cdc_init();
+  stepgen_init();
 
   uint32_t led_time = HAL_GetTick();
   int on = 0;
   for (;;) {
     console_poll();
+    stepgen_service();
 
     /* светодиодът мига 2 пъти в секунда: главният цикъл не е забил */
     if (HAL_GetTick() - led_time >= 250u) {
@@ -93,7 +97,7 @@ static void SystemClock_Config(void)
 
 /*
  * MPU: забранява спекулативния достъп до неизползваното адресно пространство
- * (стандартна защита при Cortex-M7 с включен кеш).
+ * (стандартна защита при Cortex-M7 с включен кеш) и прави RAM_D2 некеширана.
  */
 static void MPU_Config(void)
 {
@@ -109,6 +113,20 @@ static void MPU_Config(void)
   r.AccessPermission = MPU_REGION_NO_ACCESS;
   r.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
   r.IsShareable      = MPU_ACCESS_SHAREABLE;
+  r.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;
+  r.IsBufferable     = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&r);
+
+  /* RAM_D2 (буфери за DMA, .dma_buffer): без кеш, за да виждат процесорът и
+   * DMA едни и същи данни без ръчно изчистване на кеша */
+  r.Number           = MPU_REGION_NUMBER1;
+  r.BaseAddress      = 0x30000000;
+  r.Size             = MPU_REGION_SIZE_32KB;
+  r.SubRegionDisable = 0x00;
+  r.TypeExtField     = MPU_TEX_LEVEL1;
+  r.AccessPermission = MPU_REGION_FULL_ACCESS;
+  r.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
+  r.IsShareable      = MPU_ACCESS_NOT_SHAREABLE;
   r.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;
   r.IsBufferable     = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&r);
