@@ -15,10 +15,20 @@ typedef int IRQn_Type;
 
 typedef struct { volatile uint32_t BSRR; } GPIO_TypeDef;
 typedef struct { uint32_t Pin, Mode, Pull, Speed, Alternate; } GPIO_InitTypeDef;
-extern GPIO_TypeDef mock_gpiog;
-#define GPIOG (&mock_gpiog)
-#define GPIO_PIN_2 0x0004u
-#define GPIO_PIN_3 0x0008u
+extern GPIO_TypeDef mock_gpiod;
+#define GPIOD (&mock_gpiod)
+#define GPIO_PIN_4  0x0010u
+#define GPIO_PIN_5  0x0020u
+#define GPIO_PIN_6  0x0040u
+#define GPIO_PIN_7  0x0080u
+#define GPIO_PIN_8  0x0100u
+#define GPIO_PIN_9  0x0200u
+#define GPIO_PIN_10 0x0400u
+#define GPIO_PIN_11 0x0800u
+#define GPIO_PIN_12 0x1000u
+#define GPIO_PIN_13 0x2000u
+#define GPIO_PIN_14 0x4000u
+#define GPIO_PIN_15 0x8000u
 #define GPIO_MODE_OUTPUT_PP 1u
 #define GPIO_NOPULL 0u
 #define GPIO_SPEED_FREQ_HIGH 2u
@@ -83,9 +93,13 @@ static inline uint32_t HAL_RCC_GetHCLKFreq(void) { return 200000000u; }
 void Error_Handler(void);
 
 /* от board.h */
-#define BOARD_STEP_PORT        GPIOG
+#define BOARD_STEP_PORT         GPIOD
 #define BOARD_STEP_CLK_ENABLE() ((void)0)
-#define BOARD_AXIS0_STEP_PIN   GPIO_PIN_2
-#define BOARD_AXIS0_DIR_PIN    GPIO_PIN_3
+#define BOARD_STEP_PINS  { GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_8, GPIO_PIN_10, GPIO_PIN_12, GPIO_PIN_14 }
+#define BOARD_DIR_PINS   { GPIO_PIN_5, GPIO_PIN_7, GPIO_PIN_9, GPIO_PIN_11, GPIO_PIN_13, GPIO_PIN_15 }
+#define BOARD_AXES_MAX          6
+/* тестът проверява ос X */
+#define BOARD_AXIS0_STEP_PIN    GPIO_PIN_4
+#define BOARD_AXIS0_DIR_PIN     GPIO_PIN_5
 
 #endif /* MOCK_MAIN_H */

@@ -12,8 +12,9 @@
  * docs/spi-protokol.md, MOTION_SEGMENT). Генераторът интерполира линейно
  * в рамките на сегмента.
  *
- * Засега 1 ос; структурата е за STEPGEN_AXES оси. Всички пинове STEP и DIR
- * трябва да са на един порт (BOARD_STEP_PORT), защото DMA пише в един BSRR.
+ * Засега 1 ос (X: PD4 STEP, PD5 DIR); структурата е за STEPGEN_AXES оси.
+ * Всички пинове STEP и DIR са на един порт (BOARD_STEP_PORT, порт D),
+ * защото DMA пише в един BSRR. Пиновете са в board.h (BOARD_STEP_PINS).
  */
 #ifndef STEPGEN_H
 #define STEPGEN_H

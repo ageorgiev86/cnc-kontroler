@@ -260,8 +260,8 @@ void DMA1_Stream0_IRQHandler(void)
 
 static void apply_config(unsigned i)
 {
-  static const uint16_t step_pin[STEPGEN_AXES] = { BOARD_AXIS0_STEP_PIN };
-  static const uint16_t dir_pin[STEPGEN_AXES]  = { BOARD_AXIS0_DIR_PIN };
+  static const uint16_t step_pin[BOARD_AXES_MAX] = BOARD_STEP_PINS;
+  static const uint16_t dir_pin[BOARD_AXES_MAX]  = BOARD_DIR_PINS;
   const struct stepgen_axis_config *c = &cfg[i];
   struct axis_rt *a = &ax[i];
   uint64_t dec;
@@ -323,7 +323,14 @@ void stepgen_init(void)
   for (unsigned i = 0; i < STEPGEN_AXES; i++) {
     apply_config(i);
   }
-  g.Pin   = BOARD_AXIS0_STEP_PIN | BOARD_AXIS0_DIR_PIN;
+  {
+    static const uint16_t step_pin[BOARD_AXES_MAX] = BOARD_STEP_PINS;
+    static const uint16_t dir_pin[BOARD_AXES_MAX]  = BOARD_DIR_PINS;
+    g.Pin = 0;
+    for (unsigned i = 0; i < STEPGEN_AXES; i++) {
+      g.Pin |= (uint32_t)step_pin[i] | dir_pin[i];
+    }
+  }
   g.Mode  = GPIO_MODE_OUTPUT_PP;
   g.Pull  = GPIO_NOPULL;
   g.Speed = GPIO_SPEED_FREQ_HIGH;

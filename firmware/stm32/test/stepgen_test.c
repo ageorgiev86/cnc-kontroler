@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-GPIO_TypeDef mock_gpiog;
+GPIO_TypeDef mock_gpiod;
 DWT_Type mock_dwt;
 CoreDebug_Type mock_coredebug;
 
