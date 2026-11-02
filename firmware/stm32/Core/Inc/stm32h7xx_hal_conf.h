@@ -105,7 +105,7 @@
   *        (when HSE is used as system clock source, directly or through the PLL).
   */
 #if !defined  (HSE_VALUE)
-#define HSE_VALUE    (25000000UL) /*!< Value of the External oscillator in Hz. ПРОВЕРИ кварца на платката WAVGAT. */
+#define HSE_VALUE    (25000000UL) /*!< Value of the External oscillator in Hz: кварц 25 MHz (по схемата на платката) */
 #endif /* HSE_VALUE */
 
 #if !defined  (HSE_STARTUP_TIMEOUT)
