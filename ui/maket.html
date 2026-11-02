@@ -7,7 +7,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@500;600;700&family=Roboto:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
 /* Оформление: фиксиран „екран“ W×H, мащабиран в страницата; вътре всичко е в em, базата е H/800·16px.
    Една тъмна визия, умишлено (машинен панел). Плоски форми, без градиенти и размазване — 1:1 с LVGL. */
@@ -18,8 +18,8 @@
   --acc:#f2b632; --acc-ink:#1d1500; --acc-soft:rgba(242,182,50,.13);
   --ok:#3dbb7e; --warn:#ff9447; --bad:#ec4f54; --info:#59aee6;
   --path:#3b4a55; --rapid:#617079;
-  --f-ui:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
-  --f-txt:"Barlow",system-ui,sans-serif;
+  --f-ui:"Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-txt:"Roboto",system-ui,sans-serif;
   --f-num:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 html,body{background:var(--bg);color:var(--fg)}
@@ -919,7 +919,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
     <div>
       <h2>Шрифтове</h2>
       <ul>
-        <li>Barlow Condensed за надписи и Barlow за текст. За цифрите е JetBrains Mono, защото знаците са с еднаква ширина и позициите не „скачат“.</li>
+        <li>Roboto Condensed за надписи и Roboto за текст (Barlow няма кирилица). За цифрите е JetBrains Mono, защото знаците са с еднаква ширина и позициите не „скачат“.</li>
         <li>И трите шрифта са с OFL лиценз и се конвертират с <code>lv_font_conv</code>, включително кирилицата.</li>
       </ul>
     </div>
@@ -1468,7 +1468,7 @@ function paintScene(ctx,W,H,PR,info,em,tc,dim){
   for(let y=gy0;y<=gy1;y+=step){const[a,c]=PR.P(gx0,y,0),[d,e]=PR.P(gx1,y,0);ctx.moveTo(a,c);ctx.lineTo(d,e)}
   ctx.stroke();
  }
- const L=28*em/PR.sc,[ox,oy]=PR.P(0,0,0);ctx.lineWidth=1.6*em;ctx.font=`600 ${11*em}px "Barlow Condensed",sans-serif`;
+ const L=28*em/PR.sc,[ox,oy]=PR.P(0,0,0);ctx.lineWidth=1.6*em;ctx.font=`600 ${11*em}px "Roboto Condensed",sans-serif`;
  [['X',C.bad,[L,0,0]],['Y',C.ok,[0,L,0]],['Z',C.info,[0,0,L]]].forEach(([n,col,v])=>{const[ex,ey]=PR.P(...v);
   if(Math.hypot(ex-ox,ey-oy)<2*em)return;ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ex,ey);ctx.stroke();
   ctx.fillStyle=col;ctx.fillText(n,ex+(ex-ox)*.12-3*em,ey+(ey-oy)*.12+4*em)});

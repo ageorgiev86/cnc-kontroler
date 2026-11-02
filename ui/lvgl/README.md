@@ -1,0 +1,97 @@
+# Операторски интерфейс (LVGL 9)
+
+Интерфейсът на контролера, написан на C с [LVGL](https://lvgl.io) 9.6.0 (MIT). LVGL е git подмодул в `lvgl/`, закрепен към версия `v9.6.0`. Еталонът за вида е `../maket.html`.
+
+| Цел | Какво е | Изисква |
+|---|---|---|
+| `cnc-ui` | Linux платката (Orange Pi / Raspberry Pi): DRM/KMS за екрана, libinput за мишка и тъч, без X сървър | `libdrm-dev`, `libinput-dev` |
+| `cnc-ui-sim` | симулатор в прозорец на компютър | `libsdl2-dev` |
+
+CMake строи всяка цел, за която има библиотеки. На Orange Pi няма SDL2, затова се строи само `cnc-ui`.
+
+## Orange Pi (Armbian Minimal)
+
+Еднократно:
+
+```sh
+sudo apt install build-essential cmake pkg-config git libdrm-dev libinput-dev
+sudo usermod -aG video,input $USER     # достъп до /dev/dri и /dev/input; излезте и влезте отново
+cd ~/cnc-kontroler
+git submodule update --init ui/lvgl/lvgl
+cd ui/lvgl
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+```
+
+Всеки път след промяна:
+
+```sh
+cd ~/cnc-kontroler && git pull && git submodule update --init ui/lvgl/lvgl
+cd ui/lvgl && cmake --build build
+./build/cnc-ui
+```
+
+Първото компилиране на LVGL на Orange Pi One отнема няколко минути. `cmake --build build -j4` ползва и четирите ядра (при 512 MB RAM е безопасно за C).
+
+- Програмата рисува директно на HDMI екрана. Пуска се от SSH, а изображението е на монитора. Спира се с Ctrl+C.
+- Ако мониторът показва конзолата или графичен вход, програмата не може да вземе екрана. На Armbian Minimal няма графичен вход.
+- Ако има няколко DRM устройства: `./build/cnc-ui --drm /dev/dri/card1` (или `CNC_DRM_DEVICE=/dev/dri/card1`).
+- Мишката се търси при старта. Курсорът се рисува от LVGL.
+- Ориентацията следва резолюцията на екрана. При 1920×1200 е хоризонтална, а при 800×1280 е портретна.
+
+## Симулатор
+
+```sh
+cmake -B build && cmake --build build
+./build/cnc-ui-sim                       # 800×1280, портрет
+./build/cnc-ui-sim --res 1920x1200       # като монитора за разработката
+./build/cnc-ui-sim --res 1920x1200 --zoom 0.5
+```
+
+Снимка на екрана без прозорец (така се проверява всяка промяна в облачната сесия):
+
+```sh
+SDL_VIDEODRIVER=dummy ./build/cnc-ui-sim --res 1920x1200 --shot ekran.bmp
+SDL_VIDEODRIVER=dummy ./build/cnc-ui-sim --res 1920x1200 --reset --after 1300 --shot homing.bmp
+```
+
+`--reset` натиска RESET в началото, а `--after` е след колко ms се прави снимката.
+
+На Windows симулаторът е само по желание, през MSYS2 (`mingw-w64-x86_64-SDL2`, `cmake`, `gcc`).
+
+## Устройство
+
+```
+CMakeLists.txt      две цели; LVGL се компилира за всяка с lv_conf.h
+lv_conf.h           шаблонът на LVGL 9.6.0 с нашите промени (CNC_UI_SIM избира SDL или DRM + libinput)
+src/main_drm.c      старт на платката: DRM, libinput, курсор
+src/main_sim.c      старт на симулатора: SDL, снимки
+src/ui.c            екранът „Работа“ и опресняването (50 ms)
+src/ui_style.c/.h   палитра, мащаб em, шрифтове по роля, бутони и карти (класовете от макета)
+src/ui_topbar.c     горната лента
+src/ui_dro.c        позициите на осите
+src/machine.c/.h    модел на машината; засега демо, по-късно данни от планера и STM32
+fonts/ttf/          изходните шрифтове (OFL) и лицензите им
+fonts/gen/          шрифтовете за LVGL (генерирани, в git)
+fonts/gen_fonts.sh  генерира fonts/gen/ с lv_font_conv
+```
+
+## Мащаб и шрифтове
+
+Както в макета: `em = min(W, H) / 800 × 16 px`. Всички размери в кода са `EM(x)`.
+
+Шрифтовете са в две степени: `t16` за екрани с по-къса страна 800 и `t24` за 1080 и 1200. Изборът е при старта. Ако се добави екран с друг размер (например 600×1024), в `gen_fonts.sh` се добавя степен.
+
+Шрифтове: Roboto Condensed (надписи), Roboto (текст), JetBrains Mono (числа). Barlow и Barlow Condensed от първоначалния план нямат кирилица (нито в Google Fonts, нито в хранилището на автора), затова са заменени. Шрифтът за буквите на осите (`ui_ax`) и за големите числа (`num_lg`) съдържа само нужните знаци, за да е малък.
+
+Промяна на шрифтовете:
+
+```sh
+cd fonts && LV_FONT_CONV='npx lv_font_conv@1.5.3' sh gen_fonts.sh
+```
+
+## Какво има засега
+
+- Горна лента: RESET (мига, докато машината е изключена), CNC, състояние, режим, вид машина, G54 G17 G21 G90, инструмент, MCU, съобщение, час и авариен стоп.
+- Позиции X, Y, Z (A, B, C се показват, когато са активни): работна или машинна стойност, остатък, следяща грешка и точка за Home.
+- Работещи бутони: RESET (демо реферирване Z, после X и Y), авариен стоп, „Раб.“/„Маш.“.
+- Траекторията и програмата са само рамки със заглавия. Те са следващите стъпки.
