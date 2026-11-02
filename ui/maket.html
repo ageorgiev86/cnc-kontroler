@@ -375,7 +375,22 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 /* Диагностика */
 .diag{grid-template-columns:minmax(0,52fr) minmax(0,48fr);grid-auto-rows:max-content;align-content:start;overflow:auto;scrollbar-width:thin}
 .diag>.card{overflow:visible;min-height:auto}
-.diag>.card.gio{grid-column:2;grid-row:1/3}
+.diag>.card.gio{grid-column:2;grid-row:1/4}
+.aiol{display:flex;flex-direction:column;gap:.45em;padding:.5em .7em .7em}
+.aio{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.2em .8em;align-items:center;padding:.45em .6em;border:1px solid var(--line);border-radius:.35em;background:var(--panel)}
+.aio .nm{font:600 .9em var(--f-txt)}
+.aio .nm small{font:500 .8em var(--f-num);color:var(--dim);margin-left:.5em}
+.aio .v{font:500 1.4em var(--f-num);text-align:right;white-space:nowrap}
+.aio .v small{font-size:.6em;color:var(--dim);margin-left:.25em}
+.aio .bar{grid-column:1/-1;position:relative;height:.6em;background:var(--surf3);border-radius:.3em;overflow:visible}
+.aio .bar i{position:absolute;inset:0 auto 0 0;border-radius:.3em;background:var(--ok)}
+.aio .bar b{position:absolute;top:-.2em;bottom:-.2em;width:2px;background:var(--warn)}
+.aio .ft{grid-column:1/-1;display:flex;justify-content:space-between;font:400 .74em var(--f-num);color:var(--dim)}
+.aio.lo .bar i,.aio.hi .bar i{background:var(--bad)}
+.aio.lo,.aio.hi{border-color:color-mix(in srgb,var(--bad) 60%,var(--line))}
+.aiotag{font:700 .72em/1 var(--f-ui);letter-spacing:.08em;padding:.25em .4em;border-radius:.25em;background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.aio.lo .aiotag,.aio.hi .aiotag{background:var(--bad);color:#fff}
+.aioset h4{margin:.8em .3em .1em;font:600 .82em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--acc)}
 .diag .link{grid-column:1/-1}
 .gioh{display:flex;align-items:center;justify-content:space-between;gap:.5em;padding:.55em .75em .25em;font:600 .78em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
 .giog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.3em;padding:.2em .6em .6em}
@@ -674,6 +689,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <div class="card">
             <div class="card-h"><span>Системни входове и изходи (STM32)</span></div>
             <div class="io" id="ioBox"></div>
+          </div>
+          <div class="card aiocard">
+            <div class="card-h"><span>Аналогови входове и изходи</span><button class="btn sm" data-act="air-drop" id="btnAirDrop" type="button">Симулирай спад на налягането</button></div>
+            <div class="aiol" id="aioBox"></div>
           </div>
           <div class="card gio">
             <div class="card-h"><span>Входове и изходи 32 + 32</span><button class="btn sm" data-act="force-clr" type="button">Освободи ръчните</button></div>
@@ -1051,6 +1070,7 @@ function parse(lines){
    for(const a in tgt)pos[a]=inc?pos[a]+tgt[a]:tgt[a];
   }
   if(ms.includes(5))out.push(mt==='laser'?{type:'act',line:li,dur:0,sp:'off',label:'Лазер изкл.',fn:()=>{S.sp.on=false;if(S.cfg.mach.lzAir)S.airBlast=false}}:mt==='plasma'?{type:'act',line:li,dur:.3,sp:'off',label:'Плазма: дъгата е изключена',fn:()=>{S.sp.on=false}}:{type:'act',line:li,dur:.5,sp:'off',label:'Шпинделът спира',fn:()=>{S.sp.on=false}});
+  if(ms.includes(68)&&w.E!==undefined&&w.Q!==undefined){const n=Math.round(w.E),q=w.Q;out.push({type:'act',line:li,dur:0,label:'M68 E'+n+' Q'+q,fn:()=>{S.aOut[n]=q}})}
   for(const mc of[62,63,64,65])if(ms.includes(mc)&&w.P!==undefined){const n=Math.round(w.P),on=mc===62||mc===64;out.push({type:'act',line:li,dur:0,label:'M'+mc+' P'+n+': OUT'+n+(on?' вкл.':' изкл.'),fn:()=>{S.uOut[n]=on?1:0}})}
   if(ms.includes(66)&&w.P!==undefined){const n=Math.round(w.P),q=w.Q!==undefined?w.Q:10;out.push({type:'act',line:li,dur:q,label:'M66: чака IN'+n,until:()=>n>=1&&n<=32&&inVal(n-1),onTimeout:()=>toast('M66: IN'+n+' не се включи за '+q+' s')})}
   if(ms.includes(30)||ms.includes(2)){out.push({type:'act',line:li,dur:0,fn:()=>{S.sp.on=false;S.coolant=false}});return'end'}
@@ -1191,6 +1211,7 @@ function tick(dt){
  const tsp=MT()==='laser'?raw:raw>0?Math.max(SP.spMin,Math.min(SP.spMax,raw)):0;
  const d=tsp-S.sp.act,st=(MT()==='laser'?1e9:SP.spMax/Math.max(.1,SP.spRamp))*dt;S.sp.act+=Math.abs(d)<st?d:Math.sign(d)*st;
  if(S.state!=='run'&&!S.jogHold)S.F=0;
+ aioTick(dt);
  {const L=S.cfg.lube;if(L.luOn&&S.enabled){const v=Math.hypot(S.vel.X||0,S.vel.Y||0,S.vel.Z||0);
    if(v>1e-3){S.lu.t+=dt*SIMX;S.lu.d+=v*dt*SIMX/1000}
    if(performance.now()>S.lu.until&&(L.luMode==='time'?S.lu.t>=L.luMin*60:S.lu.d>=L.luDist))lubePulse('по интервал')}
@@ -1692,7 +1713,7 @@ function updDiag(){
  ];
  const html=io.map(([n,p,s])=>`<div><i class="led ${s}"></i><span>${n}</span><code>${p}</code></div>`).join('');
  if(ioBox._h!==html){ioBox._h=html;ioBox.innerHTML=html}
- updGio();
+ updGio();updAio();
  set($('#lkBuf'),(S.state==='run'&&S.cur&&S.cur.type!=='act'?Math.round(82+Math.random()*12):0)+' %');
  set($('#lkWd'),S.state==='estop'?'СПРЯН':'ОК · 1 ms');
 }
@@ -1902,6 +1923,12 @@ PDEF.tWear={k:'tWear',n:'Износване',u:'мм',t:'num',d:3,min:-5,max:5,h
 PDEF.tX={k:'tX',n:'Корекция X',u:'мм',t:'num',d:3,min:-500,max:500,h:'Корекцията на ножа по X (в диаметър).'};
 PDEF.tZ={k:'tZ',n:'Корекция Z',u:'мм',t:'num',d:3,min:-500,max:500,h:'Корекцията на ножа по Z.'};
 PDEF.tR={k:'tR',n:'Радиус на върха',u:'мм',t:'num',d:3,min:0,max:10,h:'Радиусът на върха на ножа (за компенсация на радиуса).'};
+PDEF.aLo={k:'aLo',n:'Стойност в началото на обхвата',t:'num',d:2,min:-100000,max:100000,h:'Колко е измерената величина при 4 mA или 0 V. Взима се от табелката на датчика.'};
+PDEF.aHi={k:'aHi',n:'Стойност в края на обхвата',t:'num',d:2,min:-100000,max:100000,h:'Колко е измерената величина при 20 mA, 5 V или 10 V.'};
+PDEF.aMin={k:'aMin',n:'Долна граница',t:'num',d:2,min:-100000,max:100000,h:'Под тази стойност следва избраното действие (например аларма при спад на налягането).'};
+PDEF.aMax={k:'aMax',n:'Горна граница',t:'num',d:2,min:-100000,max:100000,h:'Над тази стойност следва избраното действие (например прегряване).'};
+PDEF.aFlt={k:'aFlt',n:'Филтър',u:'ms',t:'num',d:0,min:1,max:10000,h:'Изглажда смущенията. По-голяма стойност означава по-спокойно, но по-бавно показание.'};
+PDEF.aU={k:'aU',n:'Мерна единица',t:'text',h:'Например bar, °C, %, л/мин.'};
 PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
@@ -2089,6 +2116,39 @@ function updPl(){
 const IN_F=[['none','Не се използва'],['lubeP','Налягане на мазането'],['door','Врата затворена'],['air','Налягане въздух'],['oil','Ниво масло'],['start','Бутон Старт'],['hold','Бутон Пауза'],['clamp','Детайл затегнат'],['vac','Вакуум ОК'],['pallet','Палет на място'],['chip','Контейнер за стружки пълен'],['user','Потребителски (M66)']];
 const OUT_F=[['none','Не се използва'],['cool','Охлаждане'],['mist','Мъгла'],['air','Обдухване'],['lube','Мазане'],['dust','Аспирация'],['lgreen','Сигнална колона: зелено'],['lyellow','Сигнална колона: жълто'],['lred','Сигнална колона: червено'],['clamp','Стяга'],['vac1','Вакуумна маса: зона 1'],['vac2','Вакуумна маса: зона 2'],['conv','Транспортьор стружки'],['user','Потребителски (M62–M65)']];
 const FN=(L,k)=>(L.find(x=>x[0]===k)||L[0])[1];
+S.cfg.aio={in:[{n:'Налягане въздух',f:'airP',sig:'420',lo:0,hi:10,u:'bar',amin:5.5,amax:9,act:'alarm',flt:200},{n:'Температура на шпиндела',f:'temp',sig:'010',lo:0,hi:100,u:'°C',amin:0,amax:60,act:'warn',flt:1000},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100}],
+ out:[{n:'',f:'none',sig:'010',lo:0,hi:100,u:'%'},{n:'',f:'none',sig:'010',lo:0,hi:100,u:'%'}]};
+S.draft.aio=JSON.parse(JSON.stringify(S.cfg.aio));
+const AIN_F=[['none','Не се използва'],['airP','Налягане на въздуха'],['oilP','Налягане на маслото'],['temp','Температура'],['load','Натоварване на шпиндела'],['flow','Дебит на охлаждането'],['user','Потребителски (M66 E)']];
+const AOUT_F=[['none','Не се използва'],['spindle','Обороти на шпиндела'],['user','Потребителски (M68)']];
+const SIG=[['010','0–10 V'],['05','0–5 V'],['420','4–20 mA']];
+const AACT=[['none','Нищо'],['warn','Предупреждение'],['alarm','Аларма']];
+S.aiV=[0,0,0,0];S.aOut=[0,0,0];S.airDrop=false;S.aiAl=[0,0,0,0];
+function aiTrue(i){const c=S.cfg.aio.in[i];const n=(Math.random()-.5);
+ switch(c.f){case'airP':return(S.airDrop?4.6:6.2)+n*.06;case'oilP':return performance.now()<S.lu.until?14+n*.4:0;
+  case'temp':return 24+S.sp.act/Math.max(1,S.cfg.sp.spMax)*30+n*.2;case'load':return S.sp.on?22+S.F/200+n*2:0;
+  case'flow':return S.coolant?3.2+n*.1:0;case'user':return c.lo;default:return 0}}
+function aoVal(i){const c=S.cfg.aio.out[i];if(c.f==='spindle')return c.lo+(c.hi-c.lo)*Math.min(1,S.sp.act/Math.max(1,S.cfg.sp.spMax));if(c.f==='user')return S.aOut[i+1]||0;return 0}
+function sigTxt(c,v){const f=Math.max(0,Math.min(1,(v-c.lo)/((c.hi-c.lo)||1)));return c.sig==='420'?(4+16*f).toFixed(2)+' mA':c.sig==='05'?(5*f).toFixed(2)+' V':(10*f).toFixed(2)+' V'}
+function aioTick(dt){
+ S.cfg.aio.in.forEach((c,i)=>{if(c.f==='none'){S.aiV[i]=0;return}
+  const k=Math.min(1,dt*1000/Math.max(10,c.flt));S.aiV[i]+=(aiTrue(i)-S.aiV[i])*k;
+  const v=S.aiV[i],bad=v<c.amin?-1:v>c.amax?1:0;
+  if(bad&&!S.aiAl[i]&&c.act!=='none'&&S.enabled){S.aiAl[i]=1;const t=(c.n||FN(AIN_F,c.f))+': '+v.toFixed(2)+' '+c.u+(bad<0?' под '+c.amin:' над '+c.amax)+' '+c.u;
+   if(c.act==='alarm'){halt();S.state='alarm';S.enabled=false;S.ready=false;S.alarm=t+'. Машината е спряна.'}else S.aiWarn=t}
+  if(!bad){S.aiAl[i]=0;if(S.aiWarn&&S.aiWarn.startsWith(c.n||FN(AIN_F,c.f)))S.aiWarn=''}});
+}
+function updAio(){
+ const A=S.cfg.aio,rows=[];
+ A.in.forEach((c,i)=>{if(c.f==='none')return;const v=S.aiV[i],r=(c.hi-c.lo)||1,pc=x=>Math.max(0,Math.min(100,(x-c.lo)/r*100)).toFixed(1),st=v<c.amin?'lo':v>c.amax?'hi':'';
+  rows.push(`<div class="aio ${st}"><span class="nm">AIN${i+1} · ${(c.n||FN(AIN_F,c.f)).replace(/</g,'&lt;')}<small>${sigTxt(c,v)}</small></span><span class="v">${v.toFixed(2)}<small>${c.u}</small> <span class="aiotag">${st==='lo'?'НИСКО':st==='hi'?'ВИСОКО':'ОК'}</span></span>`+
+   `<div class="bar"><i style="width:${pc(v)}%"></i>${c.act!=='none'?`<b style="left:${pc(c.amin)}%"></b><b style="left:${pc(c.amax)}%"></b>`:''}</div><div class="ft"><span>${c.lo} ${c.u}</span><span>${c.act!=='none'?'граници '+c.amin+' … '+c.amax+' '+c.u:''}</span><span>${c.hi} ${c.u}</span></div></div>`)});
+ A.out.forEach((c,i)=>{if(c.f==='none')return;const v=aoVal(i),r=(c.hi-c.lo)||1;
+  rows.push(`<div class="aio"><span class="nm">AOUT${i+1} · ${(c.n||FN(AOUT_F,c.f)).replace(/</g,'&lt;')}<small>${sigTxt(c,v)}</small></span><span class="v">${v.toFixed(1)}<small>${c.u}</small></span><div class="bar"><i style="width:${Math.max(0,Math.min(100,(v-c.lo)/r*100)).toFixed(1)}%;background:var(--acc)"></i></div></div>`)});
+ const h=rows.length?rows.join(''):'<div class="res"><div><span>Няма активни аналогови канали. Настройват се от Настройки → Входове/изходи → Аналогови.</span></div></div>';
+ const el=$('#aioBox');if(el._h!==h){el._h=h;el.innerHTML=h}
+ $('#btnAirDrop').classList.toggle('on',S.airDrop);
+}
 S.uOut=Array(33).fill(0);S.ioForce=Array(32).fill(null);S.ioTab='in';S.forceArm=-1;
 function outFn(f){
  const st=S.state;
@@ -2115,9 +2175,28 @@ function updGio(){
  const A=$('#ginBox'),B=$('#goutBox');if(A._h!==a){A._h=a;A.innerHTML=a}if(B._h!==b){B._h=b;B.innerHTML=b}
  set($('#ginCnt'),na+' вкл. от 32');set($('#goutCnt'),nb+' вкл. от 32');
 }
+const IOTABS=`<div class="seg" style="max-width:40em;padding:.3em .3em .5em">${[['in','Входове (32)'],['out','Изходи (32)'],['ain','Аналогови входове (4)'],['aout','Аналогови изходи (2)']].map(([k,l])=>`<button class="btn sm" data-act="io-tab" data-v="${k}" type="button">${l}</button>`).join('')}</div>`;
+function renderAioSet(body){
+ const dir=S.ioTab==='ain'?'in':'out',L=S.draft.aio[dir],C=S.cfg.aio[dir],Fl=dir==='in'?AIN_F:AOUT_F,pre=dir==='in'?'AIN':'AOUT';
+ const btn=(i,k,txt,act)=>`<button class="btn${L[i][k]!==C[i][k]?' chg':''}" data-act="${act||'aio-num'}" data-d="${dir}" data-i="${i}" data-k="${k}" type="button">${txt}</button>`;
+ const seg=(i,k,opts)=>`<div class="seg">${opts.map(([o,l])=>`<button class="btn sm${L[i][k]===o?' on':''}" data-act="aio-enum" data-d="${dir}" data-i="${i}" data-k="${k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`;
+ body.innerHTML=IOTABS.replace(`data-v="${S.ioTab}" type`,`data-v="${S.ioTab}" data-on="1" type`).replace(/class="btn sm" (data-act="io-tab" data-v="[a-z]+" data-on="1")/,'class="btn sm on" $1')+
+ '<div class="aioset">'+L.map((o,i)=>{const used=o.f!=='none';
+  let r=`<h4>${pre}${i+1}${used?' · '+(o.n||FN(Fl,o.f)).replace(/</g,'&lt;'):' · не се използва'}</h4><table class="pf"><tbody>`+
+  `<tr><th>Функция</th><td>${btn(i,'f',FN(Fl,o.f),'aio-fn')}</td></tr>`;
+  if(used){r+=`<tr><th>Име</th><td>${btn(i,'n',o.n?o.n.replace(/</g,'&lt;'):'—','aio-name')}</td></tr>`+
+   `<tr><th>Сигнал</th><td>${seg(i,'sig',SIG)}</td></tr>`+
+   `<tr><th>Стойност при ${o.sig==='420'?'4 mA':'0 V'}</th><td>${btn(i,'lo',o.lo)}</td></tr>`+
+   `<tr><th>Стойност при ${o.sig==='420'?'20 mA':o.sig==='05'?'5 V':'10 V'}</th><td>${btn(i,'hi',o.hi)}</td></tr>`+
+   `<tr><th>Мерна единица</th><td>${btn(i,'u',o.u.replace(/</g,'&lt;'),'aio-unit')}</td></tr>`;
+   if(dir==='in')r+=`<tr><th>Долна граница</th><td>${btn(i,'amin',o.amin+' '+o.u)}</td></tr><tr><th>Горна граница</th><td>${btn(i,'amax',o.amax+' '+o.u)}</td></tr>`+
+    `<tr><th>При излизане от границите</th><td>${seg(i,'act',AACT)}</td></tr><tr><th>Филтър</th><td>${btn(i,'flt',o.flt+' ms')}</td></tr>`}
+  return r+'</tbody></table>'}).join('')+'</div>';
+}
 function renderIoSet(body){
+ if(S.ioTab==='ain'||S.ioTab==='aout'){renderAioSet(body);return}
  const dir=S.ioTab,L=S.draft.io[dir],C=S.cfg.io[dir],Fl=dir==='in'?IN_F:OUT_F;
- body.innerHTML=`<div class="seg" style="max-width:24em;padding:.3em .3em .5em"><button class="btn sm${dir==='in'?' on':''}" data-act="io-tab" data-v="in" type="button">Входове (32)</button><button class="btn sm${dir==='out'?' on':''}" data-act="io-tab" data-v="out" type="button">Изходи (32)</button></div>`+
+ body.innerHTML=IOTABS.replace(`data-v="${S.ioTab}" type`,`data-v="${S.ioTab}" data-on="1" type`).replace(/class="btn sm" (data-act="io-tab" data-v="[a-z]+" data-on="1")/,'class="btn sm on" $1')+
  `<table class="pf pio"><thead><tr><th>№</th><th>Име</th><th>Функция</th><th>Инв.</th><th>${dir==='in'?'Филтър':'При авария'}</th></tr></thead><tbody>`+
  L.map((o,i)=>{const c=C[i],ch=k=>o[k]!==c[k]?' chg':'';
   return`<tr><td class="num">${dir==='in'?'IN':'OUT'}${i+1}</td>`+
@@ -2143,6 +2222,7 @@ function updStatus(now){
  if(S.state==='estop'){txt='Аварийният стоп е натиснат. Захранването на драйверите и шпиндела е прекъснато.';cls='bad'}
  else if(S.state==='alarm'){txt=S.alarm;cls='bad'}
  else if(now<S.toastUntil){txt=S.toast}
+ else if(S.aiWarn){txt=S.aiWarn;cls='bad'}
  else if(S.oilLow&&S.cfg.lube.luOn){txt='Ниско ниво на маслото за смазване. Долейте.';cls='bad'}
  else if(S.actLabel&&S.state==='run'){txt=S.actLabel;cls='act'}
  else if(S.state==='hold'){txt='Пауза. Натиснете ЦИКЪЛ СТАРТ, за да продължите.'}
@@ -2297,7 +2377,7 @@ panel.addEventListener('click',e=>{
   case'td-cancel':$('#txtDlg').hidden=true;break;
   case'td-ok':{const d=S.td;
    if(d.k==='host'&&!/^[A-Za-z0-9-]{1,32}$/.test(d.txt)){toast('Името може да съдържа само латински букви, цифри и тире');break}
-   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&d.k!=='toolName'&&!d.txt.trim()){toast('Полето не може да е празно');break}
+   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&d.k!=='toolName'&&d.k!=='aU'&&!d.txt.trim()){toast('Полето не може да е празно');break}
    if(d.set)d.set(d.txt.trim());else S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
   case'net-test':{const N=S.cfg.net;
    if(JSON.stringify(N)!==JSON.stringify(S.draft.net)){toast('Първо запишете промените');break}
@@ -2392,11 +2472,25 @@ panel.addEventListener('click',e=>{
   case'lube-oil':S.oilLow=!S.oilLow;toast(S.oilLow?'Симулация: ниско ниво на маслото':'Маслото е долято');break;
   case'prb-cal':calibrate();break;
   case'io-tab':S.ioTab=v;renderSet();break;
+  case'aio-enum':{const o=S.draft.aio[b.dataset.d][+b.dataset.i];o[b.dataset.k]=v;renderSet();break}
+  case'aio-num':{const o=S.draft.aio[b.dataset.d][+b.dataset.i],k=b.dataset.k,pk={lo:'aLo',hi:'aHi',amin:'aMin',amax:'aMax',flt:'aFlt'}[k];
+   S.nd={a:'aio',k:pk,txt:'',get:()=>o[k],set:x=>{o[k]=x},after:renderSet};$('#numDlg').hidden=false;renderNd();break}
+  case'aio-name':{const o=S.draft.aio[b.dataset.d][+b.dataset.i];S.td={a:'aio',k:'ioName',txt:o.n,shift:false,bg:true,get:()=>o.n,set:t=>{o.n=t;renderSet()}};$('#txtDlg').hidden=false;renderTd();break}
+  case'aio-unit':{const o=S.draft.aio[b.dataset.d][+b.dataset.i];S.td={a:'aio',k:'aU',txt:o.u,shift:false,bg:false,get:()=>o.u,set:t=>{o.u=t||'—';renderSet()}};$('#txtDlg').hidden=false;renderTd();break}
+  case'aio-fn':{const d=b.dataset.d,i=+b.dataset.i,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][i];S.pick={aio:d,i};
+   set($('#pkT'),(d==='in'?'AIN':'AOUT')+(i+1)+' · функция');set($('#pkCur'),'сега: '+FN(Fl,o.f));
+   $('#pkList').innerHTML=Fl.map(([k,n])=>`<button class="btn${o.f===k?' on':''}" data-act="pk" data-v="${k}" type="button">${n}</button>`).join('');$('#pickDlg').hidden=false;break}
+  case'air-drop':S.airDrop=!S.airDrop;toast(S.airDrop?'Симулация: налягането на въздуха пада':'Налягането е възстановено');break;
   case'io-name':{const i=+v,dir=S.ioTab,o=S.draft.io[dir][i];S.td={a:'io',k:'ioName',txt:o.n,shift:false,bg:true,get:()=>o.n,set:t=>{o.n=t}};$('#txtDlg').hidden=false;renderTd();break}
   case'io-fn':{const i=+v,dir=S.ioTab,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i];S.pick={dir,i};
    set($('#pkT'),(dir==='in'?'IN':'OUT')+(i+1)+' · функция');set($('#pkCur'),'сега: '+FN(Fl,o.f));
    $('#pkList').innerHTML=Fl.map(([k,n])=>`<button class="btn${o.f===k?' on':''}" data-act="pk" data-v="${k}" type="button">${n}</button>`).join('');$('#pickDlg').hidden=false;break}
-  case'pk':{const{dir,i}=S.pick,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i],old=FN(Fl,o.f);
+  case'pk':{if(S.pick.aio){const d=S.pick.aio,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][S.pick.i],old=FN(Fl,o.f);
+    if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;
+    const pre={airP:['bar',0,10,'420'],oilP:['bar',0,25,'420'],temp:['°C',0,100,'010'],load:['%',0,100,'010'],flow:['л/мин',0,10,'420'],spindle:['об/мин',0,24000,'010']}[v];
+    if(pre){o.u=pre[0];o.lo=pre[1];o.hi=pre[2];o.sig=pre[3]}
+    $('#pickDlg').hidden=true;renderSet();break}
+   const{dir,i}=S.pick,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i],old=FN(Fl,o.f);
    if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;$('#pickDlg').hidden=true;renderSet();break}
   case'pk-cancel':$('#pickDlg').hidden=true;break;
   case'io-inv':{const o=S.draft.io[S.ioTab][+v];o.inv=o.inv?0:1;renderSet();break}
