@@ -44,13 +44,23 @@ set(HAL_SOURCES
   ${HAL}/Src/stm32h7xx_hal_uart.c
   ${HAL}/Src/stm32h7xx_hal_uart_ex.c
   ${HAL}/Src/stm32h7xx_hal_iwdg.c
+  ${HAL}/Src/stm32h7xx_hal_pcd.c
+  ${HAL}/Src/stm32h7xx_hal_pcd_ex.c
+  ${HAL}/Src/stm32h7xx_ll_usb.c
 )
 
-set(APP_SOURCES
+# собственият код (компилира се с повече предупреждения)
+set(OWN_SOURCES
   Core/Src/main.c
   Core/Src/stm32h7xx_it.c
   Core/Src/stm32h7xx_hal_msp.c
   Core/Src/syscalls.c
+  Core/Src/usb_cdc.c
+  Core/Src/console.c
+)
+
+set(APP_SOURCES
+  ${OWN_SOURCES}
   ${DEV}/Source/Templates/system_stm32h7xx.c
   ${DEV}/Source/Templates/gcc/startup_stm32h723xx.s
 )
@@ -74,8 +84,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE ${MCU_FLAGS}
   $<$<CONFIG:Release>:-O2 -g>
 )
 # собственият код се компилира с повече предупреждения
-set_source_files_properties(Core/Src/main.c Core/Src/stm32h7xx_it.c Core/Src/stm32h7xx_hal_msp.c Core/Src/syscalls.c
-  PROPERTIES COMPILE_OPTIONS "-Wextra")
+set_source_files_properties(${OWN_SOURCES}
+  PROPERTIES COMPILE_OPTIONS "-Wextra;-Wshadow;-Wpointer-arith;-Wstrict-prototypes;-Wmissing-prototypes;-Wundef")
 
 set(LD_SCRIPT ${CMAKE_SOURCE_DIR}/STM32H723ZGTX_FLASH.ld)
 target_link_options(${PROJECT_NAME} PRIVATE ${MCU_FLAGS}

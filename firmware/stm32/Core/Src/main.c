@@ -3,11 +3,14 @@
  * Copyright (c) 2026 ageorgiev86. Всички права запазени.
  *
  * Етап 0: стартиране, такт 400 MHz от вътрешния осцилатор HSI, кешове, MPU
- * и мигащ светодиод. Служи да се провери, че инструментите, програматорът
- * и платката работят. Следващите модули (генериране на стъпки, енкодери,
- * SPI към Linux платката, watchdog) се добавят върху тази основа.
+ * и мигащ светодиод.
+ * Етап 1: USB CDC конзола за съобщения при отстраняване на грешки.
+ * Следващите модули (генериране на стъпки, енкодери, SPI към Linux платката,
+ * watchdog) се добавят върху тази основа.
  */
 #include "main.h"
+#include "console.h"
+#include "usb_cdc.h"
 
 static void MPU_Config(void);
 static void SystemClock_Config(void);
@@ -23,12 +26,19 @@ int main(void)
   HAL_Init();
   SystemClock_Config();
   LED_Init();
+  usb_cdc_init();
 
+  uint32_t led_time = HAL_GetTick();
   int on = 0;
   for (;;) {
-    on = !on;
-    LED_Set(on);
-    HAL_Delay(250);
+    console_poll();
+
+    /* светодиодът мига 2 пъти в секунда: главният цикъл не е забил */
+    if (HAL_GetTick() - led_time >= 250u) {
+      led_time += 250u;
+      on = !on;
+      LED_Set(on);
+    }
   }
 }
 
