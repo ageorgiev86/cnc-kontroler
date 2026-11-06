@@ -349,6 +349,15 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .mag .hub b{display:block;font:700 1.9em var(--f-ui);color:var(--fg);letter-spacing:.02em}
 .atc{border:1px solid var(--line);border-radius:.35em;padding:.5em .65em;font:500 .9em var(--f-txt);color:var(--dim);background:var(--panel);min-height:2.6em;display:flex;align-items:center;gap:.5em}
 .atc.busy{color:var(--acc)}
+.atc.off{color:var(--warn)}
+.atc .btn{margin-left:auto;flex:none}
+.tools .card-b.nomag{display:flex!important;flex-direction:column}
+/* Карта на височините: плоски клетки (в LVGL: lv_canvas с правоъгълници) */
+.hm{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:.3em;overflow:hidden;flex:none}
+.hm i{display:block;min-height:1.15em}
+.hm-leg{display:flex;align-items:center;gap:.4em;font:400 .74em var(--f-num);color:var(--dim)}
+.hm-leg u{display:flex;flex:1;height:.55em;border-radius:.2em;overflow:hidden;text-decoration:none}
+.hm-leg u i{flex:1}
 
 /* Пробинг */
 .probe{grid-template-columns:minmax(0,30fr) minmax(0,42fr) minmax(0,28fr)}
@@ -359,7 +368,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .inp .mt{font:400 .74em var(--f-num);color:var(--dim);grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inp .btn{grid-row:1/3;grid-column:3}
 .inp .nm{grid-column:2;grid-row:1}
-.cycs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:.45em;flex:1;min-height:0}
+.cycs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:.45em;flex:1;min-height:0}
 .cyc{flex-direction:column;gap:.35em;height:100%;min-height:0;text-transform:none;letter-spacing:.02em;font-size:.98em;padding:.4em}
 .cyc svg{width:3.4em;height:2.6em;flex:none}
 .cyc span{white-space:normal;text-align:center;line-height:1.1}
@@ -506,6 +515,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <span class="brand">CNC</span>
           <span class="pill idle" id="sbState">ГОТОВ</span>
           <span class="chip" id="sbMode">АВТО</span>
+          <span class="chip" id="sbMap" hidden><b>КАРТА Z</b></span>
           <span class="chip" id="sbMach">Фреза / рутер</span>
           <span class="chip"><b>G54</b> G17 G21 G90</span>
           <span class="chip" id="sbTool">T5</span>
@@ -854,6 +864,20 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         </div>
       </div>
 
+      <div class="modal" id="hmDlg" hidden>
+        <div class="dlg rfh" role="dialog" aria-label="Карта на височините">
+          <div class="dlg-h"><b>Карта на височините</b><span id="hmInfo"></span></div>
+          <div class="dlg-note">За печатни платки и гравиране. Повърхността се измерва в мрежа от точки. При изпълнение на програмата Z следва измерената повърхност, така че дълбочината е еднаква по цялата площ.</div>
+          <table class="pf"><tbody id="hmOpts"></tbody></table>
+          <div class="rf-steps" id="hmSteps"></div>
+          <div class="rf-warn" id="hmWarn"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1.3fr 1.3fr">
+            <button class="btn" data-act="hm-cancel" type="button">Отказ</button>
+            <button class="btn" data-act="hm-prog" type="button">Областта на програмата</button>
+            <button class="btn go" data-act="hm-go" id="hmGo" type="button">Старт</button>
+          </div>
+        </div>
+      </div>
       <div class="modal" id="numDlg" hidden>
         <div class="dlg" role="dialog" aria-label="Въвеждане на стойност">
           <div class="dlg-h"><b id="ndT"></b><span id="ndCur"></span></div>
@@ -914,6 +938,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <li>Позициите са <code>lv_label</code> с моноширинен шрифт, а лентите за грешка са <code>lv_bar</code>.</li>
         <li>Траекторията се рисува в <code>lv_canvas</code>, а G-code списъкът е <code>lv_list</code> или <code>lv_table</code>.</li>
         <li>Индикаторите на входовете са <code>lv_led</code>, а MDI клавиатурата е <code>lv_btnmatrix</code>.</li>
+        <li>Картата на височините е <code>lv_canvas</code> с правоъгълници в цвета на височината.</li>
       </ul>
     </div>
     <div>
@@ -1008,7 +1033,7 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
   const M=magCfg(),x=toolOf(T);
   if(T===S.tool){toast('T'+T+' вече е в шпиндела');return}
   if(!x){toast('Няма гнездо '+T+'. Магазинът има '+M.mn+' гнезда.');return}
-  if(x.empty){toast('Гнездо '+T+' е празно');return}
+  if(x.empty&&autoTc()){toast('Гнездо '+T+' е празно');return}
   const old=S.tool,L='Смяна на инструмент T'+T+': ',ops=[];
   if(MT()==='lathe'){const N=M.mn,dd=Math.abs((S.magPos||1)-T)%N,dist=Math.min(dd,N-dd),tp='T'+String(T).padStart(2,'0')+String(T).padStart(2,'0');
    ops.push({type:'act',line,dur:.3,label:L+'отключване на револвера',fn:()=>{S.magMoving=true}},
@@ -1018,6 +1043,20 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
   const act=(l,d,f)=>ops.push({type:'act',line,dur:d,fn:f,label:l?L+l:undefined});
   const mv=(l,fn,rapid=true)=>ops.push({type:'line',line,tgtFn:fn,rapid,feed:2000,label:L+l});
   const toW=o=>{const r={};for(const k in o)r[k]=o[k]-S.off[k];return r};
+  if(!autoTc()){
+   const C=S.cfg.mag;
+   act('спиране на шпиндела',.4,()=>{S.sp.on=false;S.coolant=false});
+   mv('Z нагоре до '+C.mcZ.toFixed(3),()=>toW({Z:C.mcZ}));
+   mv('към позицията за ръчна смяна',()=>toW({X:C.mcX,Y:C.mcY}));
+   act('',0,()=>{S.mtc=T;S.state='hold';S.F=0});
+   act('',0,()=>{S.mtc=null;S.tool=T;S.clamped=true;S.magPos=T});
+   act('корекция на дължината G43 H'+T,.3,()=>{});
+   if(C.mcMeas&&T!==10){
+    if(['X','Y','Z'].every(a=>S.homed[a]))ops.push(...measureOps(T));
+    else toast('Осите не са реферирани: T'+T+' няма да се измери с toolsetter-а');
+   }
+   S.queue.unshift(...ops);return;
+  }
   act('спиране на шпиндела',.4,()=>{S.sp.on=false});
   act('ориентация на шпиндела на '+M.mor.toFixed(1)+'°',.6,()=>{S.orient=true});
   if(M.mtype==='linear'){
@@ -1168,7 +1207,7 @@ function canMove(){
  if(S.state!=='idle'){toast('Машината се движи. Изчакайте или натиснете СТОП.');return false}
  return true;
 }
-function halt(){S.resetHoming=false;S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
+function halt(){S.mtc=null;S.resetHoming=false;S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
 function finishRun(){
  const k=S.runKind;S.state='idle';S.runKind=null;S.cur=null;S.actLabel='';S.F=0;
  if(k==='prog'){S.curPi=Infinity;toast('Програмата приключи за '+mmss(S.runTime))}
@@ -1179,7 +1218,7 @@ function spWaitDur(){const SP=S.cfg.sp;if(SP.spWait==='time')return SP.spDelay;
 function spOutTxt(){const SP=S.cfg.sp;if(SP.spCtl==='modbus')return'Modbus #'+SP.spAddr;
  const r=S.sp.act<=0?0:SP.spPwmMin+(SP.spPwmMax-SP.spPwmMin)*(S.sp.act-SP.spMin)/Math.max(1,SP.spMax-SP.spMin);return'PWM '+Math.max(0,Math.min(100,r)).toFixed(0)+' %'}
 function begin(m){
- prepare(m,work());
+ {const p=work();if(m.prog&&!m.tgtFn)p.Z-=S.hmc||0;prepare(m,p)}  /* началото е без компенсацията */
  if(m.prog){S.curPi=m.pi;S.progLine=m.line}
  if(m.label)S.actLabel=m.label;else if(m.type!=='act')S.actLabel='';
  if(m.type==='act'&&m.fn)m.fn();
@@ -1200,16 +1239,21 @@ function stepQueue(dt){
   if(m.type==='act'){m.el=(m.el||0)+b;if(m.until&&m.until()){S.cur=null;b=0;continue}if(m.el<m.dur)return;if(m.until&&m.onTimeout)m.onTimeout();b=m.el-m.dur;S.cur=null;continue}
   const feed=m.rapid?RAPID*S.rapOv/100:(m.fpr?m.fpr*Math.max(50,S.sp.act):m.feed)*S.feedOv/100;S.F=feed;if(m.prog||S.runKind==='mdi')S.progF=m.rapid?0:m.feed;
   const v=Math.max(feed,1)/60*SIMX;
-  if(m.type==='probe'&&m.s+v*b>=m.trig){m.s=m.trig;setWork(posAt(m,m.s/m.len));trigger(m);S.cur=null;b=0;return}
+  if(m.type==='probe'&&m.s+v*b>=m.trig){m.s=m.trig;setWorkM(m,posAt(m,m.s/m.len));trigger(m);S.cur=null;b=0;return}
   const need=(m.len-m.s)/v;
   if(need<=b){
-   m.s=m.len;setWork(posAt(m,1));b-=need;S.cur=null;
+   m.s=m.len;setWorkM(m,posAt(m,1));b-=need;S.cur=null;
    if(m.type==='probe'){S.state='alarm';S.alarm='Пробникът не сработи в зададения ход. Проверете позицията и входа '+(m.input==='ts'?'PRB2':'PRB1')+'.';halt();return}
    if(S.single&&m.prog&&S.queue.length){S.state='hold';toast('Единичен блок: натиснете ЦИКЪЛ СТАРТ за следващия ред');return}
    continue;
   }
-  m.s+=v*b;setWork(posAt(m,m.s/m.len));b=0;
+  m.s+=v*b;setWorkM(m,posAt(m,m.s/m.len));b=0;
  }
+}
+/* Ходовете на програмата (без G53/G28) получават Z от картата на височините */
+function setWorkM(m,p){
+ if(m.prog&&!m.tgtFn&&hmOn()){const c=hmZ(p.X,p.Y);p={...p};p.Z+=c;S.hmc=c}else S.hmc=0;
+ setWork(p);
 }
 function tick(dt){
  const before={...S.mach};
@@ -1258,7 +1302,7 @@ function updDro(){
  DROS.forEach(d=>{for(const a in d.rows){const r=d.rows[a];
   const mach=!d.compact&&S.coord==='mach';
   set(r.val,f3(mach?S.mach[a]:w[a]));
-  if(r.sm){set(r.sm,(mach?'РАБ':'МАШ')+f3(mach?w[a]:S.mach[a],9));set(r.sd,'ОСТ'+f3(to?to[a]-w[a]:0,9));
+  if(r.sm){set(r.sm,(mach?'РАБ':'МАШ')+f3(mach?w[a]:S.mach[a],9));set(r.sd,'ОСТ'+f3(to?to[a]-w[a]+(a==='Z'?S.hmc||0:0):0,9));
    const e=Math.abs(S.ferr[a]),ec=S.cfg[a].encOn,lim=S.cfg[a].encFerr;r.fb.style.width=ec?Math.min(100,e/lim*100)+'%':'0';
    r.fb.style.background=e>lim*.8?C.bad:e>lim*.5?C.warn:C.ok;set(r.fe,ec?e.toFixed(1)+(ROT[a]?' ″':' µm'):'без енкодер')}
   r.row.hidden=!S.active[a];
@@ -1529,7 +1573,7 @@ function renderTools(){
   const lt=MT()==='lathe',num=(k,v)=>`<td class="n ed" data-act="t-num" data-k="${k}" data-v="${t.t}">${t.empty?'—':v.toFixed(3)}</td>`;
   rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td class="ed" data-act="t-name" data-v="${t.t}"><span class="nm${t.empty?' emp':''}">${t.d.replace(/</g,'&lt;')}</span>${t.t===S.tool?`<span class="badge">${lt?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'&&S.cfg.prb.prMount==='spindle'?'<span class="badge dimb">PRB1</span>':''}</td>${num(lt?'tZ':'tLen',t.len)}${num(lt?'tX':'tDia',t.dia)}${num(lt?'tR':'tWear',t.w)}</tr>`)}
  toolBody.innerHTML=rows.join('');
- set($('#btnTc'),'Смени с T'+S.sel);set($('#toolCnt'),N+' гнезда');
+ set($('#btnTc'),(autoTc()?'Смени с T':'Ръчна смяна с T')+S.sel);set($('#toolCnt'),N+(MT()!=='lathe'&&!S.cfg.mag.mOn?' инструмента':' гнезда'));
 }
 const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],magKey='';
 function buildMag(){
@@ -1538,6 +1582,15 @@ function buildMag(){
  mag.className='mag '+M.mtype;S.magPh=S.magPos;set($('#magTitle'),MT()==='lathe'?'Револверна глава':'Магазин · '+MTYPE[M.mtype]);
 }
 function updMag(dt){
+ if(MT()!=='lathe'&&!S.cfg.mag.mOn){
+  const C=S.cfg.mag,busy=S.actLabel.startsWith('Смяна')||!!S.mtc,atc=$('#atc');
+  mag.hidden=true;mag.parentElement.classList.add('nomag');set($('#magTitle'),'Ръчна смяна');set($('#magPos'),S.tool?'в шпиндела T'+S.tool:'шпинделът е празен');
+  const txt=S.mtc?'Поставете T'+S.mtc+' и натиснете „Готово“':busy?S.actLabel.replace(/^Смяна на инструмент /,''):'Без магазин · при M6 шпинделът отива на X '+C.mcX.toFixed(0)+' Y '+C.mcY.toFixed(0)+' и машината чака';
+  atc.classList.toggle('busy',busy);atc.classList.remove('off');
+  const k1=txt+'|'+S.state;
+  if(atc.dataset.t!==k1){atc.dataset.t=k1;atc.innerHTML=`<i class="led ${busy?'hot':'on'}"></i><span>${txt}</span>`+(S.mtc&&S.state==='hold'?'<button class="btn sm go" data-act="start" type="button">Готово, продължи</button>':'')}
+  return}
+ mag.hidden=false;mag.parentElement.classList.remove('nomag');
  const M=magCfg(),N=M.mn,key=MT()+'|'+M.mtype+'|'+N;
  if(key!==magKey){magKey=key;buildMag()}
  let d=S.magPos-S.magPh;if(M.mtype!=='linear')d=((d%N)+N*1.5)%N-N/2;
@@ -1570,13 +1623,17 @@ function updMag(dt){
  if(M.mtype==='linear'){const a=Math.floor(ph),f=ph-a,p0=pos(Math.max(1,a)),p1=pos(Math.min(N,a+1));
   const x=p0[0]+(p1[0]-p0[0])*f,y=Math.min(p0[1],p1[1])-size*.55-1.9*em;spm.style.transform=`translate(${x}px,${y}px) translateX(-50%)`;set($('#spmT'),S.tool?'T'+S.tool:'празен')}
  set($('#hubT'),S.tool?'T'+S.tool:'—');set($('#magPos'),'гнездо '+S.magPos);
- const busy=S.actLabel.startsWith('Смяна');const atc=$('#atc');atc.classList.toggle('busy',busy);
- const txt=busy?S.actLabel.replace(/^Смяна на инструмент /,''):(MT()==='lathe'?'Револверът е заключен':'Магазинът е готов · инструментът е затегнат');
- if(atc.dataset.t!==txt){atc.dataset.t=txt;atc.innerHTML=`<i class="led ${busy?'hot':'on'}"></i><span>${txt}</span>`}
+ const busy=S.actLabel.startsWith('Смяна')||!!S.mtc;const atc=$('#atc');atc.classList.toggle('busy',busy);
+ const lt=MT()==='lathe',man=!lt&&!S.cfg.mag.atcOn;atc.classList.toggle('off',man&&!busy);
+ const txt=S.mtc?'Ръчна смяна: поставете T'+S.mtc+' и натиснете „Готово“':busy?S.actLabel.replace(/^Смяна на инструмент /,''):lt?'Револверът е заключен':man?'Автоматичната смяна е изключена · M6 = ръчна смяна':'Магазинът е готов · инструментът е затегнат';
+ const key2=txt+'|'+busy+'|'+man+'|'+S.state;
+ if(atc.dataset.t!==key2){atc.dataset.t=key2;atc.innerHTML=`<i class="led ${busy?'hot':man?'hot':'on'}"></i><span>${txt}</span>`+
+  (lt||busy?'':`<button class="btn sm ghost${man?'':' on'}" data-act="atc-tog" type="button">Авт. смяна ${man?'изкл.':'вкл.'}</button>`)+(S.mtc&&S.state==='hold'?'<button class="btn sm go" data-act="start" type="button">Готово, продължи</button>':'')}
 }
 
 /* ---------- Пробинг ---------- */
 const ICON={
+ hmap:'<svg viewBox="0 0 68 52"><path d="M4 38 C18 30 26 44 40 36 S58 30 64 34" fill="none" stroke="currentColor" stroke-width="2"/><g fill="var(--acc)"><circle cx="10" cy="14" r="2.5"/><circle cx="26" cy="14" r="2.5"/><circle cx="42" cy="14" r="2.5"/><circle cx="58" cy="14" r="2.5"/></g><path d="M10 18 V33 M26 18 V36 M42 18 V35 M58 18 V31" stroke="var(--acc)" stroke-width="1.5" stroke-dasharray="2 2"/></svg>',
  z:'<svg viewBox="0 0 68 52"><rect x="6" y="36" width="56" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><line x1="34" y1="4" x2="34" y2="26" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="30" r="4" fill="var(--acc)"/><path d="M28 18 L34 26 L40 18" fill="none" stroke="var(--acc)" stroke-width="2"/></svg>',
  hole:'<svg viewBox="0 0 68 52"><circle cx="34" cy="26" r="20" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="3.5" fill="var(--acc)"/><path d="M38 26 H50 M30 26 H18 M34 22 V10 M34 30 V42" stroke="var(--acc)" stroke-width="2"/></svg>',
  boss:'<svg viewBox="0 0 68 52"><circle cx="34" cy="26" r="13" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="26" r="2" fill="currentColor"/><path d="M4 26 H17 M64 26 H51 M34 0 V9 M34 52 V43" stroke="var(--acc)" stroke-width="2"/></svg>',
@@ -1591,7 +1648,7 @@ const sg=d=>d>0?'+':'−';
 function renderCycs(){
  const[,cx,cy]=CRN[S.corner];
  const CYCS=[['z','Повърхност Z','G38.2 Z−'],['hole','Център на отвор','4 точки'],['boss','Център на бос','4 точки'],['rot','Ротация на детайла','2 точки по X'],
-  ['corner','Външен ъгъл',`X${sg(cx)} / Y${sg(cy)}`],['icorner','Вътрешен ъгъл',`X${sg(-cx)} / Y${sg(-cy)}`],['width','Ширина на жлеб X','2 точки'],['widthy','Ширина на жлеб Y','2 точки']];
+  ['corner','Външен ъгъл',`X${sg(cx)} / Y${sg(cy)}`],['icorner','Вътрешен ъгъл',`X${sg(-cx)} / Y${sg(-cy)}`],['width','Ширина на жлеб X','2 точки'],['widthy','Ширина на жлеб Y','2 точки'],['hmap','Карта на височините',S.hm.map?'има · '+S.hm.map.nx+'×'+S.hm.map.ny:S.hm.cfg.hmNX+'×'+S.hm.cfg.hmNY+' точки']];
  const flip=`transform:scale(${S.corner[1]==='r'?-1:1},${S.corner[0]==='b'?-1:1})`;
  $('#cycs').innerHTML=CYCS.map(([k,n,s])=>`<button class="btn cyc" data-act="cyc" data-v="${k}" type="button">${k.includes('corner')?ICON[k].replace('<svg ',`<svg style="${flip}" `):ICON[k]}<span>${n}</span><small>${s}</small></button>`).join('');
  segOn('#crnSeg .btn',S.corner);
@@ -1603,6 +1660,7 @@ function touch(ax,dir,trig,label,onLatch,input,ff=PRB.fast,fs=PRB.slow,travel=tr
  {type:'line',rel:{[ax]:-dir*PRB.back},feed:1500}]}
 function result(title,rows,note){S.prbRes={title,rows,note};S.prbWarn=false;renderPrb()}
 function runCycle(k){
+ if(k==='hmap'){openHM();return}
  if(!canMove())return;
  const P=S.cfg.prb,fx=P.prMount==='fixed';
  if(!fx&&S.tool!==10){S.prbWarn=true;renderPrb();return}
@@ -1683,7 +1741,10 @@ function measureTool(){
  if(!S.tool){toast('В шпиндела няма инструмент');return}
  if(S.tool===10){toast('3D пробникът не се мери с toolsetter-а');return}
  const nh=['X','Y','Z'].filter(a=>!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');return}
- const T=S.cfg.ts,t=toolOf(S.tool),trueLen=t.len+(Math.random()-.5)*0.03,oldLen=t.len;
+ runOps(measureOps(S.tool),'probe');toast('Измерване на T'+S.tool+' с toolsetter-а');
+}
+function measureOps(tool){
+ const T=S.cfg.ts,t=toolOf(tool),trueLen=t.len+(Math.random()-.5)*0.03,oldLen=t.len;
  const trig=T.tsz-(T.tstop+trueLen);
  const ops=[
   {type:'line',tgtFn:()=>({Z:T.tsz-S.off.Z}),rapid:true,label:'Toolsetter: Z нагоре до '+T.tsz.toFixed(3)},
@@ -1691,13 +1752,14 @@ function measureTool(){
   ...touch('Z',-1,trig>0&&trig<=T.tsmax?trig:1e9,'Toolsetter',(lm)=>{const L=lm.Z-T.tstop;t.len=L;
     result('Дължина на T'+t.t,[['Нова дължина',f4(L)],['Предишна',f4(oldLen)],['Разлика',f4(L-oldLen)]],'Таблицата на инструментите е обновена.');renderTools()},'ts',T.tsvs,T.tsvl,T.tsmax),
   {type:'line',tgtFn:()=>({Z:T.tsz-S.off.Z}),rapid:true}];
- runOps(ops,'probe');toast('Измерване на T'+t.t+' с toolsetter-а');
+ return ops;
 }
 function renderTsPos(){const T=S.cfg.ts;set($('#tsPos'),'X '+T.tsx.toFixed(3)+'  Y '+T.tsy.toFixed(3))}
 function renderPrb(){
  const el=$('#prbRes');
  if(S.prbWarn){el.innerHTML=`<div class="warnbox"><span>В шпиндела е ${S.tool?'T'+S.tool:'празно'}. Циклите с 3D пробник изискват T10.</span><button class="btn on" data-act="load-t10" type="button">Зареди T10</button></div>`;return}
  const r=S.prbRes;
+ if(r&&r.hm&&S.hm.map){el.innerHTML=hmHtml();return}
  if(!r){el.innerHTML=`<div class="res"><div><span>Позиционирай пробника над или в детайла и избери цикъл.</span></div></div>`;return}
  el.innerHTML=`<span class="lab">${r.title}</span><div class="res">${r.rows.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('')}</div><div class="res"><div><span>${r.note}</span></div></div>`;
 }
@@ -1796,16 +1858,25 @@ const P_HOME=[
  {k:'hseq',n:'Ред на реферирване',t:'num',d:0,min:0,max:5,h:'Осите с по-малък номер се реферират първи, а осите с еднакъв номер тръгват заедно. Z обикновено е 0, за да се вдигне преди останалите.',ref:'LinuxCNC: HOME_SEQUENCE'}
 ];
 const P_MAG=[
+ {k:'mOn',n:'Магазин',t:'bool',on:'Има',off:'Няма',h:'Без магазин инструментите се сменят ръчно: при M6 шпинделът отива на позицията за ръчна смяна и машината чака ЦИКЪЛ СТАРТ. Таблицата на инструментите остава за дължините и диаметрите.'},
+ {k:'atcOn',n:'Автоматична смяна',t:'bool',on:'Включена',off:'Изключена',show:D=>!!D.mOn,h:'Изключена: магазинът остава настроен, но M6 се изпълнява като ръчна смяна. За ремонт или настройка на магазина, или за инструмент, който не е в гнездо. Превключва се и от екрана „Инструменти“.'},
  {k:'mtype',n:'Тип на магазина',t:'enum',opts:[['carousel','Карусел'],['chain','Верига'],['linear','Линеен']],h:'Карусел: въртящ се диск, гнездото идва при шпиндела. Верига: гнездата са на верига, която се придвижва до позицията за смяна, и побира повече инструменти. Линеен: неподвижна поставка, а шпинделът отива до гнездото с осите X и Y.'},
- {k:'mn',n:'Брой гнезда',t:'num',d:0,min:4,max:40,h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой.'},
+ {k:'mn',n:'Брой гнезда / инструменти',t:'num',d:0,min:4,max:40,h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой. Без магазин: колко реда има таблицата.'},
  {k:'mz',n:'Z за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Височината на шпиндела, при която инструментът се хваща или пуска.'},
  {k:'mor',n:'Ориентация на шпиндела',u:'°',t:'num',d:1,min:0,max:359.9,h:'Ъгълът, в който шпинделът спира преди смяна, за да влязат шпонките на държача в гнездото.'},
  {k:'msp',n:'Време за едно гнездо',u:'s',t:'num',d:2,min:.05,max:5,only:['carousel','chain'],h:'Колко време отнема преместването с едно гнездо. Използва се като изчакване и като граница за аларма, ако датчикът за позиция не сработи.'},
  {k:'m1x',n:'Гнездо 1 · X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната X на гнездо 1. Доведете шпиндела над гнездото и натиснете „Гнездо 1 = текущата X Y“.'},
  {k:'m1y',n:'Гнездо 1 · Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната Y на гнездо 1.'},
  {k:'maxis',n:'Гнездата са подредени по',t:'enum',opts:[['X','ос X'],['Y','ос Y']],only:['linear'],h:'По коя ос са наредени гнездата на поставката.'},
- {k:'mpitch',n:'Стъпка между гнездата',u:'мм',t:'num',d:3,min:-1000,max:1000,only:['linear'],h:'Разстоянието между съседни гнезда. Знакът определя посоката от гнездо 1 нататък.'}
+ {k:'mpitch',n:'Стъпка между гнездата',u:'мм',t:'num',d:3,min:-1000,max:1000,only:['linear'],h:'Разстоянието между съседни гнезда. Знакът определя посоката от гнездо 1 нататък.'},
+ {t:'hdr',n:'Ръчна смяна',show:D=>!D.mOn||!D.atcOn},
+ {k:'mcX',n:'Позиция за ръчна смяна · X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,show:D=>!D.mOn||!D.atcOn,h:'Къде отива шпинделът при ръчна смяна, така че инструментът да се достига лесно. Ползва се, когато няма магазин или автоматичната смяна е изключена.'},
+ {k:'mcY',n:'Позиция за ръчна смяна · Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,show:D=>!D.mOn||!D.atcOn,h:'Обикновено отпред и в средата на масата.'},
+ {k:'mcZ',n:'Позиция за ръчна смяна · Z',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,show:D=>!D.mOn||!D.atcOn,h:'Обикновено най-горната позиция (0), за да има място за дълъг инструмент.'},
+ {k:'mcMeas',n:'След ръчна смяна',t:'bool',on:'Измерва с toolsetter',off:'Без измерване',show:D=>!D.mOn||!D.atcOn,h:'Новият инструмент се измерва автоматично и дължината се записва в таблицата. Без измерване се ползва дължината от таблицата.'}
 ];
+/* без магазин остават само броят на инструментите и ръчната смяна */
+P_MAG.forEach(p=>{if(p.k&&!['mOn','atcOn','mn'].includes(p.k)&&!p.k.startsWith('mc')&&!p.show)p.show=D=>!!D.mOn});
 const P_TS=[
  {k:'tsx',n:'Позиция X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на сензора по X. Най-лесно: доведете шпиндела над центъра с ръчното движение и натиснете „Вземи текущата X Y“.'},
  {k:'tsy',n:'Позиция Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Центърът на сензора по Y.'},
@@ -1871,6 +1942,61 @@ const P_ENC=[
  {k:'encFerr',n:'Лимит на грешката',u:'µm (″)',t:'num',d:0,min:1,max:10000,h:'Над тази следяща грешка машината спира с аларма (удар, загубени стъпки, прекъснат енкодер).'},
  {k:'encCorr',n:'Макс. корекция',u:'мм (°)',t:'num',d:3,min:0,max:10,h:'Най-голямата корекция, която STM32 може да внесе. Ако е нужна по-голяма, нещо не е наред и машината спира.'}
 ];
+/* ---------- Карта на височините ---------- */
+S.hm={on:false,map:null,cfg:{hmSrc:'tool',hmX0:0,hmX1:80,hmY0:0,hmY1:50,hmNX:6,hmNY:5,hmZs:2,hmDep:1,hmF:100}};
+const autoTc=()=>MT()==='lathe'||(!!S.cfg.mag.mOn&&!!S.cfg.mag.atcOn);
+const hmOn=()=>S.hm.on&&!!S.hm.map;
+/* „истинската“ повърхност в симулацията: леко огъната платка, работна Z спрямо Z0 */
+const hmSurf=(x,y)=>.055*Math.sin(x/23+.4)+.035*Math.cos(y/17)+.0009*x-.0006*y-.03;
+function hmZ(x,y){const M=S.hm.map;if(!M)return 0;
+ const fx=Math.max(0,Math.min(M.nx-1,(x-M.x0)/M.dx)),fy=Math.max(0,Math.min(M.ny-1,(y-M.y0)/M.dy));
+ const i=Math.min(M.nx-2,Math.floor(fx)),j=Math.min(M.ny-2,Math.floor(fy)),u=fx-i,v=fy-j,Z=(a,b)=>M.z[b*M.nx+a]??0;
+ return Z(i,j)*(1-u)*(1-v)+Z(i+1,j)*u*(1-v)+Z(i,j+1)*(1-u)*v+Z(i+1,j+1)*u*v}
+const HMP=[['hmX0','X от'],['hmX1','X до'],['hmY0','Y от'],['hmY1','Y до'],['hmNX','Точки по X'],['hmNY','Точки по Y'],['hmZs','Безопасна височина Z'],['hmDep','Макс. дълбочина под Z0'],['hmF','Скорост на измерване']];
+function openHM(){
+ if(MT()!=='mill'){toast('Картата на височините е за фреза / рутер');return}
+ $('#hmDlg').hidden=false;hmRender();
+}
+function hmRender(){
+ const C=S.hm.cfg,dx=(C.hmX1-C.hmX0)/(C.hmNX-1),dy=(C.hmY1-C.hmY0)/(C.hmNY-1),n=C.hmNX*C.hmNY;
+ set($('#hmInfo'),n+' точки · стъпка '+dx.toFixed(1)+' × '+dy.toFixed(1)+' мм');
+ $('#hmOpts').innerHTML=`<tr><th>Сонда<small>${C.hmSrc==='tool'?'щипка на медта, вход PRB1':'3D пробник, вход PRB1'}</small></th><td><div class="seg"><button class="btn sm${C.hmSrc==='tool'?' on':''}" data-act="hm-src" data-v="tool" type="button">Инструментът</button><button class="btn sm${C.hmSrc==='prb'?' on':''}" data-act="hm-src" data-v="prb" type="button">3D пробник</button></div></td></tr>`+
+  HMP.map(([k])=>{const p=PDEF[k];return`<tr><th>${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td><button class="btn" data-act="hm-n" data-k="${k}" type="button">${fmtP(p,C[k])}</button></td></tr>`}).join('');
+ $('#hmSteps').innerHTML='<ol>'+['Z се вдига на '+C.hmZs.toFixed(3)+' (работни координати)',
+  n+' точки змиевидно: бърз ход до точката, спускане с F'+C.hmF+' до допир, запис на Z, вдигане',
+  'Компенсацията се включва: при програмата Z следва измерената повърхност (билинейна интерполация между точките)'].map(x=>`<li>${x}</li>`).join('')+'</ol>';
+ const w=[];
+ if(C.hmX1<=C.hmX0||C.hmY1<=C.hmY0)w.push('Областта е празна: „до“ трябва да е по-голямо от „от“.');
+ if(C.hmSrc==='tool')w.push('Закачете щипката на медта на платката и проверете входа с „Тест“. Работната нула Z трябва да е приблизително на повърхността.');
+ if(C.hmSrc==='prb'&&S.cfg.prb.prMount==='spindle'&&S.tool!==10)w.push('В шпиндела е '+(S.tool?'T'+S.tool:'празно')+'. За 3D пробника заредете T10.');
+ if(Math.max(dx,dy)>15)w.push('Стъпката е над 15 мм. За огъната платка изберете повече точки.');
+ if(S.hm.map)w.push('Има измерена карта ('+S.hm.map.nx+'×'+S.hm.map.ny+'). Новото измерване я заменя.');
+ $('#hmWarn').innerHTML=w.join('<br>');$('#hmGo').classList.toggle('dis',C.hmX1<=C.hmX0||C.hmY1<=C.hmY0);
+}
+function runHM(){
+ const C=S.hm.cfg,nx=C.hmNX,ny=C.hmNY,dx=(C.hmX1-C.hmX0)/(nx-1),dy=(C.hmY1-C.hmY0)/(ny-1),z=new Array(nx*ny).fill(null),ops=[],travel=C.hmZs+C.hmDep;
+ S.hm.on=false;
+ ops.push({type:'line',tgtFn:()=>({Z:C.hmZs}),rapid:true,label:'Карта: Z до безопасната височина'});
+ for(let j=0;j<ny;j++)for(let k=0;k<nx;k++){const i=j%2?nx-1-k:k,x=C.hmX0+i*dx,y=C.hmY0+j*dy,idx=j*nx+i,lb='Карта: точка '+(j*nx+k+1)+' от '+nx*ny;
+  const trig=C.hmZs-hmSurf(x,y)+(Math.random()-.5)*.004;
+  ops.push({type:'line',tgtFn:()=>({X:x,Y:y,Z:C.hmZs}),rapid:true,label:lb});
+  ops.push({type:'probe',rel:{Z:-travel},feed:C.hmF,trig:trig<=travel?trig:1e9,input:'prb',label:lb+': спускане',onTrig:(lm,lw)=>{z[idx]=lw.Z}});
+  ops.push({type:'line',tgtFn:()=>({Z:C.hmZs}),rapid:true});
+ }
+ ops.push({type:'act',dur:0,fn:()=>{S.hm.map={x0:C.hmX0,y0:C.hmY0,dx,dy,nx,ny,z};S.hm.on=true;S.prbRes={hm:true};renderPrb();renderCycs();toast('Картата е готова. Компенсацията по Z е включена.',5000)}});
+ runOps(ops,'probe');toast('Карта на височините: '+nx*ny+' точки');
+}
+function hmCol(t){const A=[89,174,230],B=[61,187,126],D=[242,182,50],[p,q,u]=t<.5?[A,B,t*2]:[B,D,(t-.5)*2];
+ return'rgb('+p.map((v,i)=>Math.round(v+(q[i]-v)*u)).join(',')+')'}
+function hmHtml(){
+ const M=S.hm.map,mn=Math.min(...M.z),mx=Math.max(...M.z),rg=Math.max(1e-6,mx-mn),cells=[];
+ for(let j=M.ny-1;j>=0;j--)for(let i=0;i<M.nx;i++){const v=M.z[j*M.nx+i];cells.push(`<i style="background:${hmCol((v-mn)/rg)}" title="X ${(M.x0+i*M.dx).toFixed(1)} Y ${(M.y0+j*M.dy).toFixed(1)}: ${f4(v)}"></i>`)}
+ const sw=[0,.25,.5,.75,1].map(t=>`<i style="background:${hmCol(t)}"></i>`).join('');
+ return`<span class="lab">Карта на височините · ${M.nx}×${M.ny} точки</span><div class="hm" style="grid-template-columns:repeat(${M.nx},minmax(0,1fr))">${cells.join('')}</div>`+
+  `<div class="hm-leg"><span>${f4(mn)}</span><u>${sw}</u><span>${f4(mx)}</span></div>`+
+  `<div class="res"><div><span>Област</span><b>X ${M.x0.toFixed(1)}…${(M.x0+(M.nx-1)*M.dx).toFixed(1)} · Y ${M.y0.toFixed(1)}…${(M.y0+(M.ny-1)*M.dy).toFixed(1)}</b></div><div><span>Стъпка</span><b>${M.dx.toFixed(2)} × ${M.dy.toFixed(2)} мм</b></div><div><span>Разлика мин./макс.</span><b>${f4(mx-mn)}</b></div></div>`+
+  `<div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn${S.hm.on?' on':''}" data-act="hm-tog" type="button">Компенсация ${S.hm.on?'вкл.':'изкл.'}</button><button class="btn" data-act="hm-del" type="button">Изтрий картата</button></div>`;
+}
 const PDEF={};[...P_AX,...P_HOME,...P_ENC,...P_MAG,...P_TS,...P_NET,...P_MACH].forEach(p=>{if(p.k)PDEF[p.k]=p});
 const isMb=D=>D.spCtl==='modbus',isPw=D=>D.spCtl==='pwm';
 const P_SP=[
@@ -1935,6 +2061,15 @@ const P_LUBE=[
 ];
 P_LUBE.forEach(p=>{if(p.k)PDEF[p.k]=p});
 const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
+PDEF.hmX0={k:'hmX0',n:'X от',u:'работни координати',t:'num',d:3,min:-9999,max:9999,h:'Левият край на областта. „Областта на програмата“ я попълва по заредената програма с 1 мм запас.'};
+PDEF.hmX1={k:'hmX1',n:'X до',u:'работни координати',t:'num',d:3,min:-9999,max:9999,h:'Десният край на областта.'};
+PDEF.hmY0={k:'hmY0',n:'Y от',u:'работни координати',t:'num',d:3,min:-9999,max:9999,h:'Предният край на областта.'};
+PDEF.hmY1={k:'hmY1',n:'Y до',u:'работни координати',t:'num',d:3,min:-9999,max:9999,h:'Задният край на областта.'};
+PDEF.hmNX={k:'hmNX',n:'Точки по X',t:'num',d:0,min:2,max:40,h:'Колко точки по X. За платка 100 мм обикновено стигат 6–10 (стъпка 10–20 мм). Повече точки = по-точно, но по-бавно.'};
+PDEF.hmNY={k:'hmNY',n:'Точки по Y',t:'num',d:0,min:2,max:40,h:'Колко точки по Y.'};
+PDEF.hmZs={k:'hmZs',n:'Безопасна височина Z',u:'мм над Z0',t:'num',d:3,min:.2,max:50,h:'На тази височина сондата се мести между точките. Трябва да е над стягите и неравностите.'};
+PDEF.hmDep={k:'hmDep',n:'Макс. дълбочина под Z0',u:'мм',t:'num',d:3,min:.05,max:10,h:'Ако няма допир до тази дълбочина, измерването спира с аларма. Пази върха на гравьора, ако щипката не е закачена.'};
+PDEF.hmF={k:'hmF',n:'Скорост на измерване',u:'мм/мин',t:'num',d:0,min:5,max:500,h:'Скоростта на спускане до допир. За V-образен гравьор 50–100 мм/мин, за да не се счупи върхът.'};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
@@ -1976,7 +2111,7 @@ S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Наляга�
 S.cfg.lube={luOn:1,luMode:'time',luMin:30,luDist:500,luPulse:5,luStart:1,luPress:0,luLow:'warn'};
 S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
-S.cfg.mag={mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
+S.cfg.mag={mOn:1,atcOn:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
 S.netOk=false;
@@ -2048,7 +2183,7 @@ function renderSet(){
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
    (sec==='mach'||sec==='sp'?'':sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
-   :`<div class="teach">${S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button></div>`);
+   :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
   help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
@@ -2280,6 +2415,7 @@ function renderAcc(body,help){
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
 function updStatus(now){
+ {const c=$('#sbMap'),on=hmOn()&&MT()==='mill';c.hidden=!on;if(on){const w=work(),z=hmZ(w.X,w.Y),tl='Z следва картата на височините · тук '+(z>=0?'+':'')+z.toFixed(3)+' мм';if(c.title!==tl)c.title=tl}}
  const p=$('#sbState'),off=!S.enabled&&S.state==='idle';p.className='pill '+(off?'off':S.state);set(p,off?'ИЗКЛЮЧЕНА':STATE_TXT[S.state]);
  {const r=$('#btnReset');r.className='btn rst'+(S.resetHoming?' homing':S.ready&&S.enabled?' ok':'');
   r.title=S.resetHoming?'Реферирване…':S.ready&&S.enabled?'Машината е активна и реферирана':'Машината е изключена. RESET включва задвижванията и реферира осите.'}
@@ -2295,6 +2431,7 @@ function updStatus(now){
  else if(S.aiWarn){txt=S.aiWarn;cls='bad'}
  else if(S.oilLow&&S.cfg.lube.luOn){txt='Ниско ниво на маслото за смазване. Долейте.';cls='bad'}
  else if(S.actLabel&&S.state==='run'){txt=S.actLabel;cls='act'}
+ else if(S.mtc&&S.state==='hold'){const tt=toolOf(S.mtc);txt='Ръчна смяна: поставете T'+S.mtc+(tt&&!tt.empty?' · '+tt.d:'')+' и натиснете ЦИКЪЛ СТАРТ.';cls='act'}
  else if(S.state==='hold'){txt='Пауза. Натиснете ЦИКЪЛ СТАРТ, за да продължите.'}
  set(m,txt);m.className='sb-msg '+cls;
  // оверрайди
@@ -2429,7 +2566,7 @@ panel.addEventListener('click',e=>{
    S.draft[d.a][d.k]=val;$('#numDlg').hidden=true;renderSet();break}
   case'pe':S.draft[b.dataset.a][b.dataset.k]=v;S.setHelp=b.dataset.k;renderSet();break;
   case'teach':{
-   const need=v==='ts-z'||v==='magz'?['Z']:['X','Y'],nh=need.filter(a=>!S.homed[a]);
+   const need=v==='ts-z'||v==='magz'?['Z']:v==='mtc'?['X','Y','Z']:['X','Y'],nh=need.filter(a=>!S.homed[a]);
    if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Позицията няма да е вярна. Натиснете HOME.');break}
    const m=S.mach;
    if(v==='ts-xy'){
@@ -2438,6 +2575,7 @@ panel.addEventListener('click',e=>{
    if(v==='ts-z')S.draft.ts.tsz=+m.Z.toFixed(3);
    if(v==='mag1'){S.draft.mag.m1x=+m.X.toFixed(3);S.draft.mag.m1y=+m.Y.toFixed(3)}
    if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
+   if(v==='mtc'){S.draft.mag.mcX=+m.X.toFixed(3);S.draft.mag.mcY=+m.Y.toFixed(3);S.draft.mag.mcZ=+m.Z.toFixed(3)}
    if(v==='prring'){S.draft.prb.prRingX=+m.X.toFixed(3);S.draft.prb.prRingY=+m.Y.toFixed(3)}
    renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
   case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
@@ -2539,6 +2677,29 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'hm-cancel':$('#hmDlg').hidden=true;break;
+  case'hm-src':S.hm.cfg.hmSrc=v;hmRender();break;
+  case'hm-n':{const k=b.dataset.k;S.nd={a:'hm',k,txt:'',get:()=>S.hm.cfg[k],set:x=>{S.hm.cfg[k]=x},after:()=>{hmRender();renderCycs()}};$('#numDlg').hidden=false;renderNd();break}
+  case'hm-prog':{if(!PROG_OPS.length){toast('Няма заредена програма');break}
+   const B=BOUNDS,C=S.hm.cfg;C.hmX0=+(B.x0-1).toFixed(3);C.hmX1=+(B.x1+1).toFixed(3);C.hmY0=+(B.y0-1).toFixed(3);C.hmY1=+(B.y1+1).toFixed(3);
+   C.hmNX=Math.max(2,Math.min(40,Math.ceil((C.hmX1-C.hmX0)/15)+1));C.hmNY=Math.max(2,Math.min(40,Math.ceil((C.hmY1-C.hmY0)/15)+1));hmRender();renderCycs();break}
+  case'hm-go':{const C=S.hm.cfg;
+   if(C.hmX1<=C.hmX0||C.hmY1<=C.hmY0){toast('Областта е празна');break}
+   if(C.hmSrc==='prb'&&S.cfg.prb.prMount==='spindle'&&S.tool!==10){toast('За 3D пробника заредете T10');break}
+   if(!canMove())break;
+   {const nh=['X','Y','Z'].filter(a=>!S.homed[a]);if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Натиснете HOME.');break}}
+   $('#hmDlg').hidden=true;runHM();break}
+  case'hm-tog':if(S.state==='run'&&S.runKind==='prog'){toast('Спрете програмата, преди да превключите компенсацията');break}
+   S.hm.on=!S.hm.on;renderPrb();toast(S.hm.on?'Компенсацията по картата е включена':'Компенсацията по картата е изключена');break;
+  case'hm-del':if(S.state==='run'&&S.runKind==='prog'){toast('Спрете програмата');break}
+   S.hm.map=null;S.hm.on=false;S.prbRes=null;renderPrb();renderCycs();toast('Картата е изтрита');break;
+  case'atc-tog':{
+   if(S.acc.level<1){toast('Превключването изисква ниво „Настройчик“');break}
+   if(S.state==='run'||S.state==='hold'){toast('Спрете машината, преди да превключите автоматичната смяна');break}
+   const on=S.cfg.mag.atcOn?0:1,t=new Date(),ts=String(t.getDate()).padStart(2,'0')+'.'+String(t.getMonth()+1).padStart(2,'0')+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+   S.acc.log.unshift({ts,who:LVN[S.acc.level],what:'mag.atcOn',from:S.cfg.mag.atcOn,to:on});
+   S.cfg.mag.atcOn=S.draft.mag.atcOn=on;renderTools();
+   toast(on?'Автоматичната смяна е включена':'Автоматичната смяна е изключена. M6 ще спира за ръчна смяна.');break}
   case'lvpick':S.acc.pick=+v;S.acc.pin='';renderSet();break;
   case'pinkey':{const A=S.acc;if(v==='C')A.pin='';else if(v==='⌫')A.pin=A.pin.slice(0,-1);else if(A.pin.length<8)A.pin+=v;renderSet();break}
   case'login':{const A=S.acc;if(performance.now()<A.lockUntil)break;
