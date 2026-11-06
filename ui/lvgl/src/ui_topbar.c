@@ -13,11 +13,11 @@ static void on_estop(lv_event_t *e) { machine_estop(); }
 static lv_obj_t *chip(lv_obj_t *parent)
 {
     lv_obj_t *c = ui_box(parent);
-    lv_obj_set_style_bg_color(c, C_PANEL, 0);
+    lv_obj_set_style_bg_color(c, C_SURF, 0);
     lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(c, C_LINE, 0);
+    lv_obj_set_style_border_color(c, C_EDGE2, 0);
     lv_obj_set_style_border_width(c, 1, 0);
-    lv_obj_set_style_radius(c, EM(0.3f), 0);
+    lv_obj_set_style_radius(c, EM(0.35f), 0);
     lv_obj_set_style_pad_hor(c, EM(0.65f), 0);
     lv_obj_set_style_pad_ver(c, EM(0.4f), 0);
     lv_obj_set_style_text_font(c, F.ui_sm, 0);
@@ -39,10 +39,10 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
 {
     lv_obj_t *bar = tb->bar = ui_box(parent);
     lv_obj_set_width(bar, LV_PCT(100));
-    lv_obj_set_style_bg_color(bar, C_SURF, 0);
+    lv_obj_set_style_bg_color(bar, C_PANEL, 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_set_style_border_side(bar, LV_BORDER_SIDE_BOTTOM, 0);
-    lv_obj_set_style_border_color(bar, C_LINE, 0);
+    lv_obj_set_style_border_color(bar, C_EDGE, 0);
     lv_obj_set_style_border_width(bar, 1, 0);
     lv_obj_set_style_pad_ver(bar, EM(0.45f), 0);
     lv_obj_set_style_pad_hor(bar, EM(0.6f), 0);
@@ -57,7 +57,7 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
     tb->reset = ui_btn(l, "RESET", BTN_RST, false);
     lv_obj_add_event_cb(tb->reset, on_reset, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *brand = ui_label(l, F.ui_md, C_ACC, "CNC");
+    lv_obj_t *brand = ui_label(l, F.ui_md, C_FG, "CNC");
     lv_obj_set_style_text_letter_space(brand, EM(0.08f), 0);
     lv_obj_set_style_pad_left(brand, EM(0.2f), 0);
     lv_obj_set_style_pad_right(brand, EM(0.35f), 0);
@@ -77,7 +77,7 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
     tb->mach = chip_text(l, "");
 
     lv_obj_t *g = chip(l);
-    tb->gmodes_wcs = ui_label(g, F.ui_sm, C_ACC, "G54");
+    tb->gmodes_wcs = ui_label(g, F.ui_sm, C_HI, "G54");
     lv_obj_set_style_text_letter_space(tb->gmodes_wcs, EM(0.05f), 0);
     lv_label_set_text(lv_label_create(g), "G17 G21 G90");
 
@@ -90,6 +90,11 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
     lv_obj_set_style_bg_opa(led, LV_OPA_COVER, 0);
     lv_obj_set_style_margin_right(led, EM(0.15f), 0);
     tb->mcu = lv_label_create(m);
+    /* .chip.mcu: без рамка, зелен текст (връзката с MCU) */
+    lv_obj_set_style_border_width(m, 0, 0);
+    lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_text_font(m, F.ui_md, 0);
+    lv_obj_set_style_text_color(m, C_OK, 0);
 
     /* съобщение */
     tb->msg = ui_label(bar, F.txt, C_DIM, "");
@@ -128,7 +133,7 @@ void topbar_update(topbar_t *tb, uint32_t now)
     else switch (M.state) {
     case MS_IDLE: bg = C_OK; bo = 46; fg = C_OK; break;   /* 18 % */
     case MS_RUN: bg = C_INFO; fg = lv_color_hex(0x06131d); break;
-    case MS_HOLD: bg = C_ACC; fg = C_ACC_INK; break;
+    case MS_HOLD: bg = C_AMB; fg = C_AMB_INK; break;
     default: bg = C_BAD; fg = lv_color_white(); break;
     }
     lv_obj_set_style_bg_color(tb->pill, bg, 0);
@@ -148,6 +153,7 @@ void topbar_update(topbar_t *tb, uint32_t now)
     if (M.mcu_link) snprintf(buf, sizeof buf, "MCU %d kHz", M.mcu_rate_hz / 1000);
     else snprintf(buf, sizeof buf, "MCU няма връзка");
     ui_set_text(tb->mcu, buf);
+    lv_obj_set_style_text_color(tb->mcu, M.mcu_link ? C_OK : C_BAD, 0);
 
     /* съобщение: авария > временно съобщение */
     const char *txt = "";

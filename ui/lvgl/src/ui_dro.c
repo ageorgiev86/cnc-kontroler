@@ -49,7 +49,7 @@ static void row_create(dro_row_t *r, lv_obj_t *parent, int a)
     /* буква на оста + точка за Home */
     lv_obj_t *ax = ui_box(row);
     lv_obj_set_overflow_visible(ax, true);
-    ui_label(ax, F.ui_ax, C_ACC, AX_NAME[a]);
+    ui_label(ax, F.ui_ax, C_HI, AX_NAME[a]);
     float ax_em = 1.95f;
     lv_obj_t *dot = r->dot = ui_box(ax);
     lv_obj_set_ignore_layout(dot, true);
@@ -180,7 +180,7 @@ void dro_update(dro_t *d, uint32_t now)
         }
         ui_set_text(r->ftxt, buf);
 
-        lv_color_t dc = M.homed[a] == HOMED_SENSOR ? C_OK : M.homed[a] == HOMED_MANUAL ? C_ACC : C_SURF3;
+        lv_color_t dc = M.homed[a] == HOMED_SENSOR ? C_OK : M.homed[a] == HOMED_MANUAL ? C_AMB : C_SURF3;
         lv_obj_set_style_bg_color(r->dot, dc, 0);
     }
     if (last >= 0) lv_obj_set_style_border_width(d->rows[last].row, 0, 0);

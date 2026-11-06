@@ -5,23 +5,36 @@
 
 #include "lvgl.h"
 
-/* Палитра (:root в макета) */
-#define C_BG      lv_color_hex(0x0d1114)
-#define C_PANEL   lv_color_hex(0x11161a)
-#define C_SURF    lv_color_hex(0x171e24)
-#define C_SURF2   lv_color_hex(0x1f282f)
-#define C_SURF3   lv_color_hex(0x2a353e)
-#define C_LINE    lv_color_hex(0x29343c)
-#define C_FG      lv_color_hex(0xe3e9ed)
-#define C_DIM     lv_color_hex(0x8a99a4)
-#define C_FAINT   lv_color_hex(0x56636c)
-#define C_ACC     lv_color_hex(0xf2b632)
-#define C_ACC_INK lv_color_hex(0x1d1500)
-#define C_OK      lv_color_hex(0x3dbb7e)
-#define C_WARN    lv_color_hex(0xff9447)
-#define C_BAD     lv_color_hex(0xec4f54)
-#define C_INFO    lv_color_hex(0x59aee6)
+/* Палитра (:root в макета): тъмно синьо, сини рамки със сияние */
+#define C_BG      lv_color_hex(0x03060c)
+#define C_PANEL   lv_color_hex(0x060b15)
+#define C_SURF    lv_color_hex(0x0a1322)
+#define C_SURF2   lv_color_hex(0x0e1a2e)
+#define C_SURF3   lv_color_hex(0x1b2b45)
+#define C_LINE    lv_color_hex(0x1a2f52)   /* вътрешни разделители */
+#define C_EDGE    lv_color_hex(0x2a6ee0)   /* рамка на картите */
+#define C_EDGE2   lv_color_hex(0x21498a)   /* рамка на бутоните и чиповете */
+#define C_GLOW    lv_color_hex(0x2d7dff)   /* сияние (shadow) */
+#define C_FG      lv_color_hex(0xf2f6ff)
+#define C_DIM     lv_color_hex(0x8b9bb6)
+#define C_FAINT   lv_color_hex(0x4e5e7a)
+#define C_HI      lv_color_hex(0x8cc8ff)   /* стойности, букви на осите */
+#define C_ACC     lv_color_hex(0x3d8bff)
+#define C_ACC_INK lv_color_hex(0xffffff)
+#define C_AMB     lv_color_hex(0xf2b632)   /* внимание: пауза, реферирване */
+#define C_AMB_INK lv_color_hex(0x1d1500)
+#define C_OK      lv_color_hex(0x22d37a)
+#define C_WARN    lv_color_hex(0xff9f43)
+#define C_BAD     lv_color_hex(0xff4d5a)
+#define C_INFO    lv_color_hex(0x5ab4ff)
 #define C_BAD_RIM lv_color_hex(0xffb3b5)
+
+/* Сиянието струва процесорно време при рисуване (софтуерно, без GPU).
+ * Ползва се само по статичните рамки; 0 го изключва. */
+#ifndef CNC_UI_GLOW
+#define CNC_UI_GLOW 1
+#endif
+void ui_glow(lv_obj_t *obj, float width_em, lv_opa_t opa);
 
 /* Шрифтове по роля (виж fonts/gen_fonts.sh) */
 typedef struct {
