@@ -1,0 +1,15 @@
+# Сравнява обобщението на gcsim (--summary) с очакваното (.expect).
+# CNC_UPDATE=1 в средата презаписва .expect (после се проверява на ръка).
+execute_process(COMMAND ${GCSIM} --summary ${IN} OUTPUT_VARIABLE out RESULT_VARIABLE rc)
+if(DEFINED ENV{CNC_UPDATE})
+  file(WRITE ${EXP} "${out}")
+  message(STATUS "UPDATE ${EXP}")
+  return()
+endif()
+if(NOT EXISTS ${EXP})
+  message(FATAL_ERROR "Няма ${EXP}")
+endif()
+file(READ ${EXP} exp)
+if(NOT out STREQUAL exp)
+  message(FATAL_ERROR "Обобщението се различава от ${EXP}\n--- очаква се:\n${exp}\n--- получено:\n${out}")
+endif()

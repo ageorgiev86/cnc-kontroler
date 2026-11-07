@@ -103,6 +103,8 @@ typedef void (*gc_emit_fn)(void *ctx, const gc_cmd_t *c);
 
 /* ---------- интерпретатор ---------- */
 typedef enum { GC_DIALECT_MACH3, GC_DIALECT_HAAS } gc_dialect_t;
+enum { GC_FLOW_NONE, GC_FLOW_CALL, GC_FLOW_CALL_N, GC_FLOW_RET };
+#define GC_SUB_DEPTH 16    /* вложени подпрограми */
 
 typedef struct {
     gc_dialect_t dialect;
@@ -138,13 +140,18 @@ typedef struct {
 
     double pos[GC_NAX];    /* машинна позиция (краят на последното движение) */
     bool ended;
+
+    /* поток за изпълнителя (gc_run_text): M98 / M97 / M99 в последния ред */
+    int flow;              /* GC_FLOW_* */
+    int flow_p, flow_l;    /* номер на подпрограмата (или N за M97) и брой повторения */
 } gc_interp_t;
 
 void gc_tables_init(gc_tables_t *t);
 void gc_interp_init(gc_interp_t *in, const gc_config_t *cfg, gc_tables_t *tab, const double start_mach[GC_NAX]);
 /* Изпълнява един ред. 0 = ok, -1 = грешка (e е попълнена). След M2/M30 in->ended е true. */
 int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e);
-/* Изпълнява цял текст (редовете от 0); спира на M2/M30, на втори '%' или в края (тогава вади GC_END). */
+/* Изпълнява цял текст (редовете от 0) с подпрограмите O / M98 P L / M97 P / M99 (до GC_SUB_DEPTH нива);
+ * спира на M2/M30, на втори '%' или в края (тогава вади GC_END). */
 int gc_run_text(gc_interp_t *in, const char *text, gc_err_t *e);
 
 /* Програмна позиция по оста (в мм или °, без инчове) */

@@ -44,3 +44,10 @@ add_executable(test_parse tests/test_parse.c)
 target_compile_options(test_parse PRIVATE ${CORE_WARNINGS})
 target_link_libraries(test_parse PRIVATE cnc-core)
 add_test(NAME parse COMMAND test_parse)
+
+# Реални програми от CAM (tests/programs): обобщението се сравнява с .expect
+file(GLOB CNC_PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/*.tap)
+foreach(p ${CNC_PROGRAMS})
+  get_filename_component(n ${p} NAME_WE)
+  add_test(NAME prog_${n} COMMAND ${CMAKE_COMMAND} -DGCSIM=$<TARGET_FILE:gcsim> -DIN=${p} -DEXP=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/${n}.expect -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compare_summary.cmake)
+endforeach()

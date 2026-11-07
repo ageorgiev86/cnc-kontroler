@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define ARC_TOL_ABS 0.002     /* мм: допустима разлика в радиуса в началото и в края */
@@ -333,6 +334,7 @@ static bool has_m(const gc_block_t *b, int m)
 int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
 {
     gc_block_t blk, *b = &blk;
+    in->flow = GC_FLOW_NONE;
     e->line = line;
     e->col = -1;
     e->msg[0] = 0;
@@ -379,7 +381,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         case 19: case 41: case 42: case 48: case 49: case 88: case 89:
             break;
         case 97: case 98: case 99:
-            return fail(e, b->mcol[k], "M%d (подпрограми) още не се поддържа: идва в стъпка 2", m);
+            break;
         case 62: case 63: case 64: case 65: case 66:
             return fail(e, b->mcol[k], "M%d (входове и изходи) още не се поддържа: идва в стъпка 6", m);
         default:
@@ -390,6 +392,9 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     int nstop = has_m(b, 0) + has_m(b, 1) + has_m(b, 2) + has_m(b, 30);
     if (nstop > 1) return fail(e, -1, "Повече от един от M0, M1, M2, M30 в реда");
     if (has_m(b, 3) + has_m(b, 4) + has_m(b, 5) > 1) return fail(e, -1, "M3, M4 и M5 не може да са в един ред");
+    if (has_m(b, 97) + has_m(b, 98) + has_m(b, 99) > 1) return fail(e, -1, "M97, M98 и M99 не може да са в един ред");
+    if ((has_m(b, 97) || has_m(b, 98) || has_m(b, 99)) && (has_m(b, 2) || has_m(b, 30)))
+        return fail(e, -1, "Подпрограма и край на програмата в един ред");
 
     /* --- осите --- */
     for (int a = 0; a < GC_NAX; a++)
@@ -598,7 +603,22 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         }
     }
 
-    /* --- 8. спиране и край --- */
+    /* --- 8. подпрограми: изпълнителят прескача (gc_run_text) --- */
+    if (has_m(b, 98) || has_m(b, 97)) {
+        int m = has_m(b, 98) ? 98 : 97;
+        if (!GC_HAS(b, 'P')) return fail(e, -1, "M%d изисква P (%s)", m, m == 98 ? "номер на подпрограмата" : "номер на реда N");
+        double p = GC_VAL(b, 'P'), l = GC_HAS(b, 'L') ? GC_VAL(b, 'L') : 1;
+        if (p < 0 || fabs(p - lround(p)) > 1e-9) return fail(e, b->col['P' - 'A'], "Невалиден номер P%g", p);
+        if (l < 0 || l > 9999 || fabs(l - lround(l)) > 1e-9) return fail(e, b->col['L' - 'A'], "Невалиден брой повторения L%g", l);
+        in->flow = m == 98 ? GC_FLOW_CALL : GC_FLOW_CALL_N;
+        in->flow_p = (int)lround(p);
+        in->flow_l = (int)lround(l);
+    } else if (has_m(b, 99)) {
+        if (GC_HAS(b, 'P')) return fail(e, b->col['P' - 'A'], "M99 P (връщане към ред) не се поддържа");
+        in->flow = GC_FLOW_RET;
+    }
+
+    /* --- 9. спиране и край --- */
     if (has_m(b, 0) || has_m(b, 1)) emit_simple(in, GC_PAUSE, has_m(b, 1), 0, line);
     if (has_m(b, 2) || has_m(b, 30)) {
         reset_modal(in);
@@ -608,29 +628,88 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     return 0;
 }
 
+/* номерът в началото на реда след буквата (O123, N45) или -1 */
+static long lead_num(const char *s, char letter)
+{
+    while (*s == ' ' || *s == '\t') s++;
+    if ((*s & ~0x20) != letter) return -1;
+    s++;
+    if (*s < '0' || *s > '9') return -1;
+    long v = 0;
+    while (*s >= '0' && *s <= '9' && v < 100000000) v = v * 10 + (*s++ - '0');
+    return v;
+}
+
 int gc_run_text(gc_interp_t *in, const char *text, gc_err_t *e)
 {
-    int line = 0;
+    /* начала на редовете */
+    int n = 1;
+    for (const char *p = text; *p; p++)
+        if (*p == '\n') n++;
+    const char **ln = malloc(sizeof *ln * (size_t)n);
+    if (!ln) { e->line = 0; e->col = -1; snprintf(e->msg, sizeof e->msg, "Няма памет"); return -1; }
+    n = 0;
+    ln[n++] = text;
+    for (const char *p = text; *p; p++)
+        if (*p == '\n' && p[1]) ln[n++] = p + 1;
+
+    struct { int ret, start, count; } st[GC_SUB_DEPTH];
+    int depth = 0, rc = 0, pc = 0;
     bool code = false, pct = false;
-    const char *s = text;
-    while (*s) {
-        const char *nl = strchr(s, '\n');
+    while (pc < n) {
         gc_block_t b;
-        if (gc_parse_line(s, &b, e) == 0 && b.percent) {
+        if (gc_parse_line(ln[pc], &b, e) == 0 && b.percent) {
             if (code || pct) break;   /* вторият % е краят на програмата */
             pct = true;
-        } else {
-            if (gc_interp_line(in, s, line, e)) return -1;
-            if (!b.empty) code = true;
-            if (in->ended) return 0;
+            pc++;
+            continue;
         }
-        if (!nl) break;
-        s = nl + 1;
-        line++;
+        if (gc_interp_line(in, ln[pc], pc, e)) { rc = -1; goto out; }
+        if (!b.empty) code = true;
+        if (in->ended) goto out;
+        int f = in->flow;
+        if (f == GC_FLOW_CALL || f == GC_FLOW_CALL_N) {
+            int tgt = -1;
+            for (int i = 0; i < n && tgt < 0; i++)
+                if (lead_num(ln[i], f == GC_FLOW_CALL ? 'O' : 'N') == in->flow_p) tgt = i;
+            e->line = pc; e->col = -1;
+            if (tgt < 0) {
+                snprintf(e->msg, sizeof e->msg, f == GC_FLOW_CALL ? "Подпрограмата O%d не е намерена" : "Редът N%d не е намерен (M97)", in->flow_p);
+                rc = -1; goto out;
+            }
+            if (depth >= GC_SUB_DEPTH) {
+                snprintf(e->msg, sizeof e->msg, "Повече от %d вложени подпрограми", GC_SUB_DEPTH);
+                rc = -1; goto out;
+            }
+            if (in->flow_l == 0) { pc++; continue; }
+            int start = f == GC_FLOW_CALL ? tgt + 1 : tgt;
+            st[depth].ret = pc + 1;
+            st[depth].start = start;
+            st[depth].count = in->flow_l;
+            depth++;
+            pc = start;
+            continue;
+        }
+        if (f == GC_FLOW_RET) {
+            if (!depth) {
+                e->line = pc; e->col = -1;
+                snprintf(e->msg, sizeof e->msg, "M99 без извикване на подпрограма (M98)");
+                rc = -1; goto out;
+            }
+            if (--st[depth - 1].count > 0) pc = st[depth - 1].start;
+            else pc = st[--depth].ret;
+            continue;
+        }
+        pc++;
     }
-    if (!in->ended) {
-        in->ended = true;
-        emit_simple(in, GC_END, 0, 0, line);
+    if (depth) {
+        e->line = n - 1; e->col = -1;
+        snprintf(e->msg, sizeof e->msg, "Подпрограмата не завършва с M99");
+        rc = -1; goto out;
     }
-    return 0;
+    in->ended = true;
+    emit_simple(in, GC_END, 0, 0, pc < n ? pc : n - 1);
+out:
+    free(ln);
+    return rc;
 }
