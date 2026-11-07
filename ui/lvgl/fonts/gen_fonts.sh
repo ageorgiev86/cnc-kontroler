@@ -8,6 +8,7 @@
 #   sh gen_fonts.sh
 #
 # Размерите са в две степени според базата em (както в ui/maket.html: em = min(W,H)/800*16):
+#   t10 — малки екрани с по-късата страна 480–600 (7" 800×480, 1024×600)
 #   t16 — екрани с по-късата страна 800 (800×1280, 1280×800)
 #   t24 — екрани с по-късата страна 1200 (1920×1200), и 1080 (1920×1080) с малко по-едри знаци
 set -eu
@@ -35,7 +36,7 @@ txt_sm Roboto-Medium.ttf            0.74 full
 ui_lg  RobotoCondensed-Bold.ttf     1.45 full
 "
 
-for tier in 16 24; do
+for tier in 10 16 24; do
   echo "$ROLES" | while read -r name ttf mul set; do
     [ -n "$name" ] || continue
     px=$(awk "BEGIN{printf \"%d\", $tier*$mul+0.5}")

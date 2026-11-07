@@ -13,6 +13,7 @@
     LV_FONT_DECLARE(font_num_gc_t##t) LV_FONT_DECLARE(font_num_ov_t##t)        \
     LV_FONT_DECLARE(font_num_pg_t##t) LV_FONT_DECLARE(font_txt_sm_t##t)        \
     LV_FONT_DECLARE(font_ui_lg_t##t)
+DECL_TIER(10)
 DECL_TIER(16)
 DECL_TIER(24)
 
@@ -21,6 +22,7 @@ DECL_TIER(24)
      &font_txt_t##t,   &font_num_sm_t##t, &font_num_md_t##t, &font_num_lg_t##t, \
      &font_num_gc_t##t, &font_num_ov_t##t, &font_num_pg_t##t, &font_txt_sm_t##t, \
      &font_ui_lg_t##t}
+static const ui_fonts_t TIER10 = TIER(10);
 static const ui_fonts_t TIER16 = TIER(16);
 static const ui_fonts_t TIER24 = TIER(24);
 
@@ -36,7 +38,7 @@ void ui_style_init(int32_t w, int32_t h)
     g_em = s / 800.0f * 16.0f;
     g_portrait = h > w;
     /* Шрифтовете са в две степени; по-едрата е от em 20 нагоре (1080 и 1200) */
-    F = g_em >= 20 ? TIER24 : TIER16;
+    F = g_em >= 20 ? TIER24 : g_em >= 13 ? TIER16 : TIER10;   /* t10 за 480–600 по късата страна */
 }
 
 void ui_flex(lv_obj_t *obj, lv_flex_flow_t flow, float gap_em)
