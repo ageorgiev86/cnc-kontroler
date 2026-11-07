@@ -34,9 +34,16 @@ if [ "${1:-}" = "--list" ]; then
     echo "Инсталиране на smbclient…"
     apt-get install -y -qq smbclient >/dev/null || { echo "ГРЕШКА: smbclient не се инсталира (мрежа?)"; exit 1; }
   fi
+  # кои услуги отговарят: SMB (445, 139), FTP (21), уеб (80)
+  echo -n "Отворени портове:"
+  for p in 445 139 21 80; do
+    if timeout 2 bash -c "</dev/tcp/$SRV/$p" 2>/dev/null; then echo -n " $p"; fi
+  done
+  echo "   (445/139 = SMB, 21 = FTP, 80 = уеб страница)"
   ok=0
-  for opt in "" "--option=client min protocol=NT1"; do
-    out=$(smbclient -L "//$SRV" -N -g $opt 2>&1)
+  for opt in "" "client min protocol=NT1"; do
+    if [ -n "$opt" ]; then out=$(smbclient -L "//$SRV" -N -g --option="$opt" 2>&1)
+    else out=$(smbclient -L "//$SRV" -N -g 2>&1); fi
     if echo "$out" | grep -q '^Disk|'; then
       echo "Дялове (SMB${opt:+ 1.0}):"
       echo "$out" | awk -F'|' -v s="$SRV" '$1=="Disk"{print "  //" s "/" $2 "   " $3}'
