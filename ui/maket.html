@@ -372,9 +372,13 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .atc.busy{color:var(--acc)}
 .atc.off{color:var(--warn)}
 .atc .btn{margin-left:auto;flex:none}
-.wcsd{width:52em}.wcst td,.wcst th{padding:.3em .45em}.wcst tr.sel td{background:var(--acc-soft)}
-.wcst .btn{min-height:2.2em;width:100%}.wcst .wv{font:500 .95em var(--f-num);text-transform:none;letter-spacing:0}
-.wcsopt{display:flex;align-items:center;gap:.8em;flex-wrap:wrap}.wcsopt .seg{flex:0 0 auto}
+.pcol{display:flex;flex-direction:column;gap:.6em;min-height:0;min-width:0}.pcol>.card:last-child{flex:1}
+.offc .card-b{gap:.4em;overflow-x:auto}.offt{font-size:.9em}.offt td,.offt th{padding:.2em .3em}.offt tr.sel td{background:var(--acc-soft)}.offt tr.off td{opacity:.6}
+.offt .btn{min-height:2em;width:100%;padding:0 .3em}.offt .wv{font:500 .9em var(--f-num);text-transform:none;letter-spacing:0}
+.offt td{white-space:nowrap}.offt .offn0{font:700 1em var(--f-ui);color:var(--hi);gap:.25em}.offt .offn0 small{font:500 .7em var(--f-num);color:var(--dim)}.offt .offn0.on small{color:var(--fg)}
+.offn1{font:700 1em var(--f-ui);color:var(--faint);padding-left:.4em}.offchk.lock{opacity:.6;cursor:default}
+.offchk{width:2em!important;font:700 1.1em var(--f-ui)}.offbase{font:600 .75em var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.offdim{font:400 .85em var(--f-num);color:var(--faint)}.offn{font:500 .8em/1.35 var(--f-txt);color:var(--dim)}.offn .w{color:var(--warn)}
 .chip.wcsc{cursor:pointer}.chip.wcsc #sbPart{color:var(--hi)}
 .lgtabs{margin-bottom:.6em}.lgtabs .btn{flex:0 1 auto}
 .lgm{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:.6em;min-height:0}
@@ -571,7 +575,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <span class="chip" id="sbMode">АВТО</span>
           <span class="chip" id="sbMap" hidden><b>КАРТА Z</b></span>
           <span class="chip" id="sbMach">Фреза / рутер</span>
-          <span class="chip wcsc" data-act="wcs-open" title="Нулеви точки и детайли"><b id="sbWcsN">G54</b> G17 G21 G90<span id="sbPart"></span></span>
+          <span class="chip wcsc" data-act="go" data-v="probe" title="Офсети: нулеви точки и детайли"><b id="sbWcsN">G54</b> G17 G21 G90<span id="sbPart"></span></span>
           <span class="chip" id="sbTool">T5</span>
           <span class="chip mcu"><i class="led on" id="sbLinkLed"></i>MCU 1 kHz</span>
         </div>
@@ -604,7 +608,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="cvslot" data-cvslot="run"><div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div></div>
           </div>
           <div class="card">
-            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="wcs-open" id="btnParts" type="button">Детайли</button><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
+            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
             <div class="slbar" id="slBar" hidden><span>Старт от ред <b id="slN"></b></span><button class="btn sm" data-act="sl-clr" type="button">Отказ</button></div>
             <div class="gc-list" id="gcList"></div>
           </div>
@@ -643,7 +647,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <!-- РЪЧНО -->
         <section class="screen jog" data-screen="jog" hidden>
           <div class="card">
-            <div class="card-h"><span id="jogWcsT">Работна позиция · G54</span><div class="grp"><button class="btn sm" data-act="wcs-open" id="btnWcsJ" type="button">G54 ▾</button><button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button><button class="btn sm" data-act="zero-all" type="button">XYZ = 0</button></div></div>
+            <div class="card-h"><span id="jogWcsT">Работна позиция · G54</span><div class="grp"><button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button><button class="btn sm" data-act="zero-all" type="button">XYZ = 0</button></div></div>
             <div class="dro" data-dro="zero"></div>
           </div>
           <div class="card">
@@ -766,9 +770,19 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               <div class="cycs" id="cycs"></div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-h"><span>Резултат</span></div>
-            <div class="card-b" id="prbRes"></div>
+          <div class="pcol">
+            <div class="card offc">
+              <div class="card-h"><span>Офсети</span><span class="r" id="offInfo"></span></div>
+              <div class="card-b">
+                <table class="tt offt"><thead id="offHead"></thead><tbody id="offBody"></tbody></table>
+                <div class="offn" id="offNote"></div>
+                <button class="btn" data-act="wcs-skip" id="wcsSkip" type="button" hidden>Пропусни текущия детайл</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span>Резултат</span></div>
+              <div class="card-b" id="prbRes"></div>
+            </div>
           </div>
         </section>
 
@@ -959,19 +973,6 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           </div>
         </div>
       </div>
-      <div class="modal" id="wcsDlg" hidden>
-        <div class="dlg wcsd" role="dialog" aria-label="Нулеви точки и детайли">
-          <div class="dlg-h"><b>Нулеви точки и детайли</b><span id="wcsInfo"></span></div>
-          <div class="tbl-wrap"><table class="tt wcst"><thead id="wcsHead"></thead><tbody id="wcsBody"></tbody></table></div>
-          <div class="wcsopt"><span class="lab">Ред на изпълнение при няколко детайла</span><div class="seg" id="wcsOrd"><button class="btn sm" data-act="wcs-ord" data-v="part" type="button">По детайл</button><button class="btn sm" data-act="wcs-ord" data-v="tool" type="button">По инструмент</button></div></div>
-          <div class="rf-steps" id="wcsSteps"></div>
-          <div class="rf-warn" id="wcsWarn"></div>
-          <div class="grid3" style="grid-template-columns:1fr 1fr">
-            <button class="btn" data-act="wcs-skip" id="wcsSkip" type="button">Пропусни текущия детайл</button>
-            <button class="btn" data-act="wcs-close" type="button">Затвори</button>
-          </div>
-        </div>
-      </div>
       <div class="modal" id="numDlg" hidden>
         <div class="dlg" role="dialog" aria-label="Въвеждане на стойност">
           <div class="dlg-h"><b id="ndT"></b><span id="ndCur"></span></div>
@@ -1022,8 +1023,8 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <li><b>Работа</b>: „Цикъл старт“ пуска демо програмата. Следи реда, траекторията и следящата грешка до всяка ос.</li>
         <li><b>Ръчно</b> и <b>MDI</b>: движение със стъпка или непрекъснато, нулиране на G54, команди като <code>G0 X10 Y10</code>.</li>
         <li><b>Инструменти</b>: избери ред и „Смени“. Ще видиш последователността на смяната.</li>
-        <li><b>Няколко детайла</b>: „Детайли“ в картата на програмата (или чипът G54 горе), отметни G55 и пусни програмата. Ред „по инструмент“ се вижда с flanets_d80.nc (T4 и T2).</li>
-        <li><b>Пробинг</b>: първо зареди T10, после пусни цикъл. Пробникът (PRB1) и toolsetter-ът (PRB2) са отделни входове.</li>
+        <li><b>Няколко детайла</b>: в „Офсети“ отметни G55, засечи я (или въведи координатите) и пусни програмата: изработват се G54 и G55, по инструмент. С flanets_d80.nc (T4 и T2) се вижда, че всеки инструмент минава по всички детайли.</li>
+        <li><b>Офсети</b>: първо зареди T10, после пусни цикъл. Пробникът (PRB1) и toolsetter-ът (PRB2) са отделни входове. В картата „Офсети“ G54 е основната нула, а отметнатите G55–G59 са допълнителни детайли.</li>
       </ul>
     </div>
     <div>
@@ -1105,10 +1106,10 @@ const S={
 };
 /* Нулеви точки G54–G59: S.off винаги сочи активната. Детайли за програмата: S.parts (по детайл / по инструмент). */
 S.wcs=54;S.wcsOff={54:S.off,55:{X:-140,Y:-180,Z:-95,A:0,B:0,C:0},56:{X:-250,Y:-110,Z:-95,A:0,B:0,C:0},57:{X:-140,Y:-110,Z:-95,A:0,B:0,C:0},58:{X:0,Y:0,Z:0,A:0,B:0,C:0},59:{X:0,Y:0,Z:0,A:0,B:0,C:0}};
-S.parts={on:[54],order:'part'};S.multi=null;S.part=null;
+S.parts={on:[54]};  /* G54 е винаги; G55–G59 се добавят с отметка */S.multi=null;S.part=null;
 const WCS=[54,55,56,57,58,59],setWcs=n=>{S.wcs=n;S.off=S.wcsOff[n]},WN=()=>'G'+S.wcs;
 const wcsSet=n=>AX.some(a=>S.wcsOff[n][a]!==0);
-const partsSel=()=>WCS.filter(n=>S.parts.on.includes(n));
+const partsSel=()=>WCS.filter(n=>n===54||S.parts.on.includes(n));
 const work=()=>{const o={};AX.forEach(a=>o[a]=S.mach[a]-S.off[a]);return o};
 const setWork=w=>AX.forEach(a=>S.mach[a]=w[a]+S.off[a]);
 const toast=(t,ms=3500)=>{S.toast=t;S.toastUntil=performance.now()+ms};
@@ -1512,17 +1513,17 @@ function buildMulti(parts){
  const enter=k=>{const w=parts[k];q.push({type:'line',tgtFn:()=>({Z:-S.off.Z}),rapid:true,part:k,label:'Детайл '+(k+1)+'/'+n+' · G'+w+': Z до безопасната височина'},
   {type:'act',dur:0,part:k,label:'Детайл '+(k+1)+'/'+n+' · G'+w,fn:()=>{setWcs(w);S.part=k}})};
  const add=(list,k)=>list.forEach(o=>{const d=dur(o);q.push({...o,part:k,t0:t,tn:t+d});t+=d});
- if(S.parts.order==='tool'){
-  const blocks=[[]];ops.forEach(o=>{if(o.tool&&blocks[blocks.length-1].length)blocks.push([]);blocks[blocks.length-1].push(o)});
-  blocks.forEach(bl=>parts.forEach((_,k)=>{enter(k);add(bl,k)}));
- }else parts.forEach((_,k)=>{enter(k);add(ops,k)});
+ /* по инструмент: блок до следващото M6 на всички детайли, после следващият блок */
+ const blocks=[[]];ops.forEach(o=>{if(o.tool&&blocks[blocks.length-1].length)blocks.push([]);blocks[blocks.length-1].push(o)});
+ blocks.forEach(bl=>parts.forEach((_,k)=>{enter(k);add(bl,k)}));
  S.mTot=t;return q;
 }
 function startProg(L){
  S.runTime=0;S.curPi=-1;S.progLine=-1;S.startLine=null;
  {const parts=partsSel(),own=progOwnWcs();
+  {const bad=parts.filter(n=>!wcsSet(n));if(parts.length>1&&bad.length){toast(bad.map(n=>'G'+n).join(', ')+' е отметната, но не е зададена. Засечете я в „Офсети“ или махнете отметката.',7000);return}}
   if(parts.length>1&&!(L>0)&&!own.length){S.multi={n:parts.length,list:parts,prev:S.wcs};S.mDone=0;S.tDone0=0;S.part=0;runOps(buildMulti(parts),'prog');
-   toast(parts.length+' детайла ('+parts.map(w=>'G'+w).join(', ')+'), '+(S.parts.order==='tool'?'по инструмент':'по детайл'));return}
+   toast(parts.length+' детайла ('+parts.map(w=>'G'+w).join(', ')+'), по инструмент');return}
   if(parts.length>1&&own.length)toast('Програмата сама избира '+own.join(', ')+'. Изпълнява се както е написана, без избора на детайли.',6000);
   S.multi=null}
  const pi0=L>0?Math.max(0,PROG_OPS.findIndex(o=>o.line>=L)):0;S.tDone0=doneNominal(pi0);
@@ -2311,7 +2312,7 @@ PDEF.accTmo={k:'accTmo',n:'Автоматичен изход',u:'мин',t:'num'
 PDEF.ioName={k:'ioName',n:'Име',t:'text',h:'Името се вижда в „Диагностика“ и в макросите. Празно име означава резерв. Клавишът БГ/EN сменя езика.'};
 const MTN={mill:'Фреза / рутер',laser:'Лазер',plasma:'Плазма',lathe:'Струг'};
 const NAVS={mill:['run','jog','mdi','tools','probe','diag','set'],laser:['run','jog','mdi','laser','diag','set'],plasma:['run','jog','mdi','plasma','diag','set'],lathe:['run','jog','mdi','tools','diag','set']};
-const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Пробинг',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
+const NAVN={run:'Работа',jog:'Ръчно',mdi:'MDI',tools:'Инструменти',probe:'Офсети',laser:'Лазер',plasma:'Плазма',diag:'Диагностика',set:'Настройки'};
 const VSEG={mill:[['iso','3D'],['top','XY'],['front','XZ'],['side','YZ']],laser:[['top','XY'],['iso','3D']],plasma:[['top','XY'],['iso','3D']],lathe:[['lathe','XZ'],['iso','3D']]};
 const DEFV={mill:'iso',laser:'top',plasma:'top',lathe:'lathe'};
 const AXK={'6':['A','B','C'],'3':[],'4a':['A'],'5ac':['A','C'],'5bc':['B','C'],'5ab':['A','B']};
@@ -2430,30 +2431,25 @@ end</pre></div>`;
   help.innerHTML='Lua, а не Python: малък (около 300 KB), бърз, вгражда се лесно в C и е с лиценз MIT. Скриптовете се редактират само със сервизна парола и се проверяват преди запис.';
  }
 }
-/* ---------- Нулеви точки и детайли ---------- */
-function wcsRender(){
- const ax=AX.filter(a=>S.active[a]),run=S.runKind==='prog'&&(S.state==='run'||S.state==='hold');
- $('#wcsHead').innerHTML=`<tr><th>Нула</th><th>Активна</th>${ax.map(a=>`<th class="n">${a} маш.</th>`).join('')}<th>В програмата</th></tr>`;
- $('#wcsBody').innerHTML=WCS.map(n=>{const o=S.wcsOff[n],on=S.parts.on.includes(n),k=partsSel().indexOf(n);
-  return`<tr class="${n===S.wcs?'sel':''}"><td class="tn">G${n}</td><td><button class="btn sm${n===S.wcs?' on':''}" data-act="wcs-act" data-v="${n}" type="button">${n===S.wcs?'активна':'избери'}</button></td>`+
-  ax.map(a=>`<td class="n"><button class="btn sm wv" data-act="wcs-v" data-v="${n}" data-a="${a}" type="button">${wcsSet(n)?o[a].toFixed(3):'—'}</button></td>`).join('')+
-  `<td><button class="btn sm${on?' on':''}" data-act="wcs-on" data-v="${n}" type="button">${on?'детайл '+(k+1):'—'}</button></td></tr>`}).join('');
- segOn('#wcsOrd .btn',S.parts.order);
- const P=partsSel(),own=progOwnWcs(),T=PINFO.tools||[],w=[];
- set($('#wcsInfo'),P.length>1?P.length+' детайла · около '+hms(P.length*(PINFO.t||0)/SIMX):'един детайл · '+WN());
- let st=[];
- if(P.length>1){st.push('Между детайлите Z се вдига до машинна Z 0, после се избира следващата нула.');
-  st.push(S.parts.order==='tool'&&T.length<2?'Програмата е с един инструмент, затова редът е по детайл: '+P.map((n,i)=>(i+1)+'. G'+n).join(' → '):S.parts.order==='tool'?T.map(t=>'T'+t+': '+P.map(n=>'G'+n).join(', ')).join(' · ')+' (по-малко смени)':P.map((n,i)=>(i+1)+'. G'+n).join(' → ')+', цялата програма на всеки');
-  st.push('Програмата е за един детайл; G54 в нея означава „текущият детайл“.')}
- else st.push('Отметнете поне две нули в „В програмата“, за да се изработят няколко детайла с една програма. Активната нула е тази, в която се нулира и измерва (Ръчно, Пробинг, карта на височините).');
- $('#wcsSteps').innerHTML='<ol>'+st.map(x=>`<li>${x}</li>`).join('')+'</ol>';
- if(own.length)w.push('Заредената програма сама избира '+own.join(', ')+'. Тя се изпълнява както е написана, без избора на детайли.');
- P.filter(n=>!wcsSet(n)).forEach(n=>w.push('G'+n+' не е зададена (всички отмествания са 0).'));
- if(run)w.push('Машината работи: таблицата се променя само при спряна машина.');
- $('#wcsWarn').innerHTML=w.join('<br>');
+/* ---------- Офсети: G54 основна, G55–G59 допълнителни детайли ---------- */
+function offRender(){
+ const ax=AX.filter(a=>S.active[a]),run=S.runKind==='prog'&&(S.state==='run'||S.state==='hold'),P=partsSel();
+ $('#offHead').innerHTML=`<tr><th>Детайл</th><th>Нула</th>${ax.map(a=>`<th class="n">${a}</th>`).join('')}</tr>`;
+ $('#offBody').innerHTML=WCS.map(n=>{const o=S.wcsOff[n],on=n===54||S.parts.on.includes(n),k=P.indexOf(n),act=n===S.wcs;
+  return`<tr class="${act?'sel':''}${on?'':' off'}"><td>${n===54?'<span class="btn sm offchk on lock" title="G54 е основната нула и винаги се изработва">✓</span>':`<button class="btn sm offchk${on?' on':''}" data-act="wcs-on" data-v="${n}" type="button">${on?'✓':''}</button>`}</td>`+
+  `<td>${on?`<button class="btn sm offn0${act?' on':''}" data-act="wcs-act" data-v="${n}" type="button" title="${act?'активна: пробникът и „Ръчно“ записват тук':'натиснете, за да е активна'}">G${n}${P.length>1?`<small>${k+1}</small>`:''}</button>`:`<span class="offn1">G${n}</span>`}</td>`+
+  ax.map(a=>`<td class="n">${on?`<button class="btn sm wv" data-act="wcs-v" data-v="${n}" data-a="${a}" type="button">${wcsSet(n)?o[a].toFixed(3):'—'}</button>`:'<span class="offdim">'+(wcsSet(n)?o[a].toFixed(3):'—')+'</span>'}</td>`).join('')+
+  `</tr>`}).join('');
+ set($('#offInfo'),P.length>1?P.length+' детайла · ~'+hms(P.length*(PINFO.t||0)/SIMX):'G54');
+ const own=progOwnWcs(),w=[];
+ w.push('Активна: <b>'+WN()+'</b> (натиснете нулата). В нея записват циклите на пробника и „X = 0“ / „Задай“ в „Ръчно“. Отметнатите G55–G59 се изработват с G54 с една програма, по инструмент.');
+ P.filter(n=>!wcsSet(n)).forEach(n=>w.push('<span class="w">G'+n+' не е зададена: изберете я като активна и я засечете.</span>'));
+ if(own.length)w.push('<span class="w">Заредената програма сама избира '+own.join(', ')+': тя се изпълнява както е написана, без допълнителните детайли.</span>');
+ if(run)w.push('Машината работи: офсетите се променят само при спряна машина.');
+ $('#offNote').innerHTML=w.join('<br>');
  $('#wcsSkip').hidden=!(S.multi&&run);
 }
-let wcsKey='';function wcsLive(){const k=S.wcs+'|'+S.state+'|'+S.part+'|'+!!S.multi;if(k!==wcsKey){wcsKey=k;wcsRender()}}
+let offKey='';function offLive(){const k=S.wcs+'|'+S.state+'|'+S.part+'|'+!!S.multi+'|'+S.parts.on.join(',');if(k!==offKey){offKey=k;offRender()}}
 function renderSet(){
  $('.screen.sets').classList.toggle('login',S.acc.level===0);
  if(S.acc.level===0){renderLogin();return}
@@ -2743,8 +2739,8 @@ const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'�
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
 function updStatus(now){
  set($('#sbWcsN'),WN());set($('#sbPart'),S.multi&&S.part!=null?' · детайл '+(S.part+1)+'/'+S.multi.n:'');
- {const n=partsSel().length;set($('#btnParts'),n>1?'Детайли ×'+n:'Детайли');$('#btnParts').classList.toggle('on',n>1);set($('#btnWcsJ'),WN()+' ▾');set($('#jogWcsT'),'Работна позиция · '+WN())}
- if(!$('#wcsDlg').hidden)wcsLive();
+ set($('#jogWcsT'),'Работна позиция · '+WN());
+ if(S.screen==='probe')offLive();
  {const c=$('#sbMap'),on=hmOn()&&MT()==='mill';c.hidden=!on;if(on){const w=work(),z=hmComp(w.X,w.Y),tl='Z следва картата на височините · тук '+(z>=0?'+':'')+z.toFixed(3)+' мм';if(c.title!==tl)c.title=tl}}
  const p=$('#sbState'),off=!S.enabled&&S.state==='idle';p.className='pill '+(off?'off':S.state);set(p,off?'ИЗКЛЮЧЕНА':STATE_TXT[S.state]);
  {const r=$('#btnReset');r.className='btn rst'+(S.resetHoming?' homing':S.ready&&S.enabled?' ok':'');
@@ -2801,7 +2797,7 @@ const panel=$('#panel');
 /* един изглед на траекторията: преместваме го в екрана, който е отворен (Работа, Ръчно, MDI) */
 function moveCv(scr){const c=$(`[data-cvslot="${scr}"]`),g=$(`[data-segslot="${scr}"]`);if(!c)return;
  const w=$('.canvas-wrap');if(w.parentElement!==c)c.appendChild(w);const sg=$('#viewSeg');if(g&&sg.parentElement!==g)g.appendChild(sg)}
-function go(scr){S.screen=scr;moveCv(scr);$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
+function go(scr){S.screen=scr;moveCv(scr);if(scr==='probe'){offKey='';offRender()}$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
 function segOn(sel,v){$$(sel).forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)))}
 panel.addEventListener('pointerdown',()=>{S.acc.last=performance.now()},true);
 panel.addEventListener('click',e=>{
@@ -3017,17 +3013,16 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
-  case'wcs-open':$('#wcsDlg').hidden=false;wcsKey='';wcsRender();break;
-  case'wcs-close':$('#wcsDlg').hidden=true;break;
-  case'wcs-act':{const n=+v;if(S.state!=='idle'){toast('Спрете машината, за да смените активната нула');break}setWcs(n);wcsRender();toast('Активна нула: G'+n);break}
-  case'wcs-on':{const n=+v,L=S.parts.on;if(S.runKind==='prog'&&S.state!=='idle'){toast('Спрете програмата');break}
-   if(L.includes(n)){if(L.length===1){toast('Поне една нула трябва да е избрана');break}L.splice(L.indexOf(n),1)}else L.push(n);wcsRender();break}
-  case'wcs-ord':if(S.runKind==='prog'&&S.state!=='idle'){toast('Спрете програмата');break}S.parts.order=v;wcsRender();break;
+  case'wcs-act':{const n=+v;if(S.state!=='idle'){toast('Спрете машината, за да смените активната нула');break}setWcs(n);offRender();toast('Активна нула: G'+n+'. Пробникът и „Ръчно“ записват в нея.');break}
+  case'wcs-on':{const n=+v,L=S.parts.on;if(S.state!=='idle'){toast('Спрете машината');break}
+   if(L.includes(n)){L.splice(L.indexOf(n),1);if(S.wcs===n)setWcs(54);toast('G'+n+' вече не е детайл')}
+   else{L.push(n);setWcs(n);toast(wcsSet(n)?'G'+n+' е детайл и е активна':'G'+n+' е детайл и е активна: засечете нулата с цикъл на пробника или въведете координатите')}
+   offRender();break}
   case'wcs-v':{const n=+v,a=b.dataset.a;if(S.state!=='idle'){toast('Спрете машината');break}
-   S.nd={a:'wcs',k:'wcsV',txt:'',get:()=>S.wcsOff[n][a],set:x=>{S.wcsOff[n][a]=x},after:wcsRender};$('#numDlg').hidden=false;renderNd();break}
+   S.nd={a:'wcs',k:'wcsV',txt:'',get:()=>S.wcsOff[n][a],set:x=>{S.wcsOff[n][a]=x},after:offRender};$('#numDlg').hidden=false;renderNd();break}
   case'wcs-skip':{if(!S.multi){break}if(S.state!=='hold'){toast('Натиснете „Пауза“, после пропуснете детайла');break}
    const k=S.part,w=S.multi.list[k];S.queue=S.queue.filter(o=>o.part!==k);if(S.cur&&S.cur.part===k)S.cur=null;S.state='run';
-   if(!S.queue.length){finishRun();break}$('#wcsDlg').hidden=true;toast('Детайл '+(k+1)+' (G'+w+') е пропуснат');break}
+   if(!S.queue.length){finishRun();break}toast('Детайл '+(k+1)+' (G'+w+') е пропуснат');break}
   case'lg-tab':S.lgTab=v;renderSet();break;
   case'lg-sel':S.lgSel=+v;renderSet();break;
   case'lg-on':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(mc){mc.on=+v;renderSet()}break}
