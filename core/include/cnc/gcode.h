@@ -47,7 +47,7 @@ typedef struct {
 int gc_parse_line(const char *s, gc_block_t *b, gc_err_t *e);   /* 0 = ok */
 
 /* ---------- таблици: нули и инструменти ---------- */
-#define GC_WCS_N 106       /* 0 не се ползва; 1–6 = G54–G59; 7–105 = G154 P1–P99 */
+#define GC_WCS_N 106       /* 0 не се ползва; 1–6 = G54–G59; 7–105 = G154 P1–P99 (Haas: G110–G129 = P1–P20) */
 #define GC_TOOL_N 256      /* T0 … T255 */
 
 typedef struct {
@@ -83,7 +83,7 @@ typedef enum {
     GC_END,                /* M2 / M30 / край на файла */
 } gc_kind_t;
 
-enum { GC_COOL_MIST = 1, GC_COOL_FLOOD = 2, GC_COOL_TSC = 4 };
+enum { GC_COOL_MIST = 1, GC_COOL_FLOOD = 2, GC_COOL_TSC = 4, GC_COOL_AIR = 8 };   /* TSC: през шпиндела (M88), AIR: въздух (M83) */
 enum { GC_PLANE_XY = 17, GC_PLANE_ZX = 18, GC_PLANE_YZ = 19 };
 
 typedef struct {

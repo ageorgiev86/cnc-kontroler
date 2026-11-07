@@ -45,6 +45,7 @@ int gc_cmd_format(const gc_cmd_t *c, unsigned axes, char *out, size_t n)
         if (c->ival & GC_COOL_MIST) PUT(" MIST");
         if (c->ival & GC_COOL_FLOOD) PUT(" FLOOD");
         if (c->ival & GC_COOL_TSC) PUT(" TSC");
+        if (c->ival & GC_COOL_AIR) PUT(" AIR");
         break;
     case GC_TOOL_PREP: PUT("TOOL_PREP T%d", c->ival); break;
     case GC_TOOL_CHANGE: PUT("TOOL_CHANGE T%d", c->ival); break;

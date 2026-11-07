@@ -51,6 +51,9 @@ static int group_of(int g)
     case 800: return GR_CYCLE;
     case 980: case 990: return GR_RETURN;
     case 540: case 541: case 550: case 560: case 570: case 580: case 590: case 1540: return GR_WCS;
+    case 1100: case 1110: case 1120: case 1130: case 1140: case 1150: case 1160: case 1170: case 1180: case 1190:
+    case 1200: case 1210: case 1220: case 1230: case 1240: case 1250: case 1260: case 1270: case 1280: case 1290:
+        return GR_WCS;   /* Haas G110–G129 = G154 P1–P20 */
     case 610: case 611: case 640: case 1870: return GR_PATH;
     default: return GR_NONE;
     }
@@ -65,7 +68,7 @@ static const char *later_g(int g)
     case 410: case 411: case 420: case 421:
         return "идва в стъпка 2а (компенсация на радиуса)";
     case 50: case 51: case 52: case 120: case 130: case 150: case 160:
-    case 431: case 500: case 510: case 520: case 680: case 690: case 700: case 710: case 720: case 930: case 1500:
+    case 431: case 500: case 501: case 510: case 511: case 520: case 680: case 690: case 700: case 710: case 720: case 930: case 1500:
         return "идва в стъпка 5";
     case 382: case 383: case 384: case 385:
         return "идва в стъпка 6 (пробник)";
@@ -278,7 +281,7 @@ static int do_g10(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
             if (!GC_HAS(b, AXL[a])) continue;
             double v = GC_VAL(b, AXL[a]) * unit(in, a);
             double *o = &in->tab->wcs[w][a];
-            if (direct) *o = (haas && in->incr) ? *o + v : v;
+            if (direct) *o = in->incr ? *o + v : v;   /* G91: добавя (така пишат и постпроцесорите на SolidCAM) */
             else *o = in->pos[a] - in->g92[a] - (a == GC_Z && in->tlo_on ? in->tlo : 0) - v;
         }
         emit_simple(in, GC_SET_WCS, w, 0, line);
@@ -380,7 +383,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
             if (b->m[j] == m) return fail(e, b->mcol[k], "M%d се повтаря в реда", m);
         switch (m) {
         case 0: case 1: case 2: case 30: case 3: case 4: case 5: case 6: case 7: case 8: case 9:
-        case 19: case 41: case 42: case 48: case 49: case 88: case 89:
+        case 19: case 41: case 42: case 48: case 49: case 83: case 84: case 88: case 89:
             break;
         case 97: case 98: case 99:
             break;
@@ -448,9 +451,11 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     int cool = in->cool;
     if (has_m(b, 9)) cool = 0;
     if (has_m(b, 89)) cool &= ~GC_COOL_TSC;
+    if (has_m(b, 84)) cool &= ~GC_COOL_AIR;
     if (has_m(b, 7)) cool |= GC_COOL_MIST;
     if (has_m(b, 8)) cool |= GC_COOL_FLOOD;
     if (has_m(b, 88)) cool |= GC_COOL_TSC;
+    if (has_m(b, 83)) cool |= GC_COOL_AIR;
     if (cool != in->cool || has_m(b, 9)) {
         in->cool = cool;
         emit_simple(in, GC_COOLANT, cool, 0, line);
@@ -502,6 +507,8 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
             int p = (int)lround(GC_VAL(b, 'P'));
             if (p < 1 || p >= GC_WCS_N) return fail(e, b->col['P' - 'A'], "G59 P трябва да е от 1 до %d", GC_WCS_N - 1);
             w = p;
+        } else if (g >= 1100) {
+            w = 7 + (g - 1100) / 10;
         } else {
             w = (g - 540) / 10 + 1;
         }
