@@ -505,7 +505,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
       <p>Интерактивен макет за HDMI екран с USB тъч. Машината и данните са симулирани.</p>
     </div>
     <div class="resbox" role="group" aria-label="Резолюция на екрана">
-      <span>Резолюция</span>
+      <span>Монитор</span>
       <button class="resbtn" data-res="600x1024" type="button">600×1024</button>
       <button class="resbtn on" data-res="800x1280" type="button">800×1280</button>
       <button class="resbtn" data-res="1080x1920" type="button">1080×1920</button>
@@ -893,6 +893,16 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <div class="grid3" style="grid-template-columns:1fr 1.6fr">
             <button class="btn" data-act="hm-cancel" type="button">Затвори</button>
             <button class="btn go" data-act="hm-go" id="hmGo" type="button">Сканирай повърхността</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal" id="resDlg" hidden>
+        <div class="dlg" role="dialog" aria-label="Потвърждение на режима на екрана">
+          <div class="dlg-h"><b>Запазване на режима на екрана?</b></div>
+          <div class="dlg-note" id="resN"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1fr">
+            <button class="btn" data-act="res-back" type="button">Върни</button>
+            <button class="btn go" data-act="res-keep" type="button">Запази</button>
           </div>
         </div>
       </div>
@@ -2110,6 +2120,17 @@ const P_PRB=[
 ];
 P_PRB.forEach(p=>{if(p.k)PDEF[p.k]=p});
 const isLu=D=>!!D.luOn;
+/* ---------- Дисплей ----------
+   MON е свързаният монитор (бутоните „Резолюция“ над макета). Режимите идват от монитора (в DRM: списъкът на конектора),
+   а „Автоматично“ е предпочитаният му режим. Завъртането прави от хоризонтален монитор портретен и обратно. */
+let MON=[800,1280];
+const DMODES=[[1920,1200],[1920,1080],[1680,1050],[1600,900],[1280,1024],[1280,800],[1280,720],[1080,1920],[1024,768],[1024,600],[800,1280],[800,600],[800,480],[600,1024]];
+const monModes=()=>{const[w,h]=MON,L=DMODES.filter(([a,b])=>a<=w&&b<=h&&(a>=b)===(w>=h));if(!L.some(([a,b])=>a===w&&b===h))L.unshift([w,h]);return L};
+const resOf=D=>{let r=D.dRes==='auto'?[...MON]:D.dRes.split('x').map(Number);if(+D.dRot%180)r=[r[1],r[0]];return r};
+const P_DISP=[
+ {k:'dRes',n:'Резолюция',t:'enum',get opts(){return[['auto','Автоматично'],...monModes().map(([a,b])=>[a+'x'+b,a+'×'+b])]},h:'Режимът на екрана. „Автоматично“ е предпочитаният режим на монитора (обикновено родният). В списъка са само режимите, които мониторът поддържа. По-ниска резолюция = по-едри елементи и по-малко работа за процесора. След „Запиши“ новият режим трябва да се потвърди до 15 s, иначе се връща старият.'},
+ {k:'dRot',n:'Завъртане',t:'enum',opts:[['0','0°'],['90','90°'],['180','180°'],['270','270°']],h:'Завърта картината. 90° или 270° прави хоризонтален монитор портретен (800×1280 по подразбиране за машината). Тъчът се завърта заедно с картината. Завъртането се смята от процесора, затова на слаба платка е по-бавно от родната ориентация.'}
+];
 const P_LUBE=[
  {k:'luOn',n:'Автоматично смазване',t:'bool',on:'Включено',off:'Изключено',h:'Помпата се включва сама през зададения интервал. Изходът е този с функция „Мазане“ в Настройки → Входове/изходи.'},
  {k:'luMode',n:'Интервал по',t:'enum',opts:[['time','Време в движение'],['dist','Изминат път']],show:isLu,h:'Броячът расте само когато осите се движат, а не когато машината стои включена. „Изминат път“ сумира пътя на всички линейни оси.'},
@@ -2121,7 +2142,8 @@ const P_LUBE=[
  {k:'luLow',n:'При ниско ниво на маслото',t:'enum',opts:[['warn','Предупреждение'],['end','Стоп след програмата'],['alarm','Аларма веднага']],show:isLu,h:'По входа с функция „Ниво масло“. „Стоп след програмата“ оставя текущата програма да завърши, но не позволява нова, докато не се долее.'}
 ];
 P_LUBE.forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
+P_DISP.forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
 (()=>{const c='работни координати';[
  ['hmX0','Мин X',c,3,'Левият край на областта.'],['hmX1','Макс X',c,3,'Десният край. „По програмата“ взима областта от заредената програма.'],
  ['hmY0','Мин Y',c,3,'Предният край.'],['hmY1','Макс Y',c,3,'Задният край.'],
@@ -2180,6 +2202,7 @@ S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
 S.cfg.mag={mOn:1,atcOn:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
+S.cfg.disp={dRes:'auto',dRot:'0'};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
 S.netOk=false;
 S.draft=clone(S.cfg);
@@ -2200,7 +2223,6 @@ const LVN=['Оператор','Настройчик','Производител']
 const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['acc','Достъп']];
 const STATIC={
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
- disp:[['Изход','HDMI · DRM'],['Тъч','USB · evdev'],['Резолюция',null],['Калибриране','3 точки'],['Безопасна Z','+5.000 G54']]
 };
 $('#setNav').innerHTML=SECS.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('');
 function fmtP(p,v){
@@ -2243,13 +2265,13 @@ function renderSet(){
  }else if(form){
   const D=S.draft[sec],C=S.cfg[sec];
   const rows=FORMS[sec].filter(p=>!(p.only&&!p.only.includes(S.draft.mag.mtype))&&!(p.show&&!p.show(D)));
-  body.innerHTML=(sec==='net'?netStatus():'')+`<table class="pf"><tbody>`+rows.map(p=>{
+  body.innerHTML=(sec==='net'?netStatus():sec==='disp'?dispStatus():'')+`<table class="pf"><tbody>`+rows.map(p=>{
    if(p.t==='hdr')return`<tr><td class="grp" colspan="2">${p.n}</td></tr>`;
    const v=D[p.k],chg=v!==C[p.k]?' chg':'';
    const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
-   (sec==='mach'||sec==='sp'?'':sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   (sec==='mach'||sec==='sp'||sec==='disp'?'':sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
   help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
@@ -2257,6 +2279,22 @@ function renderSet(){
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
  }
+}
+function dispStatus(){
+ const[w,h]=resOf(S.cfg.disp),[dw,dh]=resOf(S.draft.disp),ch=dw!==w||dh!==h;
+ return`<div class="netst"><div><span>Монитор</span><b class="ok">HDMI-A-1 · ${MON.join('×')} (предпочитан)</b></div><div><span>Сега</span><b>${w}×${h} · ${h>w?'портрет':'хоризонтално'}</b></div>`+
+  (ch?`<div><span>След „Запиши“</span><b>${dw}×${dh} · ${dh>dw?'портрет':'хоризонтално'}</b></div>`:'')+`<div><span>Тъч</span><b>USB · libinput · калибриран (3 точки)</b></div></div>`;
+}
+let resT=null;
+function resAsk(old){
+ S.resOld=old;let n=15;const d=$('#resDlg');d.hidden=false;
+ const tk=()=>{set($('#resN'),'Връщане към предишния режим след '+n+' s');if(n--<=0)resKeep(false)};clearInterval(resT);tk();resT=setInterval(tk,1000);
+}
+function resKeep(ok){
+ clearInterval(resT);resT=null;$('#resDlg').hidden=true;
+ if(!ok&&S.resOld){S.cfg.disp=clone(S.resOld);S.draft.disp=clone(S.resOld);fit();toast('Върнат е предишният режим на екрана')}
+ else toast('Режимът на екрана е запазен: '+resOf(S.cfg.disp).join('×'));
+ S.resOld=null;renderSet();
 }
 function netStatus(){
  const N=S.cfg.net,ip=N.mode==='dhcp'?'192.168.1.37 (DHCP)':N.ip+' (статичен)';
@@ -2632,6 +2670,8 @@ panel.addEventListener('click',e=>{
    if(d.set){d.set(val);$('#numDlg').hidden=true;if(d.after)d.after();break}
    S.draft[d.a][d.k]=val;$('#numDlg').hidden=true;renderSet();break}
   case'pe':S.draft[b.dataset.a][b.dataset.k]=v;S.setHelp=b.dataset.k;renderSet();break;
+  case'res-keep':resKeep(true);break;
+  case'res-back':resKeep(false);break;
   case'teach':{
    const need=v==='ts-z'||v==='magz'?['Z']:v==='mtc'?['X','Y','Z']:['X','Y'],nh=need.filter(a=>!S.homed[a]);
    if(nh.length){toast('Осите '+nh.join(', ')+' не са реферирани. Позицията няма да е вярна. Натиснете HOME.');break}
@@ -2671,8 +2711,10 @@ panel.addEventListener('click',e=>{
    const axCh=tCh||['miAx','lzAx','plAx','ltY'].some(k=>S.cfg.mach[k]!==S.draft.mach[k]);
    if(axCh){const pr=axProf(S.draft.mach);AX.forEach(a=>{const on=pr.includes(a)?1:0;if(S.draft[a].active!==on){S.draft[a].active=on;S.homed[a]=false}})}
    if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
+   const dOld=clone(S.cfg.disp),dCh=JSON.stringify(dOld)!==JSON.stringify(S.draft.disp);
    logChanges();
-   S.cfg=clone(S.draft);AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>magCfg().mn)S.magPos=1;
+   S.cfg=clone(S.draft);
+   if(dCh){fit();resAsk(dOld);renderSet();break}AX.forEach(a=>S.active[a]=!!S.cfg[a].active);if(S.magPos>magCfg().mn)S.magPos=1;
    if(tCh){applyType(true);renderSet();toast('Машината е „'+MTN[MT()]+'“. Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Натиснете HOME.',7000);break}
    if(axCh)toast('Активни оси: '+axProf(S.cfg.mach).join(', ')+'. Новите оси трябва да се реферират.',7000);
    if(mCh){['mem','usb','net'].forEach(k=>FILES[k].forEach(f=>delete f.c));if(LOADED)loadProgram(LOADED);applyType(false)}
@@ -2868,7 +2910,7 @@ panel.addEventListener('pointerdown',e=>{
 /* ---------- Мащаб ---------- */
 const vp=$('#viewport');let RES=[800,1280];
 function fit(){
- const[W,H]=RES,portrait=H>W;panel.classList.toggle('portrait',portrait);
+ RES=resOf(S.cfg.disp);const[W,H]=RES,portrait=H>W;panel.classList.toggle('portrait',portrait);
  panel.style.width=W+'px';panel.style.height=H+'px';panel.style.fontSize=(Math.min(W,H)/800*16)+'px';
  const availH=Math.max(480,window.innerHeight-32);
  const s=Math.min(1,vp.clientWidth/W,portrait?availH/H:1);panel.style.transform=`scale(${s})`;
@@ -2876,8 +2918,10 @@ function fit(){
  if(S.screen==='files')requestAnimationFrame(previewFile);
 }
 document.querySelectorAll('.resbtn').forEach(b=>b.addEventListener('click',()=>{
- RES=b.dataset.res.split('x').map(Number);document.querySelectorAll('.resbtn').forEach(x=>x.classList.toggle('on',x===b));
- set($('#setRes'),RES.join('×'));fit();
+ MON=b.dataset.res.split('x').map(Number);document.querySelectorAll('.resbtn').forEach(x=>x.classList.toggle('on',x===b));
+ /* друг монитор: режим, който той не поддържа, става „Автоматично“ */
+ for(const D of[S.cfg.disp,S.draft.disp])if(D.dRes!=='auto'&&!monModes().some(([a,c])=>a+'x'+c===D.dRes))D.dRes='auto';
+ fit();if(S.screen==='set')renderSet();
 }));
 new ResizeObserver(fit).observe(vp);window.addEventListener('resize',fit);
 
