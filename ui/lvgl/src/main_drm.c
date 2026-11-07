@@ -1,7 +1,9 @@
 /* Интерфейсът на Linux платката: DRM/KMS за екрана, libinput за мишка и тъч.
- *   cnc-ui [--drm /dev/dri/card0] [--prog файл.nc]
+ *   cnc-ui [--drm /dev/dri/card0] [--mode 1920x1200] [--rot 0|90|180|270] [--modes] [--prog файл.nc]
+ * Без --mode и --rot се ползват Настройки → Дисплей (auto = родният режим на монитора).
  * Устройството може да се зададе и с CNC_DRM_DEVICE. Без него се търси автоматично.
  * Курсорът на мишката се рисува от LVGL (няма X сървър). */
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +11,9 @@
 #include <unistd.h>
 
 #include "lvgl.h"
+#include "config.h"
+#include "drm_disp.h"
+#include "machine.h"
 #include "program.h"
 #include "ui.h"
 
@@ -50,30 +55,43 @@ static lv_obj_t *make_cursor(void)
     return img;
 }
 
+static volatile sig_atomic_t quit;
+static void on_sig(int s) { (void)s; quit = 1; }
+
 int main(int argc, char **argv)
 {
-    const char *dev = getenv("CNC_DRM_DEVICE");
+    const char *dev = getenv("CNC_DRM_DEVICE"), *mode = NULL;
+    int rot = -1, list = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--drm") && i + 1 < argc) dev = argv[++i];
+        else if (!strcmp(argv[i], "--mode") && i + 1 < argc) mode = argv[++i];
+        else if (!strcmp(argv[i], "--rot") && i + 1 < argc) rot = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--modes")) list = 1;
         else if (!strcmp(argv[i], "--prog") && i + 1 < argc) {
             if (program_load_file(argv[++i])) { fprintf(stderr, "Файлът не може да се прочете: %s\n", argv[i]); return 1; }
-        } else { fprintf(stderr, "Употреба: cnc-ui [--drm /dev/dri/cardN] [--prog файл.nc]\n"); return 2; }
+        } else { fprintf(stderr, "Употреба: cnc-ui [--drm /dev/dri/cardN] [--mode ШxВ] [--rot 0|90|180|270] [--modes] [--prog файл.nc]\n"); return 2; }
     }
 
     lv_init();
     lv_tick_set_cb(tick_ms);
 
-    lv_display_t *disp = lv_linux_drm_create();
     char *found = NULL;
     if (!dev) dev = found = lv_linux_drm_find_device_path();
     if (!dev) { fprintf(stderr, "Не е намерено DRM устройство (/dev/dri/card*)\n"); return 1; }
-    if (lv_linux_drm_set_file(disp, dev, -1) != LV_RESULT_OK) {
-        fprintf(stderr, "DRM устройството %s не може да се отвори (свързан ли е екран? права?)\n", dev);
-        return 1;
-    }
-    printf("Екран: %s, %dx%d\n", dev, (int)lv_display_get_horizontal_resolution(disp),
-           (int)lv_display_get_vertical_resolution(disp));
+    if (list) { drm_disp_list(dev); return 0; }
+
+    /* настройките трябват преди екрана: режим и завъртане */
+    cfg_init();
+    cfg_set_file(ui_config_path());
+    if (!mode) mode = cfg_str("disp.dRes");
+    if (rot < 0) rot = (int)cfg_num("disp.dRot");
+    lv_display_t *disp = drm_disp_create(dev, mode, rot);
+    if (!disp) return 1;
+    printf("Екран: %s, %dx%d, завъртане %d°\n", dev, (int)lv_display_get_horizontal_resolution(disp),
+           (int)lv_display_get_vertical_resolution(disp), rot);
     if (found) lv_free(found);
+    signal(SIGINT, on_sig);
+    signal(SIGTERM, on_sig);
 
     /* мишка (с курсор) и тъч (без курсор) */
     char *mouse = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, true);
@@ -94,13 +112,18 @@ int main(int argc, char **argv)
         }
     }
     if (!mouse && !touch) fprintf(stderr, "Няма мишка или тъч (libinput). Потребителят в група input ли е?\n");
+    else if (!mouse) fprintf(stderr, "Няма мишка (само тъч). Провери с: sudo libinput list-devices\n");
 
     ui_create(disp);
-    ui_load_config(NULL);
+    machine_apply_cfg();
+    printf("Работи. Спира се с Ctrl+C.\n");
 
-    for (;;) {
+    while (!quit) {
         uint32_t idle = lv_timer_handler();
         if (idle > 10) idle = 10;
         usleep(idle * 1000);
     }
+    drm_disp_close();
+    printf("\nСпряно.\n");
+    return 0;
 }

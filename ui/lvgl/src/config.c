@@ -1,4 +1,5 @@
 #include "config.h"
+#include "io.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +94,7 @@ void cfg_init(void)
     add("acc.pin1", "1111");
     add("acc.pin2", "2222");
     add("acc.tmo", "10");
+    io_defaults();   /* входовете и изходите: преди четенето на файла */
 }
 
 static const char *val(const char *key, bool draft)

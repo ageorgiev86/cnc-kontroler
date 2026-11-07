@@ -227,6 +227,19 @@ void ui_create(lv_display_t *disp)
 }
 
 /* Настройките се пазят в $CNC_UI_CONF или ~/.config/cnc-ui.conf (записва ги „Запиши“) */
+const char *ui_config_path(void)
+{
+    static char p[400];
+    const char *e = getenv("CNC_UI_CONF"), *h = getenv("HOME");
+    if (e && *e) snprintf(p, sizeof p, "%s", e);
+    else {
+        snprintf(p, sizeof p, "%s/.config", h ? h : ".");
+        mkdir(p, 0755);
+        snprintf(p, sizeof p, "%s/.config/cnc-ui.conf", h ? h : ".");
+    }
+    return p;
+}
+
 void ui_load_config(const char *path)
 {
     char p[400];

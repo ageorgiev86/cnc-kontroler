@@ -6,7 +6,8 @@
 #include "machine.h"
 
 void ui_create(lv_display_t *disp);
-void ui_load_config(const char *path);   /* NULL = ~/.config/cnc-ui.conf */
+void ui_load_config(const char *path);
+const char *ui_config_path(void);   /* NULL = ~/.config/cnc-ui.conf */
 /* Записва текущия екран като BMP (за снимки от симулатора). 0 при успех. */
 int ui_save_bmp(const char *path);
 /* За симулатора: екран по име и тестови действия */
