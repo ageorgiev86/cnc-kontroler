@@ -372,6 +372,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .atc.busy{color:var(--acc)}
 .atc.off{color:var(--warn)}
 .atc .btn{margin-left:auto;flex:none}
+.wcsd{width:52em}.wcst td,.wcst th{padding:.3em .45em}.wcst tr.sel td{background:var(--acc-soft)}
+.wcst .btn{min-height:2.2em;width:100%}.wcst .wv{font:500 .95em var(--f-num);text-transform:none;letter-spacing:0}
+.wcsopt{display:flex;align-items:center;gap:.8em;flex-wrap:wrap}.wcsopt .seg{flex:0 0 auto}
+.chip.wcsc{cursor:pointer}.chip.wcsc #sbPart{color:var(--hi)}
 .lgtabs{margin-bottom:.6em}.lgtabs .btn{flex:0 1 auto}
 .lgm{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:.6em;min-height:0}
 .panel.portrait .lgm{grid-template-columns:minmax(0,1fr)}
@@ -567,7 +571,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <span class="chip" id="sbMode">АВТО</span>
           <span class="chip" id="sbMap" hidden><b>КАРТА Z</b></span>
           <span class="chip" id="sbMach">Фреза / рутер</span>
-          <span class="chip"><b>G54</b> G17 G21 G90</span>
+          <span class="chip wcsc" data-act="wcs-open" title="Нулеви точки и детайли"><b id="sbWcsN">G54</b> G17 G21 G90<span id="sbPart"></span></span>
           <span class="chip" id="sbTool">T5</span>
           <span class="chip mcu"><i class="led on" id="sbLinkLed"></i>MCU 1 kHz</span>
         </div>
@@ -600,7 +604,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="cvslot" data-cvslot="run"><div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div></div>
           </div>
           <div class="card">
-            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
+            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="wcs-open" id="btnParts" type="button">Детайли</button><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
             <div class="slbar" id="slBar" hidden><span>Старт от ред <b id="slN"></b></span><button class="btn sm" data-act="sl-clr" type="button">Отказ</button></div>
             <div class="gc-list" id="gcList"></div>
           </div>
@@ -639,7 +643,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <!-- РЪЧНО -->
         <section class="screen jog" data-screen="jog" hidden>
           <div class="card">
-            <div class="card-h"><span>Работна позиция · G54</span><div class="grp"><button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button><button class="btn sm" data-act="zero-all" type="button">XYZ = 0</button></div></div>
+            <div class="card-h"><span id="jogWcsT">Работна позиция · G54</span><div class="grp"><button class="btn sm" data-act="wcs-open" id="btnWcsJ" type="button">G54 ▾</button><button class="btn sm homebtn" data-act="gozero" type="button">Go to 0</button><button class="btn sm" data-act="zero-all" type="button">XYZ = 0</button></div></div>
             <div class="dro" data-dro="zero"></div>
           </div>
           <div class="card">
@@ -955,6 +959,19 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           </div>
         </div>
       </div>
+      <div class="modal" id="wcsDlg" hidden>
+        <div class="dlg wcsd" role="dialog" aria-label="Нулеви точки и детайли">
+          <div class="dlg-h"><b>Нулеви точки и детайли</b><span id="wcsInfo"></span></div>
+          <div class="tbl-wrap"><table class="tt wcst"><thead id="wcsHead"></thead><tbody id="wcsBody"></tbody></table></div>
+          <div class="wcsopt"><span class="lab">Ред на изпълнение при няколко детайла</span><div class="seg" id="wcsOrd"><button class="btn sm" data-act="wcs-ord" data-v="part" type="button">По детайл</button><button class="btn sm" data-act="wcs-ord" data-v="tool" type="button">По инструмент</button></div></div>
+          <div class="rf-steps" id="wcsSteps"></div>
+          <div class="rf-warn" id="wcsWarn"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1fr">
+            <button class="btn" data-act="wcs-skip" id="wcsSkip" type="button">Пропусни текущия детайл</button>
+            <button class="btn" data-act="wcs-close" type="button">Затвори</button>
+          </div>
+        </div>
+      </div>
       <div class="modal" id="numDlg" hidden>
         <div class="dlg" role="dialog" aria-label="Въвеждане на стойност">
           <div class="dlg-h"><b id="ndT"></b><span id="ndCur"></span></div>
@@ -1005,6 +1022,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <li><b>Работа</b>: „Цикъл старт“ пуска демо програмата. Следи реда, траекторията и следящата грешка до всяка ос.</li>
         <li><b>Ръчно</b> и <b>MDI</b>: движение със стъпка или непрекъснато, нулиране на G54, команди като <code>G0 X10 Y10</code>.</li>
         <li><b>Инструменти</b>: избери ред и „Смени“. Ще видиш последователността на смяната.</li>
+        <li><b>Няколко детайла</b>: „Детайли“ в картата на програмата (или чипът G54 горе), отметни G55 и пусни програмата. Ред „по инструмент“ се вижда с flanets_d80.nc (T4 и T2).</li>
         <li><b>Пробинг</b>: първо зареди T10, после пусни цикъл. Пробникът (PRB1) и toolsetter-ът (PRB2) са отделни входове.</li>
       </ul>
     </div>
@@ -1085,6 +1103,12 @@ const S={
  actLabel:'', toast:'', toastUntil:0,
  flash:{prb:0,ts:0}, cnt:{prb:0,ts:0}, lastEv:null, prbRes:null, prbWarn:false
 };
+/* Нулеви точки G54–G59: S.off винаги сочи активната. Детайли за програмата: S.parts (по детайл / по инструмент). */
+S.wcs=54;S.wcsOff={54:S.off,55:{X:-140,Y:-180,Z:-95,A:0,B:0,C:0},56:{X:-250,Y:-110,Z:-95,A:0,B:0,C:0},57:{X:-140,Y:-110,Z:-95,A:0,B:0,C:0},58:{X:0,Y:0,Z:0,A:0,B:0,C:0},59:{X:0,Y:0,Z:0,A:0,B:0,C:0}};
+S.parts={on:[54],order:'part'};S.multi=null;S.part=null;
+const WCS=[54,55,56,57,58,59],setWcs=n=>{S.wcs=n;S.off=S.wcsOff[n]},WN=()=>'G'+S.wcs;
+const wcsSet=n=>AX.some(a=>S.wcsOff[n][a]!==0);
+const partsSel=()=>WCS.filter(n=>S.parts.on.includes(n));
 const work=()=>{const o={};AX.forEach(a=>o[a]=S.mach[a]-S.off[a]);return o};
 const setWork=w=>AX.forEach(a=>S.mach[a]=w[a]+S.off[a]);
 const toast=(t,ms=3500)=>{S.toast=t;S.toastUntil=performance.now()+ms};
@@ -1175,6 +1199,7 @@ function parse(lines){
   if(gs.includes(90))inc=false;if(gs.includes(91))inc=true;
   if(gs.includes(98))ret=98;if(gs.includes(99))ret=99;
   if(gs.includes(95))fpr=true;if(gs.includes(94))fpr=false;if(gs.includes(96))css=true;if(gs.includes(97))css=false;
+  {const wg=gs.find(g=>g>=54&&g<=59&&Number.isInteger(g));if(wg!=null)out.push({type:'act',line:li,dur:0,wcs:wg,label:'G'+wg,fn:()=>setWcs(wg)})}
   {const mm=ms.find(m=>m>=100&&m<=199);if(mm!=null){const mc=S.cfg.logic.macros.find(x=>x.m===mm);
    if(!mc||!mc.on){out.push({type:'act',line:li,dur:0,label:'M'+mm,fn:()=>{halt();S.state='alarm';S.alarm='M'+mm+(mc?' е изключен':' не е дефиниран')+' (Настройки → Макроси и логика).'}});return}
    if((S.macDepth||0)>=8)return;S.macDepth=(S.macDepth||0)+1;
@@ -1293,10 +1318,10 @@ function canMove(){
  if(S.state!=='idle'){toast('Машината се движи. Изчакайте или натиснете СТОП.');return false}
  return true;
 }
-function halt(){S.mtc=null;S.resetHoming=false;S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
+function halt(){S.mtc=null;if(S.multi)setWcs(S.multi.prev);S.multi=null;S.part=null;S.resetHoming=false;S.queue=[];S.cur=null;S.runKind=null;S.actLabel='';S.sp.on=false;S.magMoving=false;S.orient=false;S.jogHold=null}
 function finishRun(){
  const k=S.runKind;S.state='idle';S.runKind=null;S.cur=null;S.actLabel='';S.F=0;
- if(k==='prog'){S.curPi=Infinity;toast('Програмата приключи за '+mmss(S.runTime))}
+ if(k==='prog'){S.curPi=Infinity;toast((S.multi?S.multi.n+' детайла приключиха':'Програмата приключи')+' за '+mmss(S.runTime));if(S.multi)setWcs(S.multi.prev);S.multi=null;S.part=null}
  if(k==='mdi')toast('MDI командата е изпълнена');
 }
 function spWaitDur(){const SP=S.cfg.sp;if(SP.spWait==='time')return SP.spDelay;
@@ -1304,6 +1329,7 @@ function spWaitDur(){const SP=S.cfg.sp;if(SP.spWait==='time')return SP.spDelay;
 function spOutTxt(){const SP=S.cfg.sp;if(SP.spCtl==='modbus')return'Modbus #'+SP.spAddr;
  const r=S.sp.act<=0?0:SP.spPwmMin+(SP.spPwmMax-SP.spPwmMin)*(S.sp.act-SP.spMin)/Math.max(1,SP.spMax-SP.spMin);return'PWM '+Math.max(0,Math.min(100,r)).toFixed(0)+' %'}
 function begin(m){
+ if(m.part!=null)S.part=m.part;if(m.tn!=null)S.mDone=m.t0;
  {const p=work();if(m.prog&&!m.tgtFn)p.Z-=S.hmc||0;prepare(m,p)}  /* началото е без компенсацията */
  if(m.prog){S.curPi=m.pi;S.progLine=m.line}
  if(m.label)S.actLabel=m.label;else if(m.type!=='act')S.actLabel='';
@@ -1479,8 +1505,26 @@ function updLube(){
   `<div><span>Последно</span><b>${last} · общо ${S.lu.count} пъти</b></div><div><span>Ниво на маслото</span><b class="${S.oilLow?'':'ok'}"${S.oilLow?' style="color:var(--warn)"':''}>${S.oilLow?'НИСКО':'ОК'}</b></div>`;
  if(el._h!==h){el._h=h;el.innerHTML=h}
 }
+/* програма, която сама избира G55–G59, се изпълнява както е написана */
+const progOwnWcs=()=>[...new Set(PROG_OPS.filter(o=>o.wcs&&o.wcs!==54).map(o=>'G'+o.wcs))];
+function buildMulti(parts){
+ const ops=PROG_OPS.filter(o=>!o.wcs),c=PINFO.cum,dur=o=>(c[o.pi]||0)-(o.pi>0?c[o.pi-1]||0:0),n=parts.length,q=[];let t=0;
+ const enter=k=>{const w=parts[k];q.push({type:'line',tgtFn:()=>({Z:-S.off.Z}),rapid:true,part:k,label:'Детайл '+(k+1)+'/'+n+' · G'+w+': Z до безопасната височина'},
+  {type:'act',dur:0,part:k,label:'Детайл '+(k+1)+'/'+n+' · G'+w,fn:()=>{setWcs(w);S.part=k}})};
+ const add=(list,k)=>list.forEach(o=>{const d=dur(o);q.push({...o,part:k,t0:t,tn:t+d});t+=d});
+ if(S.parts.order==='tool'){
+  const blocks=[[]];ops.forEach(o=>{if(o.tool&&blocks[blocks.length-1].length)blocks.push([]);blocks[blocks.length-1].push(o)});
+  blocks.forEach(bl=>parts.forEach((_,k)=>{enter(k);add(bl,k)}));
+ }else parts.forEach((_,k)=>{enter(k);add(ops,k)});
+ S.mTot=t;return q;
+}
 function startProg(L){
  S.runTime=0;S.curPi=-1;S.progLine=-1;S.startLine=null;
+ {const parts=partsSel(),own=progOwnWcs();
+  if(parts.length>1&&!(L>0)&&!own.length){S.multi={n:parts.length,list:parts,prev:S.wcs};S.mDone=0;S.tDone0=0;S.part=0;runOps(buildMulti(parts),'prog');
+   toast(parts.length+' детайла ('+parts.map(w=>'G'+w).join(', ')+'), '+(S.parts.order==='tool'?'по инструмент':'по детайл'));return}
+  if(parts.length>1&&own.length)toast('Програмата сама избира '+own.join(', ')+'. Изпълнява се както е написана, без избора на детайли.',6000);
+  S.multi=null}
  const pi0=L>0?Math.max(0,PROG_OPS.findIndex(o=>o.line>=L)):0;S.tDone0=doneNominal(pi0);
  if(L>0){S.curPi=pi0;S.progLine=L;runOps(fromLine(L,S.rf),'prog');toast('Старт от ред '+(L+1))}else runOps(PROG_OPS,'prog');
 }
@@ -1583,6 +1627,17 @@ function makeProj(W,H,info,vw){
  return{sc,lathe:!!vw.lathe,P:(x,y,z)=>{const[a,c]=raw(x,y,z);return[W/2+a*sc,H/2+c*sc]}};
 }
 function pathSeg3(ctx,P,pts,k){for(let i=0;i<k;i++){const q=pts[i],[px,py]=P(q[0],q[1],q[2]);i?ctx.lineTo(px,py):ctx.moveTo(px,py)}}
+/* други детайли: отместване спрямо активната нула */
+function partDeltas(){const P=partsSel();if(P.length<2)return[];return P.filter(n=>n!==S.wcs).map(n=>({n,d:{X:S.wcsOff[n].X-S.off.X,Y:S.wcsOff[n].Y-S.off.Y,Z:S.wcsOff[n].Z-S.off.Z}}))}
+function partsInfo(){const D=partDeltas();if(!D.length)return PINFO;const b={...PINFO.bounds};
+ D.forEach(({d})=>{b.x0=Math.min(b.x0,PINFO.bounds.x0+d.X);b.x1=Math.max(b.x1,PINFO.bounds.x1+d.X);b.y0=Math.min(b.y0,PINFO.bounds.y0+d.Y);b.y1=Math.max(b.y1,PINFO.bounds.y1+d.Y)});
+ return{...PINFO,bounds:b}}
+function paintParts(ctx,PR,em){const D=partDeltas();if(!D.length)return;
+ ctx.save();ctx.font=`700 ${12*em}px "Roboto Condensed",sans-serif`;ctx.lineWidth=1.2*em;
+ D.forEach(({n,d})=>{ctx.globalAlpha=.45;ctx.strokeStyle=C.hi;ctx.beginPath();
+  PINFO.segs.forEach(sg=>{if(sg.rapid)return;sg.pts.forEach((q,i)=>{const[x,y]=PR.P(q[0]+d.X,q[1]+d.Y,q[2]+d.Z);i?ctx.lineTo(x,y):ctx.moveTo(x,y)})});ctx.stroke();
+  ctx.globalAlpha=1;ctx.fillStyle=C.hi;const[lx,ly]=PR.P(d.X,d.Y,d.Z);ctx.fillText('G'+n,lx+4*em,ly-4*em)});
+ ctx.fillStyle=C.fg;const[ox,oy]=PR.P(0,0,0);ctx.fillText(WN(),ox+4*em,oy-4*em);ctx.restore()}
 function paintScene(ctx,W,H,PR,info,em,tc,dim){
  ctx.fillStyle=C.surf;ctx.fillRect(0,0,W,H);
  const b=info.bounds,step=[1,2,5,10,20,50,100,200,500].find(v=>v*PR.sc>=14*em)||1000;
@@ -1620,9 +1675,9 @@ function draw(){
  const W=Math.round(wrap.clientWidth*dpr),H=Math.round(wrap.clientHeight*dpr);
  if(!W||!H)return;
  if(W!==cvW||H!==cvH){cv.width=W;cv.height=H;cvW=W;cvH=H}
- const ctx=cv.getContext('2d'),em=parseFloat(panel.style.fontSize)/16*dpr,vw=S.view,PR=makeProj(W,H,PINFO,vw);
- const key=PROG_ID+'|'+W+'|'+H+'|'+vw.yaw.toFixed(4)+'|'+vw.pitch.toFixed(4)+'|'+vw.zoom.toFixed(4)+'|'+(vw.lathe?1:0);
- if(key!==cacheKey){cacheKey=key;baseC=mkC(W,H);paintScene(baseC.getContext('2d'),W,H,PR,PINFO,em,TCOL,true);doneC=mkC(W,H);donePtr=0;doneTo=-1}
+ const ctx=cv.getContext('2d'),em=parseFloat(panel.style.fontSize)/16*dpr,vw=S.view,INF=partsInfo(),PR=makeProj(W,H,INF,vw);
+ const key=PROG_ID+'|'+W+'|'+H+'|'+vw.yaw.toFixed(4)+'|'+vw.pitch.toFixed(4)+'|'+vw.zoom.toFixed(4)+'|'+(vw.lathe?1:0)+'|'+S.wcs+'|'+JSON.stringify(partDeltas());
+ if(key!==cacheKey){cacheKey=key;baseC=mkC(W,H);paintScene(baseC.getContext('2d'),W,H,PR,INF,em,TCOL,true);paintParts(baseC.getContext('2d'),PR,em);doneC=mkC(W,H);donePtr=0;doneTo=-1}
  if(S.curPi<doneTo){doneC.getContext('2d').clearRect(0,0,W,H);donePtr=0}
  doneTo=S.curPi;
  const dc=doneC.getContext('2d');let style=null;
@@ -1767,7 +1822,7 @@ function runCycle(k){
  const w=work(),rb=P.prDia/2,rbT=PT().dia/2,ox0=P.prOffX,oy0=P.prOffY,R={};let ops=[];
  if(k==='z'){
   ops=[...touch('Z',-1,6+Math.random()*8,'Повърхност Z',(lm,lw)=>{R.z=lm.Z+(fx?P.prOffZ:0)})];
-  ops.push({type:'act',dur:0,fn:()=>{S.off.Z=R.z;result('Повърхност Z',[['Z маш.',f4(R.z)],['Нов G54 Z',f4(R.z)]],'Работната нула по Z е на повърхността.')}});
+  ops.push({type:'act',dur:0,fn:()=>{S.off.Z=R.z;result('Повърхност Z',[['Z маш.',f4(R.z)],['Нов '+WN()+' Z',f4(R.z)]],'Работната нула по Z е на повърхността.')}});
   ops.push({type:'line',rel:{Z:5},rapid:true});
  }else if(k==='hole'||k==='width'){
   const Rh=12.5+Math.random()*0.03,ox=(Math.random()-.5)*2,oy=(Math.random()-.5)*2;
@@ -1784,8 +1839,8 @@ function runCycle(k){
   ops.push({type:'act',dur:0,fn:()=>{
    const cx=(R.xp+R.xm)/2,dx=R.xp-R.xm+2*rb;
    if(k==='hole'){const cy=(R.yp+R.ym)/2,dy=R.yp-R.ym+2*rb;S.off.X+=cx;S.off.Y+=cy;
-    result('Център на отвор',[['Център X',f4(cx)],['Център Y',f4(cy)],['Ø по X',f4(dx)],['Ø по Y',f4(dy)],['Овалност',f4(Math.abs(dx-dy))]],'G54 X и Y са преместени в центъра.');}
-   else{S.off.X+=cx;result('Ширина на жлеб X',[['Център X',f4(cx)],['Ширина',f4(dx)]],'G54 X е преместен в центъра на жлеба.')}
+    result('Център на отвор',[['Център X',f4(cx)],['Център Y',f4(cy)],['Ø по X',f4(dx)],['Ø по Y',f4(dy)],['Овалност',f4(Math.abs(dx-dy))]],WN()+' X и Y са преместени в центъра.');}
+   else{S.off.X+=cx;result('Ширина на жлеб X',[['Център X',f4(cx)],['Ширина',f4(dx)]],WN()+' X е преместен в центъра на жлеба.')}
   }});
  }else if(k==='corner'||k==='icorner'){
   const[cn,cx,cy]=CRN[S.corner],inner=k==='icorner',sx=inner?-cx:cx,sy=inner?-cy:cy;
@@ -1795,7 +1850,7 @@ function runCycle(k){
   ops.push({type:'line',tgt:{X:w.X},feed:2000});
   ops.push(...touch('Y',sy,dy,'Стена Y'+sg(sy),(lm,lw)=>{R.y=lw.Y+oy0+sy*rb}));
   ops.push({type:'line',tgt:{Y:w.Y},feed:2000});
-  ops.push({type:'act',dur:0,fn:()=>{S.off.X+=R.x;S.off.Y+=R.y;result(nm,[['Ъгъл X',f4(R.x)],['Ъгъл Y',f4(R.y)],['Посоки',`X${sg(sx)} / Y${sg(sy)}`]],inner?'G54 X и Y са в ъгъла на джоба.':'G54 X и Y са в ъгъла на детайла.')}});
+  ops.push({type:'act',dur:0,fn:()=>{S.off.X+=R.x;S.off.Y+=R.y;result(nm,[['Ъгъл X',f4(R.x)],['Ъгъл Y',f4(R.y)],['Посоки',`X${sg(sx)} / Y${sg(sy)}`]],inner?WN()+' X и Y са в ъгъла на джоба.':WN()+' X и Y са в ъгъла на детайла.')}});
  }else if(k==='widthy'){
   const Rh=8+Math.random()*0.03,oy=(Math.random()-.5)*2;
   ops.push(...touch('Y',1,oy+Rh-rbT,'Y+',(lm,lw)=>{R.yp=lw.Y+oy0}));
@@ -1912,12 +1967,12 @@ function renderMdi(){
 function renderDlg(){
  const d=S.dlg,a=d.ax,w=work(),u=ROT[a]?'°':'мм';
  segOn('#dlgAx .btn',a);segOn('#dlgTgt .btn',d.tgt);
- set($('#dlgT'),(d.tgt==='mach'?'Референтна точка · ':'Работна нула G54 · ')+a);
+ set($('#dlgT'),(d.tgt==='mach'?'Референтна точка · ':'Работна нула '+WN()+' · ')+a);set($('#dlgTgt [data-v="work"]'),'Работна · '+WN());
  set($('#dlgCur'),'раб.'+f3(w[a])+'  маш.'+f3(S.mach[a]));
  $('#dlgIn').innerHTML=(d.txt||'<span style="color:var(--faint)">'+f3(d.tgt==='mach'?S.mach[a]:w[a]).trim()+'</span>')+' '+u+'<span class="caret"></span>';
  const n=$('#dlgNote');
  if(d.tgt==='mach'){n.className='dlg-note w';set(n,`Текущото положение на ${a} получава въведената машинна координата и оста се маркира като ръчно реферирана. G54 остава спрямо машинната нула, така че работната позиция се измества със същата разлика.`)}
- else{n.className='dlg-note';set(n,`Текущото положение на ${a} получава въведената работна координата в G54. Машинната координата и референтната точка не се променят.`)}
+ else{n.className='dlg-note';set(n,`Текущото положение на ${a} получава въведената работна координата в '+WN()+'. Машинната координата и референтната точка не се променят.`)}
 }
 function homeLabels(){
  const m=S.refMode==='manual';
@@ -1931,7 +1986,7 @@ function applyDlg(){
  if(!canMove())return;
  const val=+d.txt;
  if(d.tgt==='mach'){S.mach[a]=val;S.homed[a]='manual';toast(`Референтна точка ${a}: машинна позиция = ${val.toFixed(3)}`)}
- else{S.off[a]=S.mach[a]-val;toast(`G54 ${a}: работна позиция = ${val.toFixed(3)}`)}
+ else{S.off[a]=S.mach[a]-val;toast(`${WN()} ${a}: работна позиция = ${val.toFixed(3)}`)}
  $('#modal').hidden=true;
 }
 
@@ -2048,8 +2103,9 @@ const P_ENC=[
    Мрежа по стъпка между Мин и Макс (последната точка е на ръба). Обхождане колона по колона по X,
    змиевидно по Y. След допир Z се вдига с „Z отдръпване“ (% от Макс Z − Мин Z) над точката, най-много до Макс Z.
    Корекция: Z += карта(x,y) − Z повърхност (билинейно), извън областта няма корекция. */
-S.hm={grid:null,apply:true,show:true,saved:null,ask:0,cfg:{hmX0:0,hmX1:80,hmY0:0,hmY1:50,hmZ0:-1,hmZ1:2,hmRes:10,hmZs:0,hmRet:25,
+S.hm={grids:{},apply:true,show:true,saved:null,ask:0,cfg:{hmX0:0,hmX1:80,hmY0:0,hmY1:50,hmZ0:-1,hmZ1:2,hmRes:10,hmZs:0,hmRet:25,
  hmF:50,hmScan:1000,hmArc:.1,plOn:0,hmPl:0,hmOX:0,hmOY:0,hmOZ:0}};
+Object.defineProperty(S.hm,'grid',{get(){return this.grids[S.wcs]||null},set(v){this.grids[S.wcs]=v}});  /* картата е за активната нула */
 const autoTc=()=>MT()==='lathe'||(!!S.cfg.mag.mOn&&!!S.cfg.mag.atcOn);
 const hmDone=()=>{const G=S.hm.grid;return!!G&&G.z.every(c=>c.every(v=>!isNaN(v)))};
 const hmOn=()=>S.hm.apply&&hmDone();
@@ -2121,7 +2177,7 @@ function hmHtml(){
  const cnt=G.z.flat().filter(x=>!isNaN(x)).length;
  for(let j=ny-1;j>=0;j--)for(let i=0;i<nx;i++){const v=G.z[i][j];cells.push(isNaN(v)?'<i style="background:var(--surf3)"></i>':`<i style="background:${hmCol((v-mn)/rg)}" title="X ${G.gx[i].toFixed(2)} Y ${G.gy[j].toFixed(2)}: ${f4(v)}"></i>`)}
  const sw=[0,.25,.5,.75,1].map(t=>`<i style="background:${hmCol(t)}"></i>`).join('');
- return`<span class="lab">Карта на височините · ${done?nx+'×'+ny+' точки':'сканиране '+cnt+' / '+nx*ny}</span><div class="hm" style="grid-template-columns:repeat(${nx},minmax(0,1fr))">${cells.join('')}</div>`+
+ return`<span class="lab">Карта на височините · ${WN()} · ${done?nx+'×'+ny+' точки':'сканиране '+cnt+' / '+nx*ny}</span><div class="hm" style="grid-template-columns:repeat(${nx},minmax(0,1fr))">${cells.join('')}</div>`+
   `<div class="hm-leg"><span>${f4(mn)}</span><u>${sw}</u><span>${f4(mx)}</span></div>`+
   `<div class="res"><div><span>Област</span><b>X ${G.gx[0].toFixed(1)}…${G.gx[nx-1].toFixed(1)} · Y ${G.gy[0].toFixed(1)}…${G.gy[ny-1].toFixed(1)}</b></div><div><span>Разлика мин./макс.</span><b>${f4(mx-mn)}</b></div><div><span>Z повърхност</span><b>${f4(S.hm.cfg.hmZs)}</b></div></div>`+
   `<div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn${S.hm.apply?' on':''}" data-act="hm-tg" data-v="apply" data-on="${S.hm.apply?0:1}" type="button">Приложи: ${S.hm.apply?'да':'не'}</button><button class="btn" data-act="cyc" data-v="hmap" type="button">Настройки</button></div>`;
@@ -2234,6 +2290,7 @@ PDEF.tPick={k:'tPick',n:'Инструмент за смяна',t:'num',d:0,min:1
 PDEF.lgT={k:'lgT',n:'Задържане',u:'s',t:'num',d:1,min:0,max:600,h:'Колко дълго условието трябва да е налице, преди правилото да сработи. 0 = веднага.'};
 PDEF.lgOut={k:'lgOut',n:'Изход',t:'num',d:0,min:1,max:32,h:'Номерът на изхода (OUT1–OUT32).'};
 PDEF.lgMac={k:'lgMac',n:'Макрос',t:'num',d:0,min:100,max:199,h:'Номерът на макроса (M100–M199).'};
+PDEF.wcsV={k:'wcsV',n:'Отместване',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Машинната координата на нулата по тази ос. Най-лесно се задава с „X = 0“ или „Задай“ в „Ръчно“ или с цикъл на пробника, при избрана активна нула.'};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
@@ -2373,6 +2430,30 @@ end</pre></div>`;
   help.innerHTML='Lua, а не Python: малък (около 300 KB), бърз, вгражда се лесно в C и е с лиценз MIT. Скриптовете се редактират само със сервизна парола и се проверяват преди запис.';
  }
 }
+/* ---------- Нулеви точки и детайли ---------- */
+function wcsRender(){
+ const ax=AX.filter(a=>S.active[a]),run=S.runKind==='prog'&&(S.state==='run'||S.state==='hold');
+ $('#wcsHead').innerHTML=`<tr><th>Нула</th><th>Активна</th>${ax.map(a=>`<th class="n">${a} маш.</th>`).join('')}<th>В програмата</th></tr>`;
+ $('#wcsBody').innerHTML=WCS.map(n=>{const o=S.wcsOff[n],on=S.parts.on.includes(n),k=partsSel().indexOf(n);
+  return`<tr class="${n===S.wcs?'sel':''}"><td class="tn">G${n}</td><td><button class="btn sm${n===S.wcs?' on':''}" data-act="wcs-act" data-v="${n}" type="button">${n===S.wcs?'активна':'избери'}</button></td>`+
+  ax.map(a=>`<td class="n"><button class="btn sm wv" data-act="wcs-v" data-v="${n}" data-a="${a}" type="button">${wcsSet(n)?o[a].toFixed(3):'—'}</button></td>`).join('')+
+  `<td><button class="btn sm${on?' on':''}" data-act="wcs-on" data-v="${n}" type="button">${on?'детайл '+(k+1):'—'}</button></td></tr>`}).join('');
+ segOn('#wcsOrd .btn',S.parts.order);
+ const P=partsSel(),own=progOwnWcs(),T=PINFO.tools||[],w=[];
+ set($('#wcsInfo'),P.length>1?P.length+' детайла · около '+hms(P.length*(PINFO.t||0)/SIMX):'един детайл · '+WN());
+ let st=[];
+ if(P.length>1){st.push('Между детайлите Z се вдига до машинна Z 0, после се избира следващата нула.');
+  st.push(S.parts.order==='tool'&&T.length<2?'Програмата е с един инструмент, затова редът е по детайл: '+P.map((n,i)=>(i+1)+'. G'+n).join(' → '):S.parts.order==='tool'?T.map(t=>'T'+t+': '+P.map(n=>'G'+n).join(', ')).join(' · ')+' (по-малко смени)':P.map((n,i)=>(i+1)+'. G'+n).join(' → ')+', цялата програма на всеки');
+  st.push('Програмата е за един детайл; G54 в нея означава „текущият детайл“.')}
+ else st.push('Отметнете поне две нули в „В програмата“, за да се изработят няколко детайла с една програма. Активната нула е тази, в която се нулира и измерва (Ръчно, Пробинг, карта на височините).');
+ $('#wcsSteps').innerHTML='<ol>'+st.map(x=>`<li>${x}</li>`).join('')+'</ol>';
+ if(own.length)w.push('Заредената програма сама избира '+own.join(', ')+'. Тя се изпълнява както е написана, без избора на детайли.');
+ P.filter(n=>!wcsSet(n)).forEach(n=>w.push('G'+n+' не е зададена (всички отмествания са 0).'));
+ if(run)w.push('Машината работи: таблицата се променя само при спряна машина.');
+ $('#wcsWarn').innerHTML=w.join('<br>');
+ $('#wcsSkip').hidden=!(S.multi&&run);
+}
+let wcsKey='';function wcsLive(){const k=S.wcs+'|'+S.state+'|'+S.part+'|'+!!S.multi;if(k!==wcsKey){wcsKey=k;wcsRender()}}
 function renderSet(){
  $('.screen.sets').classList.toggle('login',S.acc.level===0);
  if(S.acc.level===0){renderLogin();return}
@@ -2661,6 +2742,9 @@ function renderAcc(body,help){
 const STATE_TXT={idle:'ГОТОВ',run:'РАБОТИ',hold:'ПАУЗА',alarm:'АЛАРМА',estop:'АВАРИЕН СТОП'};
 const MODE_TXT={run:'АВТО',jog:'РЪЧЕН',mdi:'MDI'};
 function updStatus(now){
+ set($('#sbWcsN'),WN());set($('#sbPart'),S.multi&&S.part!=null?' · детайл '+(S.part+1)+'/'+S.multi.n:'');
+ {const n=partsSel().length;set($('#btnParts'),n>1?'Детайли ×'+n:'Детайли');$('#btnParts').classList.toggle('on',n>1);set($('#btnWcsJ'),WN()+' ▾');set($('#jogWcsT'),'Работна позиция · '+WN())}
+ if(!$('#wcsDlg').hidden)wcsLive();
  {const c=$('#sbMap'),on=hmOn()&&MT()==='mill';c.hidden=!on;if(on){const w=work(),z=hmComp(w.X,w.Y),tl='Z следва картата на височините · тук '+(z>=0?'+':'')+z.toFixed(3)+' мм';if(c.title!==tl)c.title=tl}}
  const p=$('#sbState'),off=!S.enabled&&S.state==='idle';p.className='pill '+(off?'off':S.state);set(p,off?'ИЗКЛЮЧЕНА':STATE_TXT[S.state]);
  {const r=$('#btnReset');r.className='btn rst'+(S.resetHoming?' homing':S.ready&&S.enabled?' ok':'');
@@ -2689,9 +2773,10 @@ function updStatus(now){
  else{set($('#sLab'),'Шпиндел');set($('#sAct'),String(Math.round(S.sp.act/10)*10).padStart(5,' '));
   set($('#sProg'),(mt==='lathe'?(S.sp.css?'G96 '+S.sp.css+' м/мин':'G97 S'+S.sp.cmd):'S'+S.sp.cmd)+' · '+(S.sp.on?(S.sp.dir==='CW'?'CW':'CCW'):'спрян')+' · '+spOutTxt())}
  set($('#runTime'),mmss(S.runTime));
- {const tot=PINFO.t||0,run=S.runKind==='prog'&&(S.state==='run'||S.state==='hold'),fin=S.curPi===Infinity;
+ {const mm=!!S.multi&&S.runKind==='prog',tot=mm?S.mTot:(PINFO.t||0),run=S.runKind==='prog'&&(S.state==='run'||S.state==='hold'),fin=S.curPi===Infinity;
   let done=fin?tot:S.curPi>=0?doneNominal(S.curPi):0;
-  if(run&&S.cur&&S.cur.prog&&S.cur.len&&S.cur.type!=='act'){const c=PINFO.cum,a=doneNominal(S.cur.pi),b=c[S.cur.pi]||a;done=a+(b-a)*Math.min(1,S.cur.s/S.cur.len)}
+  if(mm){const c=S.cur;done=c&&c.tn!=null?c.t0+(c.tn-c.t0)*(c.type!=='act'&&c.len?Math.min(1,c.s/c.len):1):S.mDone||0}
+  else if(run&&S.cur&&S.cur.prog&&S.cur.len&&S.cur.type!=='act'){const c=PINFO.cum,a=doneNominal(S.cur.pi),b=c[S.cur.pi]||a;done=a+(b-a)*Math.min(1,S.cur.s/S.cur.len)}
   const pct=tot?Math.min(100,done/tot*100):0,did=done-(S.tDone0||0);
   const k=did>tot*.02&&S.runTime>3?S.runTime/did:1/SIMX*100/Math.max(10,S.feedOv);
   const rem=Math.max(0,(tot-done)*k);
@@ -2894,9 +2979,9 @@ panel.addEventListener('click',e=>{
    const t={};['X','Y','A','B','C'].filter(a=>S.active[a]).forEach(a=>t[a]=0);
    if(Object.keys(t).length)ops.push({type:'line',tgt:t,rapid:true,label:'Go to 0: '+Object.keys(t).join(' ')+' към програмната нула'});
    if(S.active.Z)ops.push({type:'line',tgtFn:()=>({Z:Math.min(SAFE_Z,0-S.off.Z)}),rapid:true,label:'Go to 0: Z до безопасна височина'});
-   ops.push({type:'act',dur:0,fn:()=>toast('На програмната нула G54. Z е на '+SAFE_Z.toFixed(3)+' над детайла.')});
+   ops.push({type:'act',dur:0,fn:()=>toast('На програмната нула '+WN()+'. Z е на '+SAFE_Z.toFixed(3)+' над детайла.')});
    runOps(ops,'jog');break}
-  case'zero':if(!canMove())break;if(!S.active[v]){toast('Ос '+v+' е изключена');break}S.off[v]=S.mach[v];toast('G54 '+v+' = 0');break;
+  case'zero':if(!canMove())break;if(!S.active[v]){toast('Ос '+v+' е изключена');break}S.off[v]=S.mach[v];toast(WN()+' '+v+' = 0');break;
   case'setv':S.dlg={ax:v,tgt:'work',txt:''};$('#modal').hidden=false;renderDlg();break;
   case'dlg-ax':S.dlg.ax=v;S.dlg.txt='';renderDlg();break;
   case'dlg-tgt':S.dlg.tgt=v;renderDlg();break;
@@ -2910,7 +2995,7 @@ panel.addEventListener('click',e=>{
   case'dlg-cancel':$('#modal').hidden=true;break;
   case'dlg-zero':S.dlg.txt='0';applyDlg();break;
   case'dlg-ok':applyDlg();break;
-  case'zero-all':if(!canMove())break;['X','Y','Z'].filter(a=>S.active[a]).forEach(a=>S.off[a]=S.mach[a]);toast('G54 X, Y, Z = 0');break;
+  case'zero-all':if(!canMove())break;['X','Y','Z'].filter(a=>S.active[a]).forEach(a=>S.off[a]=S.mach[a]);toast(WN()+' X, Y, Z = 0');break;
   case'key':S.mdi+=v;renderMdi();break;
   case'mdi-del':S.mdi=S.mdi.slice(0,-1);renderMdi();break;
   case'mdi-clr':S.mdi='';renderMdi();break;
@@ -2932,6 +3017,17 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'wcs-open':$('#wcsDlg').hidden=false;wcsKey='';wcsRender();break;
+  case'wcs-close':$('#wcsDlg').hidden=true;break;
+  case'wcs-act':{const n=+v;if(S.state!=='idle'){toast('Спрете машината, за да смените активната нула');break}setWcs(n);wcsRender();toast('Активна нула: G'+n);break}
+  case'wcs-on':{const n=+v,L=S.parts.on;if(S.runKind==='prog'&&S.state!=='idle'){toast('Спрете програмата');break}
+   if(L.includes(n)){if(L.length===1){toast('Поне една нула трябва да е избрана');break}L.splice(L.indexOf(n),1)}else L.push(n);wcsRender();break}
+  case'wcs-ord':if(S.runKind==='prog'&&S.state!=='idle'){toast('Спрете програмата');break}S.parts.order=v;wcsRender();break;
+  case'wcs-v':{const n=+v,a=b.dataset.a;if(S.state!=='idle'){toast('Спрете машината');break}
+   S.nd={a:'wcs',k:'wcsV',txt:'',get:()=>S.wcsOff[n][a],set:x=>{S.wcsOff[n][a]=x},after:wcsRender};$('#numDlg').hidden=false;renderNd();break}
+  case'wcs-skip':{if(!S.multi){break}if(S.state!=='hold'){toast('Натиснете „Пауза“, после пропуснете детайла');break}
+   const k=S.part,w=S.multi.list[k];S.queue=S.queue.filter(o=>o.part!==k);if(S.cur&&S.cur.part===k)S.cur=null;S.state='run';
+   if(!S.queue.length){finishRun();break}$('#wcsDlg').hidden=true;toast('Детайл '+(k+1)+' (G'+w+') е пропуснат');break}
   case'lg-tab':S.lgTab=v;renderSet();break;
   case'lg-sel':S.lgSel=+v;renderSet();break;
   case'lg-on':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(mc){mc.on=+v;renderSet()}break}
