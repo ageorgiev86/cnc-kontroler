@@ -27,7 +27,8 @@ typedef struct {
 
 typedef struct {
     char name[64];
-    char **line;
+    char **line;       /* сочат в text */
+    char *text;        /* целият текст в един буфер (без отделна памет за всеки ред) */
     int nlines;
     p3_t *pt;          /* точки в работни координати */
     float *cum;        /* натрупана дължина в рамките на хода */

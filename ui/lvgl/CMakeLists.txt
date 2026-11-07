@@ -45,6 +45,7 @@ set(APP_SOURCES
   src/machine.c
   src/program.c
   src/ui_traj.c
+  src/raster.c
   src/ui_gcode.c
   src/ui_ctrl.c
   src/ui_dlg.c

@@ -37,7 +37,7 @@ void program_free_into(program_t *g)
 
 static void program_free_g(void)
 {
-    for (int i = 0; i < G->nlines; i++) free(G->line[i]);
+    free(G->text);
     free(G->line);
     free(G->pt);
     free(G->cum);
@@ -271,21 +271,23 @@ int program_parse_into(program_t *dst, const char *name, const char *text)
     G = dst;
     program_free_g();
     snprintf(G->name, sizeof G->name, "%s", name);
-    const char *s = text;
+    size_t n = strlen(text);
+    G->text = malloc(n + 1);
+    if (!G->text) abort();
+    memcpy(G->text, text, n + 1);
+    char *s = G->text;
     while (*s) {
-        const char *e = strchr(s, '\n');
+        char *e = strchr(s, '\n');
         size_t len = e ? (size_t)(e - s) : strlen(s);
+        char *next = e ? e + 1 : s + len;
         while (len && (s[len - 1] == '\r' || s[len - 1] == ' ')) len--;
+        s[len] = 0;
         GROW(G->line, G->nlines, G->cap_line);
-        char *l = malloc(len + 1);
-        if (!l) abort();
-        memcpy(l, s, len);
-        l[len] = 0;
-        G->line[G->nlines++] = l;
+        G->line[G->nlines++] = s;
         if (!e) break;
-        s = e + 1;
+        s = next;
     }
-    while (G->nlines && !G->line[G->nlines - 1][0]) free(G->line[--G->nlines]);
+    while (G->nlines && !G->line[G->nlines - 1][0]) G->nlines--;
     parse();
     G = sv;
     return 0;

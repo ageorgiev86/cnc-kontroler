@@ -38,7 +38,8 @@ typedef struct {
 /* 3D траектория (lv_canvas) */
 typedef struct {
     lv_obj_t *card, *body, *canvas, *base_cv, *leg, *info, *seg[5];
-    lv_draw_buf_t *buf, *base;
+    lv_draw_buf_t *buf, *base, *done;   /* екран, основа, основа + изминатият път */
+    int done_op;                         /* докъде е нарисуван изминатият път в done */
     int32_t w, h;
     float yaw, pitch, zoom;
     int view;              /* 0 3D, 1 XY, 2 XZ, 3 YZ, -1 свободен */
@@ -106,6 +107,7 @@ void files_update(uint32_t now);
 void files_show(void);
 void files_test(int src, int sel);
 void files_load(void);
+void files_hide(void);
 void hmap_open(void);
 void hmap_label(char *b, size_t n);
 void hmap_result(lv_obj_t *parent);

@@ -4,6 +4,7 @@
  * USB = /media/<потребител>/<памет> и /media/<памет>. Мрежа = /mnt/cnc-net, когато дялът е включен. */
 #include <dirent.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 
 #include "config.h"
 #include "program.h"
+#include "raster.h"
 #include "ui.h"
 #include "ui_style.h"
 
@@ -25,6 +27,7 @@ static program_t PV;                 /* прегледът */
 static char pv_key[600];
 static lv_obj_t *seg[3], *list, *warn, *warn_txt, *pv_name, *pv_size, *pv, *info[6], *btns;
 
+static void pv_render(void);
 static const uint32_t PAL[] = {0x59aee6, 0x3dbb7e, 0xe47ab3, 0xff9447, 0xa78bfa, 0x4fd1c5, 0xd9e45a, 0xf07167};
 
 static const char *prog_dir(void)
@@ -127,7 +130,7 @@ static void preview(void)
         ui_set_text(pv_name, "—");
         ui_set_text(pv_size, "");
         for (int i = 0; i < 6; i++) ui_set_text(info[i], "");
-        lv_obj_invalidate(pv);
+        pv_render();
         return;
     }
     fent_t *f = &FL[sel];
@@ -156,48 +159,59 @@ static void preview(void)
     snprintf(b, sizeof b, "X  %.1f … %.1f", PV.x0, PV.x1); ui_set_text(info[3], b);
     snprintf(b, sizeof b, "Y  %.1f … %.1f", PV.y0, PV.y1); ui_set_text(info[4], b);
     snprintf(b, sizeof b, "Z  %.1f … %.1f", PV.z0, PV.z1); ui_set_text(info[5], b);
-    lv_obj_invalidate(pv);
+    pv_render();
 }
 
-static void on_pv_draw(lv_event_t *e)
+/* 3D изглед на прегледа: рисува се веднъж в буфер (бързо и при стотици хиляди редове) */
+static lv_obj_t *pv_cv;
+static lv_draw_buf_t *pv_buf;
+
+static void pv_render(void)
 {
-    if (!PV.nop) return;
-    lv_layer_t *l = lv_event_get_layer(e);
-    lv_area_t co;
-    lv_obj_get_coords(pv, &co);
-    float W = (float)lv_area_get_width(&co), H = (float)lv_area_get_height(&co);
-    float yaw = -(float)M_PI / 6, pitch = (float)M_PI / 3, cy = cosf(yaw), sy = sinf(yaw), cp = cosf(pitch), sp = sinf(pitch);
-    float x0 = fminf(PV.x0, 0), x1 = fmaxf(PV.x1, 0), y0 = fminf(PV.y0, 0), y1 = fmaxf(PV.y1, 0);
-    float cx = (x0 + x1) / 2, cyy = (y0 + y1) / 2, cz = (PV.z0 + PV.z1) / 2;
+    if (!pv_buf) return;
+    lv_canvas_fill_bg(pv_cv, C_SURF, LV_OPA_COVER);
+    if (PV.nop) {
+        float W = (float)pv_buf->header.w, H = (float)pv_buf->header.h;
+        float yaw = -(float)M_PI / 6, pitch = (float)M_PI / 3, cy = cosf(yaw), sy = sinf(yaw), cp = cosf(pitch), sp = sinf(pitch);
+        float x0 = fminf(PV.x0, 0), x1 = fmaxf(PV.x1, 0), y0 = fminf(PV.y0, 0), y1 = fmaxf(PV.y1, 0);
+        float cx = (x0 + x1) / 2, cyy = (y0 + y1) / 2, cz = (PV.z0 + PV.z1) / 2;
 #define PRJ(X, Y, Z, A, B) do { float dx = (X) - cx, dy = (Y) - cyy, dz = (Z) - cz; float x1_ = dx * cy - dy * sy, y1_ = dx * sy + dy * cy; \
     A = x1_; B = -(y1_ * cp + dz * sp); } while (0)
-    float mx = 1e-6f, my = 1e-6f;
-    const float xs[2] = {x0, x1}, ys[2] = {y0, y1}, zs[2] = {PV.z0, PV.z1};
-    for (int i = 0; i < 2; i++)
-        for (int j = 0; j < 2; j++)
-            for (int k = 0; k < 2; k++) { float a, b; PRJ(xs[i], ys[j], zs[k], a, b); mx = fmaxf(mx, fabsf(a)); my = fmaxf(my, fabsf(b)); }
-    float sc = fminf(W / 2 / mx, H / 2 / my) * 0.86f;
-    lv_draw_line_dsc_t d;
-    lv_draw_line_dsc_init(&d);
-    int segs = 0;
-    for (int i = 0; i < PV.nop && segs < 30000; i++) {
-        const op_t *o = &PV.op[i];
-        if (o->kind != OP_MOVE) continue;
-        int ti = 0;
-        for (int k = 0; k < PV.ntools; k++) if (PV.tools[k] == o->tool) ti = k;
-        d.color = o->rapid ? lv_color_hex(0x5b6f8f) : lv_color_hex(PAL[ti % 8]);
-        d.width = o->rapid ? 1 : EM(0.12f) > 1 ? EM(0.12f) : 1;
-        d.dash_width = d.dash_gap = o->rapid ? EM(0.25f) : 0;
-        for (int k = o->p0; k < o->p0 + o->np - 1; k++, segs++) {
-            float a, b, c2, d2;
-            PRJ(PV.pt[k].x, PV.pt[k].y, PV.pt[k].z, a, b);
-            PRJ(PV.pt[k + 1].x, PV.pt[k + 1].y, PV.pt[k + 1].z, c2, d2);
-            d.p1.x = co.x1 + (int32_t)(W / 2 + a * sc); d.p1.y = co.y1 + (int32_t)(H / 2 + b * sc);
-            d.p2.x = co.x1 + (int32_t)(W / 2 + c2 * sc); d.p2.y = co.y1 + (int32_t)(H / 2 + d2 * sc);
-            lv_draw_line(l, &d);
+        float mx = 1e-6f, my = 1e-6f;
+        const float xs[2] = {x0, x1}, ys[2] = {y0, y1}, zs[2] = {PV.z0, PV.z1};
+        for (int i = 0; i < 2; i++)
+            for (int j = 0; j < 2; j++)
+                for (int k = 0; k < 2; k++) { float a, b; PRJ(xs[i], ys[j], zs[k], a, b); mx = fmaxf(mx, fabsf(a)); my = fmaxf(my, fabsf(b)); }
+        float sc = fminf(W / 2 / mx, H / 2 / my) * 0.86f;
+        int lw = EM(0.12f) > 1 ? EM(0.12f) : 1, dash = EM(0.25f) > 1 ? EM(0.25f) : 2;
+        for (int i = 0; i < PV.nop; i++) {
+            const op_t *o = &PV.op[i];
+            if (o->kind != OP_MOVE) continue;
+            int ti = 0;
+            for (int k = 0; k < PV.ntools; k++) if (PV.tools[k] == o->tool) ti = k;
+            lv_color_t c = o->rapid ? lv_color_hex(0x5b6f8f) : lv_color_hex(PAL[ti % 8]);
+            int32_t px0 = INT32_MIN, py0 = 0;
+            for (int k = o->p0; k < o->p0 + o->np; k++) {
+                float a, b;
+                PRJ(PV.pt[k].x, PV.pt[k].y, PV.pt[k].z, a, b);
+                int32_t qx = (int32_t)(W / 2 + a * sc), qy = (int32_t)(H / 2 + b * sc);
+                if (px0 != INT32_MIN && (qx != px0 || qy != py0)) raster_line(pv_buf, px0, py0, qx, qy, c, o->rapid ? 1 : lw, LV_OPA_COVER, o->rapid ? dash : 0);
+                if (px0 == INT32_MIN || qx != px0 || qy != py0) { px0 = qx; py0 = qy; }
+            }
         }
-    }
 #undef PRJ
+    }
+    lv_obj_invalidate(pv_cv);
+}
+
+static void on_pv_size(lv_event_t *e)
+{
+    int32_t w = lv_obj_get_content_width(pv), h = lv_obj_get_content_height(pv);
+    if (w < 16 || h < 16 || (pv_buf && (int32_t)pv_buf->header.w == w && (int32_t)pv_buf->header.h == h)) return;
+    if (pv_buf) lv_draw_buf_destroy(pv_buf);
+    pv_buf = lv_draw_buf_create((uint32_t)w, (uint32_t)h, LV_COLOR_FORMAT_NATIVE, 0);
+    lv_canvas_set_draw_buf(pv_cv, pv_buf);
+    pv_render();
 }
 
 /* ---------- списък ---------- */
@@ -346,7 +360,8 @@ void files_create(lv_obj_t *scr)
     pv = ui_box(p);
     lv_obj_set_width(pv, LV_PCT(100));
     lv_obj_set_flex_grow(pv, 1);
-    lv_obj_add_event_cb(pv, on_pv_draw, LV_EVENT_DRAW_MAIN, NULL);
+    pv_cv = lv_canvas_create(pv);
+    lv_obj_add_event_cb(pv, on_pv_size, LV_EVENT_SIZE_CHANGED, NULL);
     static int32_t c3[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}, r2[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST};
     lv_obj_t *ig = ui_box(p);
     lv_obj_set_width(ig, LV_PCT(100));
@@ -381,4 +396,11 @@ void files_test(int s, int i)
     sel = i;
     ui_go(SCR_FILES);
     files_show();
+}
+
+/* при излизане от екрана: прегледът се освобождава (при голяма програма това са десетки MB) */
+void files_hide(void)
+{
+    program_free_into(&PV);
+    pv_key[0] = 0;
 }

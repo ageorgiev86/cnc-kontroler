@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "program.h"
+#include "raster.h"
 #include "ui.h"
 #include "ui_style.h"
 
@@ -72,15 +73,19 @@ static void line(lv_layer_t *l, lv_point_precise_t a, lv_point_precise_t b, lv_c
 }
 
 /* ход от точка i0 до i1 (включително) */
-static void path(lv_layer_t *l, const proj_t *p, int i0, int i1, lv_color_t c, int32_t w, lv_opa_t opa, int32_t dash)
+/* ход от точка i0 до i1 направо в буфера; точките в един и същ пиксел се прескачат */
+static void path(lv_draw_buf_t *b, const proj_t *p, int i0, int i1, lv_color_t c, int32_t w, lv_opa_t opa, int32_t dash)
 {
     lv_point_precise_t a = P2(p, P.pt[i0].x, P.pt[i0].y, P.pt[i0].z);
     for (int i = i0 + 1; i <= i1; i++) {
-        lv_point_precise_t b = P2(p, P.pt[i].x, P.pt[i].y, P.pt[i].z);
-        line(l, a, b, c, w, opa, dash);
-        a = b;
+        lv_point_precise_t q = P2(p, P.pt[i].x, P.pt[i].y, P.pt[i].z);
+        if (q.x == a.x && q.y == a.y && i < i1) continue;
+        raster_line(b, (int32_t)a.x, (int32_t)a.y, (int32_t)q.x, (int32_t)q.y, c, w < 1 ? 1 : w, opa, dash);
+        a = q;
     }
 }
+
+static void op_path(lv_draw_buf_t *b, const proj_t *p, const op_t *o, bool done);
 
 static int32_t px(float x) { return (int32_t)lroundf(x * g_em / 16.0f); }   /* ширина на линии като в макета */
 
@@ -103,15 +108,14 @@ static void draw_base(traj_t *t)
         for (float y = gy0; y <= gy1 + 1e-3f; y += step) line(&l, P2(&p, gx0, y, 0), P2(&p, gx1, y, 0), C_LINE, 1, LV_OPA_COVER, 0);
     }
 
-    /* цялата траектория бледо */
-    for (int i = 0; i < P.nop; i++) {
-        const op_t *o = &P.op[i];
-        if (o->kind != OP_MOVE) continue;
-        if (o->rapid) path(&l, &p, o->p0, o->p0 + o->np - 1, lv_color_hex(0x5b6f8f), 1, LV_OPA_COVER, px(4));
-        else path(&l, &p, o->p0, o->p0 + o->np - 1, tool_color(o->tool), px(1.7f), 82, 0);
-    }
+    lv_canvas_finish_layer(t->base_cv, &l);
+
+    /* цялата траектория бледо: направо в буфера (десетки хиляди линии) */
+    for (int i = 0; i < P.nop; i++)
+        if (P.op[i].kind == OP_MOVE) op_path(t->base, &p, &P.op[i], false);
 
     /* оси X Y Z от нулата */
+    lv_canvas_init_layer(t->base_cv, &l);
     float L = 28 * g_em / 16.0f / p.sc;
     lv_point_precise_t o0 = P2(&p, 0, 0, 0);
     const struct { const char *n; lv_color_t c; float v[3]; } ax[3] = {
@@ -129,22 +133,29 @@ static void draw_base(traj_t *t)
     }
     lv_canvas_finish_layer(t->base_cv, &l);
     t->base_dirty = false;
+    t->done_op = -1;   /* изминатият път се рисува наново върху новата основа */
+}
+
+static void op_path(lv_draw_buf_t *b, const proj_t *p, const op_t *o, bool done)
+{
+    if (done) {
+        if (o->rapid) path(b, p, o->p0, o->p0 + o->np - 1, C_DIM, 1, LV_OPA_COVER, px(4));
+        else path(b, p, o->p0, o->p0 + o->np - 1, tool_color(o->tool), px(2.4f), LV_OPA_COVER, 0);
+    } else {
+        if (o->rapid) path(b, p, o->p0, o->p0 + o->np - 1, lv_color_hex(0x5b6f8f), 1, LV_OPA_COVER, px(4));
+        else path(b, p, o->p0, o->p0 + o->np - 1, tool_color(o->tool), px(1.7f), 82, 0);
+    }
 }
 
 static void draw_top(traj_t *t)
 {
     proj_t p = make_proj(t);
-    memcpy(t->buf->data, t->base->data, t->buf->data_size);
-    lv_layer_t l;
-    lv_canvas_init_layer(t->canvas, &l);
-    /* изминатият път */
+    /* изминатият път се добавя постепенно в отделен буфер (не се рисува всеки кадър от нулата) */
     int cur = M.op < P.nop ? M.op : P.nop - 1;
-    for (int i = 0; i < cur && i < P.nop; i++) {
-        const op_t *o = &P.op[i];
-        if (o->kind != OP_MOVE) continue;
-        if (o->rapid) path(&l, &p, o->p0, o->p0 + o->np - 1, C_DIM, 1, LV_OPA_COVER, px(4));
-        else path(&l, &p, o->p0, o->p0 + o->np - 1, tool_color(o->tool), px(2.4f), LV_OPA_COVER, 0);
-    }
+    if (t->done_op < 0 || cur < t->done_op) { memcpy(t->done->data, t->base->data, t->done->data_size); t->done_op = 0; }
+    for (; t->done_op < cur; t->done_op++)
+        if (P.op[t->done_op].kind == OP_MOVE) op_path(t->done, &p, &P.op[t->done_op], true);
+    memcpy(t->buf->data, t->done->data, t->buf->data_size);
     double wx = machine_work(AX_X), wy = machine_work(AX_Y), wz = machine_work(AX_Z);
     if (cur >= 0 && P.op[cur].kind == OP_MOVE && M.op_s > 0 && (M.state == MS_RUN || M.state == MS_HOLD)) {
         const op_t *o = &P.op[cur];
@@ -152,9 +163,12 @@ static void draw_top(traj_t *t)
         while (k < o->p0 + o->np - 1 && P.cum[k + 1] < M.op_s) k++;
         lv_color_t c = o->rapid ? C_DIM : tool_color(o->tool);
         int32_t w = o->rapid ? 1 : px(2.4f), dsh = o->rapid ? px(4) : 0;
-        if (k > o->p0) path(&l, &p, o->p0, k, c, w, LV_OPA_COVER, dsh);
-        line(&l, P2(&p, P.pt[k].x, P.pt[k].y, P.pt[k].z), P2(&p, (float)wx, (float)wy, (float)wz), c, w, LV_OPA_COVER, dsh);
+        if (k > o->p0) path(t->buf, &p, o->p0, k, c, w, LV_OPA_COVER, dsh);
+        lv_point_precise_t a0 = P2(&p, P.pt[k].x, P.pt[k].y, P.pt[k].z), a1 = P2(&p, (float)wx, (float)wy, (float)wz);
+        raster_line(t->buf, (int32_t)a0.x, (int32_t)a0.y, (int32_t)a1.x, (int32_t)a1.y, c, w < 1 ? 1 : w, LV_OPA_COVER, dsh);
     }
+    lv_layer_t l;
+    lv_canvas_init_layer(t->canvas, &l);
     /* инструментът: дръжка нагоре, кръг на върха и кръст */
     double dia;
     machine_tool_name(M.tool, &dia);
@@ -178,10 +192,12 @@ static void draw_top(traj_t *t)
 
 static void alloc_bufs(traj_t *t, int32_t w, int32_t h)
 {
-    if (t->buf) { lv_draw_buf_destroy(t->buf); lv_draw_buf_destroy(t->base); }
+    if (t->buf) { lv_draw_buf_destroy(t->buf); lv_draw_buf_destroy(t->base); lv_draw_buf_destroy(t->done); }
     t->w = w; t->h = h;
     t->buf = lv_draw_buf_create((uint32_t)w, (uint32_t)h, LV_COLOR_FORMAT_NATIVE, 0);
     t->base = lv_draw_buf_create((uint32_t)w, (uint32_t)h, LV_COLOR_FORMAT_NATIVE, 0);
+    t->done = lv_draw_buf_create((uint32_t)w, (uint32_t)h, LV_COLOR_FORMAT_NATIVE, 0);
+    t->done_op = -1;
     lv_canvas_set_draw_buf(t->canvas, t->buf);
     lv_canvas_set_draw_buf(t->base_cv, t->base);
     t->base_dirty = true;

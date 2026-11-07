@@ -130,6 +130,7 @@ void ui_go(int s)
         /* в портрет заглавието се скрива само в „Работа“ (.ttl в макета) */
         lv_obj_set_hidden(lv_obj_get_child(lv_obj_get_child(traj.card, 0), 0), g_portrait && s == SCR_RUN);
     }
+    if (g_screen == SCR_FILES && s != SCR_FILES) files_hide();
     for (int i = 0; i < SCR_N; i++) lv_obj_set_hidden(scr_box[i], i != s);
     for (int i = 0; i < 7; i++) ui_btn_set_kind(nav_btn[i], NAV_SCR[i] == s ? BTN_ON : BTN_NORMAL);
     g_screen = s;
