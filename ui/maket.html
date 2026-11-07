@@ -103,11 +103,11 @@ body{font-family:var(--f-txt)}
 .panel.portrait .run .val{font-size:1.9em}
 .panel.portrait .ctrl{grid-template-columns:repeat(3,minmax(0,1fr))}
 .panel.portrait .cycle{grid-column:1/-1}
-.panel.portrait .jog{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.panel.portrait .jog,.panel.portrait .mdi{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.panel.portrait .jog>.card.trj,.panel.portrait .mdi>.card.trj{grid-column:2;grid-row:1/3}
+.panel.portrait .jog>.card:last-child,.panel.portrait .mdi>.card:last-child{grid-column:1/-1;grid-row:3}
 .panel.portrait .jog>.card:last-child .card-b{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.55em 1.2em}
 .panel.portrait .jog .refgrid{grid-column:2}
-.panel.portrait .mdi{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
-.panel.portrait .mdi>.card:last-child{grid-column:1/-1}
 .panel.portrait .mdi .hist{max-height:11em}
 .panel.portrait .tools{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
 .panel.portrait .tools>.card:last-child .card-b{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr auto;align-items:center;gap:.6em 1.4em}
@@ -272,7 +272,14 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .gl.c>span:first-child{color:var(--acc)}
 
 /* Ръчно */
-.jog{grid-template-columns:minmax(0,33fr) minmax(0,42fr) minmax(0,25fr)}
+/* Ръчно и MDI: позицията над движението/командата, траекторията в средата, параметрите/клавиатурата вдясно */
+.jog,.mdi{grid-template-columns:minmax(0,33fr) minmax(0,42fr) minmax(0,25fr);grid-template-rows:auto minmax(0,1fr)}
+.jog>.card:nth-child(1),.mdi>.card:nth-child(1){grid-column:1;grid-row:1}
+.jog>.card:nth-child(2),.mdi>.card:nth-child(2){grid-column:1;grid-row:2}
+.jog>.card.trj,.mdi>.card.trj{grid-column:2;grid-row:1/3}
+.jog>.card:last-child,.mdi>.card:last-child{grid-column:3;grid-row:1/3}
+.cvslot{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.trj .card-h .seg .btn{font-size:.82em}
 .pad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:.45em;flex:1;min-height:0}
 .pad .btn,.rot .btn{min-height:0;height:100%;font-size:1.45em;font-weight:700;letter-spacing:.04em}
 .pad .lbl{display:flex;align-items:center;justify-content:center;font:700 1.1em var(--f-ui);color:var(--faint);letter-spacing:.1em}
@@ -285,7 +292,6 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .lab{font:600 .82em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
 
 /* MDI */
-.mdi{grid-template-columns:minmax(0,29fr) minmax(0,37fr) minmax(0,34fr)}
 .mdi-in{font:500 1.3em/1.5 var(--f-num);background:var(--panel);border:1px solid var(--line);border-radius:.35em;padding:.45em .6em;min-height:4.8em;white-space:pre-wrap;word-break:break-all}
 .mdi-in .caret{display:inline-block;width:.55em;height:1.1em;vertical-align:-.15em;background:var(--acc);animation:blink 1s steps(2) infinite}
 .hist{display:flex;flex-direction:column;gap:.3em;overflow:auto;min-height:0;flex:1}
@@ -366,6 +372,11 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .atc.busy{color:var(--acc)}
 .atc.off{color:var(--warn)}
 .atc .btn{margin-left:auto;flex:none}
+.tpick{display:flex;flex-direction:column;gap:.3em}
+.tpick .btn{justify-content:flex-start;gap:.8em;min-height:3em;background:var(--panel);font:500 1.15em var(--f-num);text-transform:none;letter-spacing:0}
+.tpick .btn b{color:var(--hi);font:700 1.1em var(--f-ui)}
+.tpick .btn span{font:500 .8em var(--f-txt);color:var(--dim)}
+.panel.portrait .tools .tpick{grid-column:2}
 .tools .card-b.nomag{display:flex!important;flex-direction:column}
 /* Карта на височините: плоски клетки (в LVGL: lv_canvas с правоъгълници) */
 .hm{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:.3em;overflow:hidden;flex:none}
@@ -567,9 +578,9 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           </div>
           <div class="card">
             <div class="card-h"><span class="ttl">Траектория</span>
-              <div class="seg vseg" id="viewSeg"><button class="btn sm on" data-act="view" data-v="iso" type="button">3D</button><button class="btn sm" data-act="view" data-v="top" type="button">XY</button><button class="btn sm" data-act="view" data-v="front" type="button">XZ</button><button class="btn sm" data-act="view" data-v="side" type="button">YZ</button><button class="btn sm" data-act="view" data-v="fit" type="button">Побери</button></div>
+              <span class="segslot" data-segslot="run"><div class="seg vseg" id="viewSeg"><button class="btn sm on" data-act="view" data-v="iso" type="button">3D</button><button class="btn sm" data-act="view" data-v="top" type="button">XY</button><button class="btn sm" data-act="view" data-v="front" type="button">XZ</button><button class="btn sm" data-act="view" data-v="side" type="button">YZ</button><button class="btn sm" data-act="view" data-v="fit" type="button">Побери</button></div></span>
             </div>
-            <div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div>
+            <div class="cvslot" data-cvslot="run"><div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div></div>
           </div>
           <div class="card">
             <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
@@ -629,6 +640,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               </div>
             </div>
           </div>
+          <div class="card trj">
+            <div class="card-h"><span>Траектория</span><span class="segslot" data-segslot="jog"></span></div>
+            <div class="cvslot" data-cvslot="jog"></div>
+          </div>
           <div class="card">
             <div class="card-h"><span>Параметри</span></div>
             <div class="card-b">
@@ -673,6 +688,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
               <div class="hist" id="mdiHist"></div>
             </div>
           </div>
+          <div class="card trj">
+            <div class="card-h"><span>Траектория</span><span class="segslot" data-segslot="mdi"></span></div>
+            <div class="cvslot" data-cvslot="mdi"></div>
+          </div>
           <div class="card">
             <div class="card-h"><span>Клавиатура</span></div>
             <div class="card-b"><div class="keys" id="keys"></div></div>
@@ -694,6 +713,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
                 <button class="btn on" data-act="tool-change" id="btnTc" type="button">Смени с T3</button>
                 <button class="btn" data-act="tool-measure" type="button">Измери дължина</button>
               </div>
+              <div class="tpick"><span class="lab">Инструмент за смяна</span><button class="btn" data-act="t-pick" id="btnTPick" type="button"></button></div>
             </div>
           </div>
         </section>
@@ -1617,7 +1637,8 @@ function renderTools(){
   const lt=MT()==='lathe',num=(k,v)=>`<td class="n ed" data-act="t-num" data-k="${k}" data-v="${t.t}">${t.empty?'—':v.toFixed(3)}</td>`;
   rows.push(`<tr data-act="tsel" data-v="${t.t}" class="${t.t===S.sel?'sel':''}"><td class="tn">T${t.t}</td><td class="ed" data-act="t-name" data-v="${t.t}"><span class="nm${t.empty?' emp':''}">${t.d.replace(/</g,'&lt;')}</span>${t.t===S.tool?`<span class="badge">${lt?'в работа':'шпиндел'}</span>`:''}${t.t===10&&MT()==='mill'&&S.cfg.prb.prMount==='spindle'?'<span class="badge dimb">PRB1</span>':''}</td>${num(lt?'tZ':'tLen',t.len)}${num(lt?'tX':'tDia',t.dia)}${num(lt?'tR':'tWear',t.w)}</tr>`)}
  toolBody.innerHTML=rows.join('');
- set($('#btnTc'),(autoTc()?'Смени с T':'Ръчна смяна с T')+S.sel);set($('#toolCnt'),N+(MT()!=='lathe'&&!S.cfg.mag.mOn?' инструмента':' гнезда'));
+ set($('#btnTc'),(autoTc()?'Смени с T':'Ръчна смяна с T')+S.sel);
+ {const t=toolOf(S.sel);$('#btnTPick').innerHTML=`<b>T${S.sel}</b><span>${t?(t.empty?'празно':t.d.replace(/</g,'&lt;')):''} · натиснете, за да въведете номер</span>`}set($('#toolCnt'),N+(MT()!=='lathe'&&!S.cfg.mag.mOn?' инструмента':' гнезда'));
 }
 const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],WL=[],magKey='';
 /* колелата на карусела: гнездо i е на колело wh(i), място lc(i); S.wpos/S.wph са позициите на колелата */
@@ -2186,6 +2207,7 @@ const FORMS={disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_P
  ['hmOX','Офсет на сондата X','мм',3,'Отместване на сондата спрямо оста на шпиндела. Прибавя се към X на точките.'],
  ['hmOY','Офсет на сондата Y','мм',3,'Същото по Y.'],['hmOZ','Офсет на сондата Z','мм',3,'Прибавя се към измерената Z.']
 ].forEach(([k,n,u,d,h])=>{PDEF[k]={k,n,u,t:'num',d,min:k==='hmRes'||k==='hmArc'?.001:k==='hmRet'?1:k==='hmF'||k==='hmScan'?1:-9999,max:k==='hmRet'?100:99999,h}})})();
+PDEF.tPick={k:'tPick',n:'Инструмент за смяна',t:'num',d:0,min:1,get max(){return magCfg().mn},h:'Номерът на инструмента (T), който да се постави в шпиндела. После натиснете „Смени“.'};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
@@ -2599,7 +2621,10 @@ function updStatus(now){
 
 /* ---------- Събития ---------- */
 const panel=$('#panel');
-function go(scr){S.screen=scr;$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
+/* един изглед на траекторията: преместваме го в екрана, който е отворен (Работа, Ръчно, MDI) */
+function moveCv(scr){const c=$(`[data-cvslot="${scr}"]`),g=$(`[data-segslot="${scr}"]`);if(!c)return;
+ const w=$('.canvas-wrap');if(w.parentElement!==c)c.appendChild(w);const sg=$('#viewSeg');if(g&&sg.parentElement!==g)g.appendChild(sg)}
+function go(scr){S.screen=scr;moveCv(scr);$$('.screen').forEach(s=>s.hidden=s.dataset.screen!==scr);$$('#nav .btn').forEach(b=>b.classList.toggle('on',b.dataset.v===scr));if(scr==='tools')renderTools();if(scr==='set')renderSet();if(scr==='files'){renderFiles();requestAnimationFrame(previewFile)}if(scr==='run')lastWin=''}
 function segOn(sel,v){$$(sel).forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)))}
 panel.addEventListener('pointerdown',()=>{S.acc.last=performance.now()},true);
 panel.addEventListener('click',e=>{
@@ -2814,6 +2839,8 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case't-pick':S.nd={a:'tool',k:'tPick',txt:'',get:()=>S.sel,set:x=>{const n=Math.round(x),t=toolOf(n);if(!t){toast('Няма инструмент T'+n);return}
+    S.sel=n;renderTools();const r=$(`#toolBody tr[data-v="${n}"]`);if(r)r.scrollIntoView({block:'center'});toast('Избран е T'+n+(t.empty?' · празно гнездо':' · '+t.d))},after:()=>{}};$('#numDlg').hidden=false;renderNd();break;
   case'hm-cancel':$('#hmDlg').hidden=true;break;
   case'hm-n':{const k=b.dataset.k;S.nd={a:'hm',k,txt:'',get:()=>S.hm.cfg[k],set:x=>{S.hm.cfg[k]=x},after:()=>{hmRender();renderCycs()}};$('#numDlg').hidden=false;renderNd();break}
   case'hm-tg':{const on=b.dataset.on==='1';if(v==='plOn')S.hm.cfg.plOn=on?1:0;else{
@@ -2959,7 +2986,8 @@ let last=performance.now(),acc=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);acc+=dt;
  updDro();updStatus(now);
- if(S.screen==='run'){updGc();draw()}
+ if(S.screen==='run')updGc();
+ if(S.screen==='run'||S.screen==='jog'||S.screen==='mdi')draw();
  if(S.screen==='tools')updMag(dt);
  if(S.screen==='laser')updLz(now);
  if(S.screen==='set'&&S.setSec==='lube')updLube();
