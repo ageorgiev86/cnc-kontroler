@@ -1,6 +1,7 @@
 /* Горната лента (.statusbar в макета):
  * RESET, CNC, състояние, режим, вид машина, G-режими, инструмент, MCU | съобщение | час, авариен стоп */
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include "ui.h"
@@ -82,6 +83,8 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
     lv_label_set_text(lv_label_create(g), "G17 G21 G90");
 
     tb->tool = chip_text(l, "");
+    lv_label_set_long_mode(tb->tool, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_style_max_width(tb->tool, EM(15), 0);
 
     lv_obj_t *m = chip(l);
     lv_obj_t *led = tb->mcu_led = ui_box(m);
@@ -114,6 +117,21 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
 
 static const char *const STATE_TXT[] = {"ГОТОВ", "РАБОТИ", "ПАУЗА", "АЛАРМА", "АВАРИЕН СТОП"};
 static const char *const MACH_TXT[] = {"Фреза / рутер", "Лазер", "Плазма", "Струг"};
+
+/* Ако лявата група не се побира до часовника и аварийния стоп, по-маловажните чипове се скриват
+ * (вид машина, режим, MCU, G-режими), а името на инструмента се съкращава. */
+static void fit(topbar_t *tb)
+{
+    if (g_portrait) return;   /* в портрет лентата се пренася на два реда */
+    lv_obj_t *opt[4] = {lv_obj_get_parent(tb->mach), lv_obj_get_parent(tb->mode), lv_obj_get_parent(tb->mcu), lv_obj_get_parent(tb->gmodes_wcs)};
+    for (int i = 0; i < 4; i++) lv_obj_set_hidden(opt[i], false);
+    lv_obj_update_layout(tb->bar);
+    int32_t avail = lv_obj_get_content_width(tb->bar) - lv_obj_get_width(tb->right) - EM(1.2f);
+    for (int i = 0; i < 4 && lv_obj_get_width(tb->left) > avail; i++) {
+        lv_obj_set_hidden(opt[i], true);
+        lv_obj_update_layout(tb->bar);
+    }
+}
 
 void topbar_update(topbar_t *tb, uint32_t now)
 {
@@ -150,7 +168,12 @@ void topbar_update(topbar_t *tb, uint32_t now)
     ui_set_text(tb->gmodes_wcs, buf);
     if (M.tool) snprintf(buf, sizeof buf, "T%d · %s Ø%g", M.tool, M.tool_desc, M.tool_dia);
     else snprintf(buf, sizeof buf, "Без инструмент");
-    ui_set_text(tb->tool, buf);
+    static char tool_was[96];
+    if (strcmp(buf, tool_was)) {
+        ui_set_text(tb->tool, buf);
+        snprintf(tool_was, sizeof tool_was, "%s", buf);
+        fit(tb);
+    }
 
     lv_obj_set_style_bg_color(tb->mcu_led, M.mcu_link ? C_OK : C_BAD, 0);
     if (M.mcu_link) snprintf(buf, sizeof buf, "MCU %d kHz", M.mcu_rate_hz / 1000);

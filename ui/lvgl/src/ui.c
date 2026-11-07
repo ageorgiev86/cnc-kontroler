@@ -77,9 +77,29 @@ void ui_traj_slot(int scr, int col, int cspan, int row, int rspan)
     tslot[scr].row = row; tslot[scr].rspan = rspan;
 }
 
+/* надписите на навигацията: ако не се побират, по-дребен шрифт и без разредка */
+static void nav_fit(void)
+{
+    lv_obj_update_layout(lv_screen_active());
+    for (int i = 0; i < 7; i++) {
+        lv_obj_t *b = nav_btn[i], *l = ui_btn_label(b);
+        const lv_font_t *f[3] = {lv_obj_get_style_text_font(b, 0), F.ui_sm, F.ui_xs};
+        for (int k = 0; k < 3; k++) {
+            int32_t ls = k == 0 ? lv_obj_get_style_text_letter_space(b, 0) : 0;
+            lv_obj_set_style_text_font(b, f[k], 0);
+            lv_obj_set_style_text_letter_space(b, ls, 0);
+            lv_obj_update_layout(b);
+            if (lv_obj_get_width(l) <= lv_obj_get_content_width(b)) break;
+        }
+        lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
+    }
+}
+
 static void update_cb(lv_timer_t *t)
 {
     static uint32_t last;
+    static bool fitted;
+    if (!fitted) { nav_fit(); fitted = true; }
     uint32_t now = lv_tick_get();
     machine_tick(now, last ? now - last : 0);
     last = now;
