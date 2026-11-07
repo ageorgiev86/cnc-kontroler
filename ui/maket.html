@@ -372,6 +372,23 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .atc.busy{color:var(--acc)}
 .atc.off{color:var(--warn)}
 .atc .btn{margin-left:auto;flex:none}
+.lgtabs{margin-bottom:.6em}.lgtabs .btn{flex:0 1 auto}
+.lgm{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:.6em;min-height:0}
+.panel.portrait .lgm{grid-template-columns:minmax(0,1fr)}
+.lgl{display:flex;flex-direction:column;gap:.35em}
+.lgl .btn{justify-content:flex-start;gap:.6em;text-transform:none;letter-spacing:0;min-height:2.8em}
+.lgl .btn b{font:700 1.05em var(--f-ui);color:var(--hi)} .lgl .btn span{font:500 .85em var(--f-txt);white-space:normal;text-align:left}
+.lgl .btn.off{opacity:.5}
+.lge{display:flex;flex-direction:column;gap:.5em;min-width:0}
+.lgh{display:flex;align-items:center;gap:.5em}.lgh>b{font:700 1.3em var(--f-ui);color:var(--hi)}.lgh>.btn{flex:1;justify-content:flex-start;text-transform:none;font:500 1em var(--f-txt)}
+.lgcode{width:100%;min-height:13em;resize:vertical;background:var(--panel);color:var(--fg);border:1px solid var(--edge2);border-radius:.35em;padding:.5em .65em;font:400 .95em/1.5 var(--f-num);white-space:pre;overflow:auto;margin:0}
+.lgcode:focus{outline:none;border-color:var(--hi);box-shadow:0 0 .5em var(--glow)}
+.lgcode.ro{min-height:0;color:var(--dim)}
+.lgchk{font:500 .85em/1.4 var(--f-txt);padding:.45em .6em;border-radius:.35em;border:1px solid var(--line)}
+.lgchk.ok{color:var(--ok)} .lgchk.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,transparent)}
+.lgr td{vertical-align:middle} .lgr tr.off td{opacity:.55} .lgr .lgb{text-transform:none;letter-spacing:0;font:500 .9em var(--f-txt)}
+.lgr .lgw{font:500 .8em var(--f-num);color:var(--dim)}
+.lgm1{display:flex;flex-direction:column;gap:.6em}
 .tpick{display:flex;flex-direction:column;gap:.3em}
 .tpick .btn{justify-content:flex-start;gap:.8em;min-height:3em;background:var(--panel);font:500 1.15em var(--f-num);text-transform:none;letter-spacing:0}
 .tpick .btn b{color:var(--hi);font:700 1.1em var(--f-ui)}
@@ -1158,6 +1175,12 @@ function parse(lines){
   if(gs.includes(90))inc=false;if(gs.includes(91))inc=true;
   if(gs.includes(98))ret=98;if(gs.includes(99))ret=99;
   if(gs.includes(95))fpr=true;if(gs.includes(94))fpr=false;if(gs.includes(96))css=true;if(gs.includes(97))css=false;
+  {const mm=ms.find(m=>m>=100&&m<=199);if(mm!=null){const mc=S.cfg.logic.macros.find(x=>x.m===mm);
+   if(!mc||!mc.on){out.push({type:'act',line:li,dur:0,label:'M'+mm,fn:()=>{halt();S.state='alarm';S.alarm='M'+mm+(mc?' е изключен':' не е дефиниран')+' (Настройки → Макроси и логика).'}});return}
+   if((S.macDepth||0)>=8)return;S.macDepth=(S.macDepth||0)+1;
+   out.push({type:'act',line:li,dur:0,label:'M'+mm+': '+mc.n});
+   mc.code.split('\n').forEach(l=>{const t=l.replace(/\(.*?\)/g,'').toUpperCase().trim();if(!t||/^(O\d|M99|IF|WHILE|END|GOTO|#)/.test(t))return;step(l,li)});
+   S.macDepth--;return}}
   gs.forEach(g=>{if(g===0||g===1||g===2||g===3){mode=g;cyc=0}if(g===81||g===82||g===83){cyc=g;cInit=pos.Z}if(g===80)cyc=0});
   for(const k of['X','Y','Z','I','J','K','R'])if(w[k]!==undefined)w[k]*=u;
   if(w.F!==undefined)F=w.F*u;
@@ -2208,6 +2231,9 @@ const FORMS={disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_P
  ['hmOY','Офсет на сондата Y','мм',3,'Същото по Y.'],['hmOZ','Офсет на сондата Z','мм',3,'Прибавя се към измерената Z.']
 ].forEach(([k,n,u,d,h])=>{PDEF[k]={k,n,u,t:'num',d,min:k==='hmRes'||k==='hmArc'?.001:k==='hmRet'?1:k==='hmF'||k==='hmScan'?1:-9999,max:k==='hmRet'?100:99999,h}})})();
 PDEF.tPick={k:'tPick',n:'Инструмент за смяна',t:'num',d:0,min:1,get max(){return magCfg().mn},h:'Номерът на инструмента (T), който да се постави в шпиндела. После натиснете „Смени“.'};
+PDEF.lgT={k:'lgT',n:'Задържане',u:'s',t:'num',d:1,min:0,max:600,h:'Колко дълго условието трябва да е налице, преди правилото да сработи. 0 = веднага.'};
+PDEF.lgOut={k:'lgOut',n:'Изход',t:'num',d:0,min:1,max:32,h:'Номерът на изхода (OUT1–OUT32).'};
+PDEF.lgMac={k:'lgMac',n:'Макрос',t:'num',d:0,min:100,max:199,h:'Номерът на макроса (M100–M199).'};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
@@ -2252,6 +2278,18 @@ S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1
 S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.disp={dRes:'auto',dRot:'0'};
+/* Макроси и логика (docs/makrosi-logika.md). В макета: макросите се изпълняват (G/M редовете), правилата само се настройват. */
+S.cfg.logic={
+ macros:[
+  {m:100,n:'Затягане на детайла',on:1,code:'O100 (M100: ЗАТЯГАНЕ НА ДЕТАЙЛА)\nM64 P13 (OUT13: втора стяга)\nM66 P11 L3 Q2 (чакай IN11 „стегнато“ до 2 s)\nIF [#5399 LT 0] THEN #3000=1 (СТЯГАТА НЕ ЗАТЯГА)\nM99'},
+  {m:101,n:'Разтягане',on:1,code:'O101 (M101: РАЗТЯГАНЕ)\nM65 P13\nG4 P0.5\nM99'},
+  {m:110,n:'Вакуумна маса, двете зони',on:1,code:'O110 (M110: ВАКУУМ ЗОНИ 1 И 2)\nM64 P10\nM64 P11\nM66 P7 L3 Q5 (чакай „Вакуум ОК“)\nM99'}],
+ rules:[
+  {on:1,inp:1,cond:0,t:1,act:'alarm',arg:0},
+  {on:1,inp:0,cond:0,t:0,act:'hold',arg:0},
+  {on:1,inp:3,cond:1,t:0,act:'start',arg:0},
+  {on:0,inp:8,cond:1,t:2,act:'warn',arg:0}]
+};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
 S.netOk=false;
 S.draft=clone(S.cfg);
@@ -2267,9 +2305,9 @@ function homeOps(axes){
  });
  return ops;
 }
-const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1};
+const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1,logic:2};
 const LVN=['Оператор','Настройчик','Производител'];
-const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['acc','Достъп']];
+const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['logic','Макроси и логика'],['acc','Достъп']];
 const STATIC={
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
 };
@@ -2281,6 +2319,59 @@ function fmtP(p,v){
  if(p.t==='ip'||p.t==='text')return v===''||v==null?'—':String(v);
  if(p.t==='pass')return v?'••••••':'не е зададена';
  return(+v).toFixed(p.d);
+}
+/* ---------- Макроси и логика ---------- */
+const LG_ACT=[['hold','Пауза на подаването'],['stop','Стоп + спиране на шпиндела'],['alarm','Аларма'],['warn','Предупреждение'],['start','Цикъл старт'],['out1','Включи изход'],['out0','Изключи изход'],['macro','Изпълни макрос']];
+const lgWhere=a=>['hold','stop','alarm','out1','out0'].includes(a)?'STM32 · 1 ms':'Linux · 100 Hz';
+const ioNm=(d,i)=>{const o=S.draft.io[d][i];return(d==='in'?'IN':'OUT')+(i+1)+(o&&(o.n||o.f!=='none')?' · '+(o.n||FN(d==='in'?IN_F:OUT_F,o.f)):'')};
+/* проверка на макрос: синтаксис и номерата на входовете/изходите */
+function macCheck(mc){
+ const er=[],L=mc.code.split('\n');let depth=0;
+ if(!/^\s*O0*(\d+)/i.test(L[0]||'')||+(/O0*(\d+)/i.exec(L[0])||[])[1]!==mc.m)er.push('ред 1: трябва да започва с O'+mc.m);
+ if(!L.some(l=>/^\s*M99\b/i.test(l)))er.push('липсва M99 (край на макроса)');
+ L.forEach((raw,i)=>{const t=raw.replace(/\(.*?\)/g,'').replace(/;.*/,'').toUpperCase().trim();if(!t||/^O\d+$/.test(t)||t==='M99')return;
+  if((raw.match(/\(/g)||[]).length!==(raw.match(/\)/g)||[]).length){er.push('ред '+(i+1)+': незатворена скоба');return}
+  if(/^(IF|WHILE|END\d*|GOTO|#)/.test(t)){if((t.match(/\[/g)||[]).length!==(t.match(/\]/g)||[]).length)er.push('ред '+(i+1)+': незатворена [ ]');if(/^WHILE/.test(t))depth++;if(/^END/.test(t))depth--;return}
+  if(!/^([A-Z]\s*[-+]?(\d+\.?\d*|\.\d+)\s*)+$/.test(t)){er.push('ред '+(i+1)+': неразпозната команда „'+t+'“');return}
+  const m=/M\s*(6[2-6])\b/.exec(t),p=/P\s*(\d+)/.exec(t);if(m&&(!p||+p[1]<1||+p[1]>32))er.push('ред '+(i+1)+': M'+m[1]+' иска P1 … P32');
+  const mm=/M\s*(1\d\d)\b/.exec(t);if(mm&&+mm[1]===mc.m)er.push('ред '+(i+1)+': макросът извиква сам себе си');});
+ if(depth)er.push('WHILE без END');
+ return er;
+}
+function renderLogic(body,help){
+ const L=S.draft.logic,tab=S.lgTab||'mac';
+ const tabs=`<div class="seg lgtabs">${[['mac','Макроси M100–M199'],['rules','Правила „ако → тогава“'],['lua','Скриптове Lua']].map(([k,n])=>`<button class="btn sm${tab===k?' on':''}" data-act="lg-tab" data-v="${k}" type="button">${n}</button>`).join('')}</div>`;
+ if(tab==='mac'){
+  if(!L.macros.length)S.lgSel=null;else if(!L.macros.some(x=>x.m===S.lgSel))S.lgSel=L.macros[0].m;
+  const mc=L.macros.find(x=>x.m===S.lgSel),er=mc?macCheck(mc):[];
+  body.innerHTML=tabs+`<div class="lgm"><div class="lgl">${L.macros.map(x=>`<button class="btn${x.m===S.lgSel?' on':''}${x.on?'':' off'}" data-act="lg-sel" data-v="${x.m}" type="button"><b>M${x.m}</b><span>${x.n.replace(/</g,'&lt;')}</span></button>`).join('')}<button class="btn ghost" data-act="lg-new" type="button">+ Нов макрос</button></div>`+
+   (mc?`<div class="lge"><div class="lgh"><b>M${mc.m}</b><button class="btn" data-act="lg-name" type="button">${mc.n.replace(/</g,'&lt;')}</button><div class="seg"><button class="btn sm${mc.on?' on':''}" data-act="lg-on" data-v="1" type="button">Вкл.</button><button class="btn sm${mc.on?'':' on'}" data-act="lg-on" data-v="0" type="button">Изкл.</button></div></div>
+   <textarea class="lgcode" id="lgCode" spellcheck="false">${mc.code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+   <div class="lgchk ${er.length?'bad':'ok'}" id="lgChk">${er.length?er.join('<br>'):'Проверката е минала: синтаксисът и номерата на входовете и изходите са наред.'}</div>
+   <div class="grid3" style="grid-template-columns:1fr 1fr 1fr"><button class="btn" data-act="lg-check" type="button">Провери</button><button class="btn" data-act="lg-try" type="button">Пробвай в MDI</button><button class="btn" data-act="lg-del" type="button">Изтрий</button></div></div>`:'<div class="lge"><p class="txt">Няма макроси. Натиснете „+ Нов макрос“.</p></div>')+`</div>`;
+  help.innerHTML='Макросът е подпрограма O<b>номер</b> … M99 и се извиква от програмата или MDI с M100–M199. Достъп до входовете и изходите: M62–M65 P<i>n</i> (изходи), M66 P<i>n</i> L3 Q<i>s</i> (чакай вход), #5399 (резултат от M66), аларма с #3000. Изпълнява се в интерпретатора на Linux, синхронно с движението. В макета се изпълняват G/M редовете, а IF, WHILE и # се проверяват, но се пропускат. Безопасността никога не е в макрос.';
+ }else if(tab==='rules'){
+  body.innerHTML=tabs+`<div class="tbl-wrap"><table class="tt lgr"><thead><tr><th>Вкл.</th><th>Ако</th><th>Условие</th><th class="n">Задържане</th><th>Тогава</th><th>Изпълнява се в</th><th></th></tr></thead><tbody>`+
+   L.rules.map((r,i)=>{const a=LG_ACT.find(x=>x[0]===r.act),arg=r.act==='out1'||r.act==='out0'?' · '+ioNm('out',r.arg):r.act==='macro'?' · M'+r.arg:'';
+    return`<tr class="${r.on?'':'off'}"><td><button class="btn sm${r.on?' on':''}" data-act="lg-r" data-k="on" data-v="${i}" type="button">${r.on?'Да':'Не'}</button></td>`+
+    `<td><button class="btn sm lgb" data-act="lg-r" data-k="inp" data-v="${i}" type="button">${ioNm('in',r.inp).replace(/</g,'&lt;')}</button></td>`+
+    `<td><button class="btn sm" data-act="lg-r" data-k="cond" data-v="${i}" type="button">${r.cond?'се включи':'липсва (изкл.)'}</button></td>`+
+    `<td class="n"><button class="btn sm" data-act="lg-r" data-k="t" data-v="${i}" type="button">${r.t} s</button></td>`+
+    `<td><button class="btn sm lgb" data-act="lg-r" data-k="act" data-v="${i}" type="button">${a?a[1]:r.act}${arg.replace(/</g,'&lt;')}</button></td>`+
+    `<td class="lgw">${lgWhere(r.act)}</td><td><button class="btn sm ghost" data-act="lg-r" data-k="del" data-v="${i}" type="button">✕</button></td></tr>`}).join('')+
+   `</tbody></table></div><div class="teach"><button class="btn" data-act="lg-radd" type="button">+ Ново правило</button></div>`;
+  help.innerHTML='Правилата работят постоянно, без програмиране. Пауза, стоп, аларма и изходите вървят в STM32 на всяка 1 ms, останалите в Linux около 100 пъти в секунда. „Задържане“: колко дълго условието трябва да е налице, преди правилото да сработи. Аварийният стоп, вратата при работещ шпиндел и крайните изключватели не са правила: те са хардуерни и във firmware-а. В макета правилата само се настройват.';
+ }else{
+  body.innerHTML=tabs+`<div class="lgm1"><p class="txt">Скриптове на Lua за случаите, които правилата не покриват: сложни автомати, връзка с външни устройства, собствени екрани. Идват в следваща версия, след макросите и правилата.</p><pre class="lgcode ro">-- пример: палетен сменяч
+function on_input(n, v)
+  if n == 8 and v then           -- IN8 „Палет на място“
+    out(14, true)                -- OUT14: заключване на палета
+    wait_input(12, true, 2.0)    -- IN12 „заключено“
+    message("Палетът е сменен")
+  end
+end</pre></div>`;
+  help.innerHTML='Lua, а не Python: малък (около 300 KB), бърз, вгражда се лесно в C и е с лиценз MIT. Скриптовете се редактират само със сервизна парола и се проверяват преди запис.';
+ }
 }
 function renderSet(){
  $('.screen.sets').classList.toggle('login',S.acc.level===0);
@@ -2295,11 +2386,12 @@ function renderSet(){
  const dirty=JSON.stringify(S.cfg)!==JSON.stringify(S.draft);
  set($('#setDirty'),dirty?'незаписани промени':'');
  const form=!!FORMS[sec];
- $('#setFoot').hidden=!(tab||form||sec==='io');
+ $('#setFoot').hidden=!(tab||form||sec==='io'||sec==='logic');
  set($('#setNote'),dirty?'Промените важат след „Запиши“.':'');
  const body=$('#setBody'),help=$('#setHelp');
  if(sec==='acc'){renderAcc(body,help);$('#setFoot').hidden=true;return}
- if(sec==='io'){renderIoSet(body);help.innerHTML=S.setHelp?S.setHelp:'Името и функцията се виждат в „Диагностика“ и в макросите (по-късно). Инвертирането обръща логическото състояние. Филтърът потиска смущения по входа. „При авария“ определя какво прави изходът при авариен стоп или загуба на връзката с Linux.';help.hidden=false}
+ if(sec==='logic'){renderLogic(body,help);return}
+ if(sec==='io'){renderIoSet(body);help.innerHTML=S.setHelp?S.setHelp:'Името и функцията се виждат в „Диагностика“, в макросите и в правилата (Настройки → Макроси и логика). „Потребителски“ вход или изход се ползва от G-code (M62–M66), от макрос или от правило. Инвертирането обръща логическото състояние. Филтърът потиска смущения по входа. „При авария“ определя какво прави изходът при авариен стоп или загуба на връзката с Linux.';help.hidden=false}
  else if(tab){
   const P={ax:P_AX,home:P_HOME,enc:P_ENC}[sec];
   body.innerHTML=`<table class="pt"><thead><tr><th></th>${AX.map(a=>`<th class="${S.draft[a].active?'':'off'}">${a}</th>`).join('')}</tr></thead><tbody>`+
@@ -2764,6 +2856,7 @@ panel.addEventListener('click',e=>{
    if(axCh){const pr=axProf(S.draft.mach);AX.forEach(a=>{const on=pr.includes(a)?1:0;if(S.draft[a].active!==on){S.draft[a].active=on;S.homed[a]=false}})}
    if(S.draft.mag.mn>magMax(S.draft.mag)){toast('Магазин „'+(S.draft.mag.mOn?MTYPE[S.draft.mag.mtype]:'няма')+'“ има най-много '+magMax(S.draft.mag)+' гнезда. Намалете броя.');break}
    if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
+   {const bad=S.draft.logic.macros.find(x=>x.on&&macCheck(x).length);if(bad){toast('M'+bad.m+' има грешки. Поправете ги или изключете макроса („Провери“).',6000);S.lgTab='mac';S.lgSel=bad.m;renderSet();break}}
    const dOld=clone(S.cfg.disp),dCh=JSON.stringify(dOld)!==JSON.stringify(S.draft.disp);
    logChanges();
    S.cfg=clone(S.draft);
@@ -2839,6 +2932,28 @@ panel.addEventListener('click',e=>{
   case'tool-measure':measureTool();break;
   case'load-t10':if(!canMove())break;S.prbWarn=false;S.prbRes=null;renderPrb();runOps([atcOp(10)],'atc');break;
   case'cyc':runCycle(v);break;
+  case'lg-tab':S.lgTab=v;renderSet();break;
+  case'lg-sel':S.lgSel=+v;renderSet();break;
+  case'lg-on':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(mc){mc.on=+v;renderSet()}break}
+  case'lg-new':{const M=S.draft.logic.macros;let m=100;while(M.some(x=>x.m===m)&&m<199)m++;if(M.some(x=>x.m===m)){toast('Всички номера M100–M199 са заети');break}
+   M.push({m,n:'Нов макрос',on:1,code:'O'+m+' (M'+m+')\n\nM99'});M.sort((a,c)=>a.m-c.m);S.lgSel=m;renderSet();break}
+  case'lg-name':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);S.td={a:'logic',k:'ioName',txt:mc.n,shift:false,bg:true,get:()=>mc.n,set:t=>{mc.n=t||'M'+mc.m;renderSet()}};$('#txtDlg').hidden=false;renderTd();break}
+  case'lg-check':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel),er=macCheck(mc);renderSet();toast(er.length?'M'+mc.m+': '+er.length+' грешки':'M'+mc.m+': проверката е минала');break}
+  case'lg-try':{const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(JSON.stringify(S.cfg.logic)!==JSON.stringify(S.draft.logic)){toast('Първо натиснете „Запиши“');break}
+   S.mdi='M'+mc.m;go('mdi');renderMdi();toast('Натиснете „Изпълни“, за да пуснете M'+mc.m);break}
+  case'lg-del':{const M=S.draft.logic.macros,k=M.findIndex(x=>x.m===S.lgSel);if(k>=0){M.splice(k,1);S.lgSel=null;renderSet();toast('Макросът е изтрит. Натиснете „Запиши“.')}break}
+  case'lg-radd':S.draft.logic.rules.push({on:1,inp:0,cond:1,t:0,act:'warn',arg:0});renderSet();break;
+  case'lg-r':{const i=+v,r=S.draft.logic.rules[i],k=b.dataset.k;
+   if(k==='on'){r.on=r.on?0:1;renderSet();break}
+   if(k==='cond'){r.cond=r.cond?0:1;renderSet();break}
+   if(k==='del'){S.draft.logic.rules.splice(i,1);renderSet();break}
+   if(k==='t'){S.nd={a:'logic',k:'lgT',txt:'',get:()=>r.t,set:x=>{r.t=x},after:renderSet};$('#numDlg').hidden=false;renderNd();break}
+   S.pick={lg:i,k};
+   if(k==='inp'){set($('#pkT'),'Правило '+(i+1)+' · вход');set($('#pkCur'),'сега: '+ioNm('in',r.inp));
+    $('#pkList').innerHTML=S.draft.io.in.map((o,n)=>`<button class="btn${r.inp===n?' on':''}" data-act="pk" data-v="${n}" type="button">${ioNm('in',n).replace(/</g,'&lt;')}</button>`).join('')}
+   else{set($('#pkT'),'Правило '+(i+1)+' · действие');set($('#pkCur'),'');
+    $('#pkList').innerHTML=LG_ACT.map(([a,n])=>`<button class="btn${r.act===a?' on':''}" data-act="pk" data-v="${a}" type="button">${n}</button>`).join('')}
+   $('#pickDlg').hidden=false;break}
   case't-pick':S.nd={a:'tool',k:'tPick',txt:'',get:()=>S.sel,set:x=>{const n=Math.round(x),t=toolOf(n);if(!t){toast('Няма инструмент T'+n);return}
     S.sel=n;renderTools();const r=$(`#toolBody tr[data-v="${n}"]`);if(r)r.scrollIntoView({block:'center'});toast('Избран е T'+n+(t.empty?' · празно гнездо':' · '+t.d))},after:()=>{}};$('#numDlg').hidden=false;renderNd();break;
   case'hm-cancel':$('#hmDlg').hidden=true;break;
@@ -2899,7 +3014,13 @@ panel.addEventListener('click',e=>{
   case'io-fn':{const i=+v,dir=S.ioTab,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i];S.pick={dir,i};
    set($('#pkT'),(dir==='in'?'IN':'OUT')+(i+1)+' · функция');set($('#pkCur'),'сега: '+FN(Fl,o.f));
    $('#pkList').innerHTML=Fl.map(([k,n])=>`<button class="btn${o.f===k?' on':''}" data-act="pk" data-v="${k}" type="button">${n}</button>`).join('');$('#pickDlg').hidden=false;break}
-  case'pk':{if(S.pick.aio){const d=S.pick.aio,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][S.pick.i],old=FN(Fl,o.f);
+  case'pk':{if(S.pick.lg!=null){const r=S.draft.logic.rules[S.pick.lg],k=S.pick.k;S.pick={};$('#pickDlg').hidden=true;
+    if(k==='inp'){r.inp=+v;renderSet();break}
+    r.act=v;
+    if(v==='out1'||v==='out0'){S.nd={a:'logic',k:'lgOut',txt:'',get:()=>r.arg+1,set:x=>{r.arg=Math.round(x)-1},after:renderSet};$('#numDlg').hidden=false;renderNd()}
+    else if(v==='macro'){S.nd={a:'logic',k:'lgMac',txt:'',get:()=>r.arg||100,set:x=>{r.arg=Math.round(x)},after:renderSet};$('#numDlg').hidden=false;renderNd()}
+    renderSet();break}
+   if(S.pick.aio){const d=S.pick.aio,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][S.pick.i],old=FN(Fl,o.f);
     if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;
     const pre={airP:['bar',0,10,'420'],oilP:['bar',0,25,'420'],temp:['°C',0,100,'010'],load:['%',0,100,'010'],flow:['л/мин',0,10,'420'],spindle:['об/мин',0,24000,'010']}[v];
     if(pre){o.u=pre[0];o.lo=pre[1];o.hi=pre[2];o.sig=pre[3]}
@@ -2980,6 +3101,10 @@ document.querySelectorAll('.resbtn').forEach(b=>b.addEventListener('click',()=>{
 }));
 new ResizeObserver(fit).observe(vp);window.addEventListener('resize',fit);
 
+/* редакторът на макроси: текстът се пише направо в чернова (в LVGL: lv_textarea + клавиатура) */
+document.addEventListener('input',e=>{if(e.target.id!=='lgCode')return;const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(!mc)return;mc.code=e.target.value;
+ const er=macCheck(mc),c=$('#lgChk');c.className='lgchk '+(er.length?'bad':'ok');c.innerHTML=er.length?er.join('<br>'):'Проверката е минала: синтаксисът и номерата на входовете и изходите са наред.';
+ set($('#setDirty'),'незаписани промени');set($('#setNote'),'Промените важат след „Запиши“.')});
 /* ---------- Цикъл ---------- */
 loadProgram(FILES.mem[0]);applyType(false);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
 let last=performance.now(),acc=0;
