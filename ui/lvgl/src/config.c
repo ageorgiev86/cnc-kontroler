@@ -1,8 +1,10 @@
 #include "config.h"
 #include "io.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define VAL_LEN 72
 #define HASH_N 1024
@@ -201,7 +203,20 @@ static void write_file(void)
     if (!f) return;
     fprintf(f, "# Настройки на CNC интерфейса (записва ги екранът „Настройки“)\n");
     for (int i = 0; i < n_e; i++) fprintf(f, "%s=%s\n", E[i].key, E[i].cfg);
-    if (fclose(f) == 0) rename(tmp, file_path);
+    /* безопасно при спиране на тока: данните на диска → преименуване → записът на папката на диска.
+     * Така остава или старият, или новият файл, никога половин. */
+    bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
+    if (fclose(f) != 0) ok = false;
+    if (!ok) { remove(tmp); return; }
+    if (rename(tmp, file_path) != 0) { remove(tmp); return; }
+    char dir[300];
+    snprintf(dir, sizeof dir, "%s", file_path);
+    char *sl = strrchr(dir, '/');
+    if (sl) {
+        *(sl == dir ? sl + 1 : sl) = 0;
+        int fd = open(dir, O_RDONLY | O_DIRECTORY);
+        if (fd >= 0) { fsync(fd); close(fd); }
+    }
 }
 
 void cfg_commit_key(const char *key)
