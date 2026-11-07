@@ -186,3 +186,22 @@ void mdi_update(uint32_t now)
     dro_update(&dro, now);
     if (dirty) render();
 }
+
+/* физическа клавиатура в MDI: буквите се пишат главни, Enter изпълнява */
+bool mdi_key(uint32_t key)
+{
+    size_t n = strlen(cmd);
+    if (key == LV_KEY_ENTER) {
+        while (n && (cmd[n - 1] == '\n' || cmd[n - 1] == ' ')) cmd[--n] = 0;
+        if (machine_mdi(cmd, lv_tick_get()) == 0) { add_hist(cmd); cmd[0] = 0; }
+    } else if (key == LV_KEY_BACKSPACE) { if (n) cmd[n - 1] = 0; }
+    else if (key == LV_KEY_ESC || key == LV_KEY_DEL) cmd[0] = 0;
+    else if (key == LV_KEY_UP && nhist) snprintf(cmd, sizeof cmd, "%s", hist[0]);
+    else if (key >= 0x20 && key < 0x7f && n + 2 < sizeof cmd) {
+        char c = (char)key;
+        if (c >= 'a' && c <= 'z') c -= 32;
+        cmd[n] = c; cmd[n + 1] = 0;
+    } else return false;
+    dirty = true;
+    return true;
+}

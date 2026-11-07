@@ -62,9 +62,9 @@ int main(int argc, char **argv)
     if (zoom > 0 && zoom != 1.0f) lv_sdl_window_set_zoom(disp, zoom);
     lv_sdl_mouse_create();
     lv_sdl_mousewheel_create();
-    lv_sdl_keyboard_create();
 
     ui_create(disp);
+    ui_keys_attach(lv_sdl_keyboard_create());
     if (conf) ui_load_config(conf);   /* в симулатора само при --conf, за да са снимките повторими */
     if (press_reset) machine_reset(lv_tick_get());
     if (screen && ui_go_name(screen)) { fprintf(stderr, "Няма екран „%s“\n", screen); return 2; }

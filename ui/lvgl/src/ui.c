@@ -278,6 +278,55 @@ void ui_load_config(const char *path)
     machine_apply_cfg();
 }
 
+/* ---------- физическа клавиатура ----------
+ * Клавишите стигат до невидим обект в група (LV_EVENT_KEY), а оттам до ui_key:
+ * диалог > MDI > преки пътища (F1–F7 екраните, в „Ръчно“ стрелките и Page Up/Down движат осите). */
+#define KEY_F(n) (0xF000u + (n))   /* F1–F12 от драйвера на клавиатурата */
+
+void ui_key(uint32_t key)
+{
+    uint32_t now = lv_tick_get();
+    if (dlg_key(key)) return;
+    if (key >= KEY_F(1) && key <= KEY_F(7)) {
+        static const int S[7] = {SCR_RUN, SCR_JOG, SCR_MDI, SCR_TOOLS, SCR_PROBE, SCR_DIAG, SCR_SET};
+        ui_go(S[key - KEY_F(1)]);
+        return;
+    }
+    if (g_screen == SCR_MDI && mdi_key(key)) return;
+    if (g_screen == SCR_JOG) {
+        int ax = -1, dir = 0;
+        if (key == LV_KEY_LEFT) ax = AX_X, dir = -1;
+        else if (key == LV_KEY_RIGHT) ax = AX_X, dir = 1;
+        else if (key == LV_KEY_UP) ax = AX_Y, dir = 1;
+        else if (key == LV_KEY_DOWN) ax = AX_Y, dir = -1;
+        else if (key == LV_KEY_PREV || key == KEY_F(20)) ax = AX_Z, dir = 1;    /* Page Up */
+        else if (key == LV_KEY_NEXT || key == KEY_F(21)) ax = AX_Z, dir = -1;   /* Page Down */
+        if (ax >= 0) {
+            double inc = M.jog_inc;
+            if (inc <= 0) M.jog_inc = 1;   /* при „Непрек.“ клавишът дава стъпка 1 мм */
+            if (M.state == MS_IDLE) machine_jog(ax, dir, now);
+            M.jog_inc = inc;
+            return;
+        }
+    }
+}
+
+static void on_catch_key(lv_event_t *e) { ui_key(lv_event_get_key(e)); }
+
+void ui_keys_attach(lv_indev_t *kb)
+{
+    static lv_group_t *g;
+    if (!g) {
+        g = lv_group_create();
+        lv_obj_t *c = ui_box(lv_layer_sys());   /* невидим получател на клавишите */
+        lv_obj_set_size(c, 1, 1);
+        lv_obj_add_event_cb(c, on_catch_key, LV_EVENT_KEY, NULL);
+        lv_group_add_obj(g, c);
+        lv_group_focus_obj(c);
+    }
+    lv_indev_set_group(kb, g);
+}
+
 static const char *const SCR_NAME[SCR_N] = {"run", "jog", "mdi", "tools", "probe", "diag", "set", "files"};
 
 int ui_go_name(const char *name)
@@ -307,6 +356,7 @@ void ui_test(const char *act)
     else if (!strncmp(act, "hmap", 4)) hmap_open();
     else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
     else if (!strncmp(act, "load", 4)) files_load();
+    else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
     else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));
     else if (!strncmp(act, "part:", 5)) machine_wcs_toggle(atoi(arg), now);
     else if (!strncmp(act, "cfg:", 4)) {   /* cfg:ключ=стойност — направо в записаните настройки */

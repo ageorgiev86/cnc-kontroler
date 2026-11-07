@@ -136,9 +136,11 @@ static lv_obj_t *foot(lv_obj_t *d, const char *mid, lv_event_cb_t mid_cb, const 
 /* ---------- числова клавиатура (.dk) ---------- */
 static void render(void);
 
-static void on_key(lv_event_t *e)
+static void dk_press(const char *k);
+static void on_key(lv_event_t *e) { dk_press(lv_event_get_user_data(e)); }
+
+static void dk_press(const char *k)
 {
-    const char *k = lv_event_get_user_data(e);
     char *t = D.txt;
     size_t n = strlen(t);
     if (!strcmp(k, "bs")) { if (n) t[n - 1] = 0; }
@@ -155,7 +157,7 @@ static void on_key(lv_event_t *e)
         strcat(t, n == 0 || (n == 1 && t[0] == '-') ? "0." : ".");
     } else {
         int digits = 0;
-        for (const char *p = t; *p; p++) digits += isdigit((unsigned char)*p);
+        for (const char *p = t; *p; p++) digits += isdigit((unsigned char)*p) != 0;
         if (digits < 8) strcat(t, k);
     }
     render();
@@ -471,4 +473,36 @@ void dlg_confirm(const char *title, const char *text, const char *ok, dlg_pick_c
     D.note = note(d);
     ui_set_text(D.note, text);
     foot(d, NULL, NULL, ok, on_conf_ok);
+}
+
+/* ---------- физическа клавиатура ---------- */
+bool dlg_key(uint32_t key)
+{
+    if (D.kind == D_NONE) return false;
+    if (key == LV_KEY_ESC) { dlg_close(); return true; }
+    if (D.kind == D_SETPOS || D.kind == D_NUM) {
+        char k[2] = {(char)key, 0};
+        if (key == LV_KEY_ENTER) { if (D.kind == D_NUM) on_num_ok(NULL); else setpos_apply(); }
+        else if (key == LV_KEY_BACKSPACE || key == LV_KEY_DEL) dk_press("bs");
+        else if ((key >= '0' && key <= '9') || key == '.') dk_press(k);
+        else if (key == ',') dk_press(".");
+        else if (key == '-') dk_press("pm");
+        return true;
+    }
+    if (D.kind == D_TEXT) {
+        size_t n = strlen(D.txt);
+        if (key == LV_KEY_ENTER) on_text_ok(NULL);
+        else if (key == LV_KEY_BACKSPACE || key == LV_KEY_DEL) {
+            if (n) { n--; while (n && ((unsigned char)D.txt[n] & 0xC0) == 0x80) n--; D.txt[n] = 0; }
+            text_render();
+        } else if (key >= 0x20 && key < 0x800 && n + 3 < (size_t)D.maxlen) {   /* латиница и кирилица (UTF-8) */
+            if (key < 0x80) D.txt[n++] = (char)key;
+            else { D.txt[n++] = (char)(0xC0 | (key >> 6)); D.txt[n++] = (char)(0x80 | (key & 0x3F)); }
+            D.txt[n] = 0;
+            text_render();
+        }
+        return true;
+    }
+    if (D.kind == D_PICK && key == LV_KEY_ENTER && confirm_cb) { on_conf_ok(NULL); return true; }
+    return true;   /* докато има диалог, клавишите не стигат до екрана */
 }

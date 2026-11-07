@@ -124,6 +124,10 @@ void dlg_pick(const char *title, const char *const *opts, int n, int cur, dlg_pi
 void dlg_confirm(const char *title, const char *text, const char *ok, dlg_pick_cb cb, void *ud);
 void dlg_close(void);
 bool dlg_open(void);
+bool dlg_key(uint32_t key);     /* физическа клавиатура; true = обработено */
+bool mdi_key(uint32_t key);
+void ui_key(uint32_t key);      /* клавиш: Unicode знак или LV_KEY_* */
+void ui_keys_attach(lv_indev_t *kb);   /* клавиатурата праща към ui_key */
 
 /* Мигане като steps(2) в макета: първата половина на периода е видимо */
 static inline bool ui_blink_on(uint32_t now, uint32_t period) { return now % period < period / 2; }

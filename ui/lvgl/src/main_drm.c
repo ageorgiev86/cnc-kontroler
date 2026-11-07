@@ -13,6 +13,7 @@
 #include "lvgl.h"
 #include "config.h"
 #include "drm_disp.h"
+#include "kbd_evdev.h"
 #include "machine.h"
 #include "program.h"
 #include "ui.h"
@@ -116,6 +117,13 @@ int main(int argc, char **argv)
 
     ui_create(disp);
     machine_apply_cfg();
+
+    /* клавиатури (може и няколко, напр. безжичен приемник) */
+    char *kb[4] = {0};
+    size_t nkb = lv_libinput_find_devs(LV_LIBINPUT_CAPABILITY_KEYBOARD, kb, 4, true);
+    lv_indev_t *kbi = kbd_evdev_create(kb, (int)nkb);
+    if (kbi) { lv_indev_set_display(kbi, disp); ui_keys_attach(kbi); }
+    else printf("Няма клавиатура (не е задължителна)\n");
     printf("Работи. Спира се с Ctrl+C.\n");
 
     while (!quit) {
