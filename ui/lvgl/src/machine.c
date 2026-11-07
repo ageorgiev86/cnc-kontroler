@@ -23,11 +23,11 @@ void machine_init(void)
     cfg_init();
     tools_init();
     static const double mach[AX_N] = {-250, -180, -70, 0, 0, 0};
-    static const double off[AX_N] = {-250, -180, -95, 0, 0, 0};
+    static const double off[7][3] = {{0}, {-250, -180, -95}, {-140, -180, -95}, {-250, -110, -95}, {-140, -110, -95}, {0}, {0}};
     static const int seq[AX_N] = {1, 1, 0, 2, 2, 2};
     for (int a = 0; a < AX_N; a++) {
         M.mach[a] = mach[a];
-        M.off[a] = off[a];
+        for (int w = 1; w <= 6; w++) M.wcs_off[w][a] = a <= AX_Z ? off[w][a] : 0;
         M.active[a] = a <= AX_Z;
         M.rotary[a] = a >= AX_A;
         M.home_sw[a] = true;
@@ -38,6 +38,8 @@ void machine_init(void)
     M.state = MS_IDLE;
     M.type = MT_MILL;
     M.wcs = 1;
+    M.off = M.wcs_off[1];
+    M.parts = 1 << 1;
     M.tool = 5;
     snprintf(M.tool_desc, sizeof M.tool_desc, "Фреза 3Z ALU");
     M.tool_dia = 10;
@@ -142,6 +144,8 @@ void machine_estop(void)
     mq_clear();
     M.run_kind = RK_NONE;
     M.jog_dir = 0;
+    M.off = M.wcs_off[M.wcs];
+    M.wcs_run = 0;
     M.sp_on = false;
     M.coolant = false;
     M.feed_act = 0;
@@ -193,13 +197,88 @@ static void set_work(p3_t p)
 {
     M.mach[AX_X] = p.x + M.off[AX_X];
     M.mach[AX_Y] = p.y + M.off[AX_Y];
-    M.mach[AX_Z] = p.z + M.off[AX_Z];
+    M.mach[AX_Z] = p.z + M.off[AX_Z] + hmap_corr(p.x, p.y);
 }
 
 static p3_t work_pos(void)
 {
     p3_t p = {(float)machine_work(AX_X), (float)machine_work(AX_Y), (float)machine_work(AX_Z)};
     return p;
+}
+
+/* ---------- няколко детайла: програмата минава по всички отметнати нули, по инструмент ---------- */
+#define SCHED_MAX 1024
+typedef struct { int s, e, w; float t0; } sched_t;   /* ходовете [s, e) върху нула w; t0 = номинално време в началото */
+static sched_t SCH[SCHED_MAX];
+static int sch_n, sch_i;
+static bool fresh;          /* първият ход след смяна на детайла тръгва от текущата позиция */
+static p3_t fresh_from;
+
+int machine_parts(int *list)
+{
+    int n = 0;
+    for (int w = 1; w <= 6; w++)
+        if (w == 1 || (M.parts & (1 << w))) list[n++] = w;
+    return n;
+}
+
+static void build_sched(void)
+{
+    int parts[6], np = machine_parts(parts), end = P.nop - 1;   /* последният ход е OP_END */
+    sch_n = sch_i = 0;
+    if (np < 2) parts[0] = M.wcs, np = 1;
+    int s = 0;
+    float t = 0;
+    for (int i = 1; i <= end; i++) {
+        if (i < end && P.op[i].kind != OP_TOOL) continue;
+        for (int k = 0; k < np && sch_n < SCHED_MAX; k++) {
+            SCH[sch_n++] = (sched_t){s, i, parts[k], t};
+            t += P.op[i].t0 - P.op[s].t0;
+        }
+        s = i;
+    }
+    M.t_total = t;
+    M.part_n = np;
+}
+
+static void sched_enter(int i, bool move_from_cur)
+{
+    sch_i = i;
+    M.op = SCH[i].s;
+    M.op_s = 0;
+    int w = SCH[i].w;
+    if (M.off != M.wcs_off[w]) {
+        double wk[AX_N];
+        for (int a = 0; a < AX_N; a++) wk[a] = M.mach[a] - M.wcs_off[w][a];
+        fresh_from = (p3_t){(float)wk[AX_X], (float)wk[AX_Y], (float)wk[AX_Z]};
+        fresh = move_from_cur;
+        M.off = M.wcs_off[w];
+    }
+    M.wcs_run = w;
+    int parts[6], np = machine_parts(parts);
+    M.part_i = 0;
+    for (int k = 0; k < np; k++)
+        if (parts[k] == w) M.part_i = k;
+}
+
+void machine_skip_part(uint32_t now)
+{
+    if (M.run_kind != RK_PROG || M.part_n < 2) return;
+    if (M.state != MS_HOLD) { machine_toast("Натиснете „Пауза“, после пропуснете детайла", now, 3500); return; }
+    int w = SCH[sch_i].w, k = M.part_i;
+    for (int i = sch_i + 1; i < sch_n; i++)
+        if (SCH[i].w == w) SCH[i].s = SCH[i].e;   /* празен интервал: прескача се */
+    M.op = SCH[sch_i].e;
+    M.state = MS_RUN;
+    char t[64];
+    snprintf(t, sizeof t, "Детайл %d (G%d) е пропуснат", k + 1, 53 + w);
+    machine_toast(t, now, 3500);
+}
+
+static void sched_restore(void)
+{
+    M.off = M.wcs_off[M.wcs];
+    M.wcs_run = 0;
 }
 
 void machine_start(uint32_t now)
@@ -214,7 +293,16 @@ void machine_start(uint32_t now)
     if (machine_need_home()) { machine_toast("Осите не са реферирани. Натиснете HOME.", now, 3500); return; }
     if (!P.nop) { machine_toast("Няма заредена програма. Натиснете „Отвори“.", now, 3500); return; }
     if (M.prog_done || M.op >= P.nop - 1) { M.op = 0; M.prog_done = false; M.done_t = 0; }
-    if (M.op == 0) { M.run_time = 0; M.op_s = 0; M.line = -1; }
+    if (M.op == 0) {
+        M.run_time = 0; M.op_s = 0; M.line = -1;
+        build_sched();
+        sched_enter(0, true);
+        if (M.part_n > 1) {
+            char t[160];
+            snprintf(t, sizeof t, "%d детайла: всеки инструмент минава по всички нули", M.part_n);
+            machine_toast(t, now, 4000);
+        }
+    }
     M.state = MS_RUN;
     M.run_kind = RK_PROG;
 }
@@ -228,6 +316,7 @@ void machine_stop(uint32_t now)
 {
     if (M.state != MS_RUN && M.state != MS_HOLD) return;
     mq_clear();
+    if (M.run_kind == RK_PROG) sched_restore();
     M.run_kind = RK_NONE;
     M.state = MS_IDLE;
     M.sp_on = false;
@@ -241,6 +330,7 @@ void machine_rewind(uint32_t now)
 {
     if (M.state != MS_IDLE) { machine_toast("Rewind е разрешен само при спряна машина", now, 3500); return; }
     M.op = 0; M.op_s = 0; M.line = -1; M.prog_done = false; M.done_t = 0; M.run_time = 0;
+    sched_restore();
     machine_toast("Програмата е върната в началото", now, 3500);
 }
 
@@ -251,7 +341,7 @@ void machine_rov(int pct) { M.rov = pct; }
 
 float machine_remaining_s(void)
 {
-    float rest = P.t_total - M.done_t;
+    float rest = (M.t_total > 0 ? M.t_total : P.t_total) - M.done_t;
     if (rest < 0) rest = 0;
     return rest / SIMX * 100.0f / (float)(M.fov > 10 ? M.fov : 10);
 }
@@ -281,10 +371,17 @@ static void tick_program(uint32_t now, float dt)
     M.run_time += dt;
     float budget = dt * SIMX;          /* „номинални“ секунди за този кадър */
     while (budget > 0 && M.state == MS_RUN) {
+        /* край на хода от разписанието: следващият детайл или краят на програмата */
+        if (M.op >= SCH[sch_i].e) {
+            if (sch_i + 1 < sch_n) { sched_enter(sch_i + 1, true); continue; }
+            M.op = P.nop - 1;
+        }
         op_t *o = &P.op[M.op];
+        float tb = SCH[sch_i].t0 - P.op[SCH[sch_i].s].t0;   /* към номиналното време на хода */
         if (M.line != o->line && o->kind != OP_END) M.line = o->line;
         if (o->kind == OP_END) {
-            M.state = MS_IDLE; M.run_kind = RK_NONE; M.prog_done = true; M.done_t = P.t_total; M.feed_act = 0;
+            sched_restore();
+            M.state = MS_IDLE; M.run_kind = RK_NONE; M.prog_done = true; M.done_t = M.t_total; M.feed_act = 0;
             M.sp_on = false; M.coolant = false;
             for (int a = 0; a < AX_N; a++) M.togo[a] = 0;
             char t[80];
@@ -299,11 +396,25 @@ static void tick_program(uint32_t now, float dt)
             M.feed_act = feed;
             M.feed_prog = o->rapid ? 0 : o->feed;
             p3_t end;
+            if (fresh) {   /* след смяна на детайла: направо от текущата позиция до края на хода */
+                along(o, o->len, &end);
+                p3_t a = fresh_from;
+                float L = sqrtf((end.x - a.x) * (end.x - a.x) + (end.y - a.y) * (end.y - a.y) + (end.z - a.z) * (end.z - a.z));
+                float vv = RAPID * M.rov / 100.0f / 60.0f, rest = L - M.op_s;
+                M.feed_act = vv * 60;
+                if (rest <= vv * budget || L <= 0) { budget -= rest / vv; set_work(end); M.op_s = 0; M.op++; fresh = false; continue; }
+                M.op_s += vv * budget;
+                budget = 0;
+                float f = M.op_s / L;
+                p3_t q = {a.x + (end.x - a.x) * f, a.y + (end.y - a.y) * f, a.z + (end.z - a.z) * f};
+                set_work(q);
+                return;
+            }
             if (need <= budget) {
                 budget -= need;
                 set_work(along(o, o->len, &end));
                 M.op_s = 0; M.op++;
-                M.done_t = o->t1;
+                M.done_t = tb + o->t1;
                 if (M.single && P.op[M.op].kind != OP_END) { M.state = MS_HOLD; machine_toast("Единичен блок: натиснете ЦИКЪЛ СТАРТ", now, 4000); }
                 continue;
             }
@@ -313,7 +424,7 @@ static void tick_program(uint32_t now, float dt)
             set_work(p);
             w = work_pos();
             M.togo[AX_X] = end.x - w.x; M.togo[AX_Y] = end.y - w.y; M.togo[AX_Z] = end.z - w.z;
-            M.done_t = o->t0 + (o->t1 - o->t0) * (o->len > 0 ? M.op_s / o->len : 1);
+            M.done_t = tb + o->t0 + (o->t1 - o->t0) * (o->len > 0 ? M.op_s / o->len : 1);
             /* следяща грешка, пропорционална на скоростта (демо) */
             for (int a = 0; a <= AX_Z; a++) M.ferr[a] = M.enc_on[a] ? 0.04f * feed / 60.0f * (0.6f + 0.4f * sinf(now / 70.0f + a)) : 0;
             return;
@@ -344,11 +455,11 @@ static void tick_program(uint32_t now, float dt)
         if (M.op_s + budget >= dur) {
             budget -= dur - M.op_s;
             if (o->kind == OP_TOOL && o->tool != M.tool) { machine_select_tool(o->tool); M.act_label[0] = 0; }
-            M.op_s = 0; M.op++; M.done_t = o->t1;
+            M.op_s = 0; M.op++; M.done_t = tb + o->t1;
             continue;
         }
         M.op_s += budget;
-        M.done_t = o->t0 + M.op_s;
+        M.done_t = tb + o->t0 + M.op_s;
         budget = 0;
     }
 }
@@ -385,7 +496,9 @@ static bool mq_started;
 static double mq_from[AX_N];
 static float mq_len, mq_s;
 
-static void mq_clear(void) { mq_n = mq_i = 0; mq_started = false; M.act_label[0] = 0; M.mtc = 0; M.mag_moving = false; M.orient = false; }
+static bool (*mq_refill)(void);
+void mq_set_refill(bool (*fn)(void)) { mq_refill = fn; }
+static void mq_clear(void) { mq_refill = NULL; mq_n = mq_i = 0; mq_started = false; M.act_label[0] = 0; M.mtc = 0; M.mag_moving = false; M.orient = false; }
 bool mq_busy(void) { return mq_i < mq_n; }
 
 void mq_begin(runkind_t kind)
@@ -474,6 +587,11 @@ static void mq_tick(uint32_t now, float dt)
         }
         mq_i++;
         mq_started = false;
+        if (mq_i >= mq_n && mq_refill) {   /* следващата порция */
+            mq_n = mq_i = 0;
+            bool (*fn)(void) = mq_refill;
+            if (!fn()) mq_refill = NULL;
+        }
     }
     if (mq_i >= mq_n && M.state == MS_RUN) {
         mq_clear();

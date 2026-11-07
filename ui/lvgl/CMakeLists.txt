@@ -54,6 +54,10 @@ set(APP_SOURCES
   src/config.c
   src/machine_tc.c
   src/ui_tools.c
+  src/machine_prb.c
+  src/machine_hmap.c
+  src/ui_probe.c
+  src/ui_hmap.c
   src/config_defs.c
 )
 

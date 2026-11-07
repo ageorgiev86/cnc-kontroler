@@ -41,7 +41,11 @@ typedef struct {
     mtype_t type;
 
     double mach[AX_N];     /* машинна позиция, мм или ° */
-    double off[AX_N];      /* активна работна нула (G54) */
+    double *off;           /* активната работна нула: сочи в wcs_off */
+    double wcs_off[7][AX_N];   /* G54 … G59 = 1 … 6 (машинни координати на нулата) */
+    int parts;             /* детайли за програмата: бит n = G53+n; G54 е винаги */
+    int wcs_run;           /* нулата на текущия детайл по време на работа (0 = M.wcs) */
+    int part_i, part_n;    /* текущ детайл / брой детайли */
     double togo[AX_N];     /* остатък до края на блока */
     double ferr[AX_N];     /* следяща грешка, µm (или ″ за въртящи оси) */
 
@@ -70,6 +74,7 @@ typedef struct {
     bool prog_done;
     float run_time;        /* s от старта */
     float done_t;          /* изпълнено номинално време, s */
+    float t_total;         /* номинално време за всички детайли, s */
     int fov, sov, rov;     /* оверрайди: подаване, шпиндел, бърз ход, % */
     float feed_act;        /* мм/мин */
     float feed_prog;       /* F от програмата */
@@ -153,6 +158,30 @@ void mq_move(const double tgt[AX_N], float feed, bool ov, const char *label);
 void mq_act(float dur_s, mq_fn_t fn, int arg, const char *label);
 void mq_go(void);
 bool mq_busy(void);
+void mq_set_refill(bool (*fn)(void));   /* при празна опашка fn добавя следващата порция (дълги сканирания) */
+
+/* Карта на височините (по модела на Autoleveler в UGS): мрежа от точки, билинейна корекция на Z */
+#define HM_MAX 64
+typedef struct {
+    double x0, x1, y0, y1, z0, z1, res, zs, ret, f, scan;   /* работни координати, мм, %, мм/мин */
+    int nx, ny, wcs;
+    float z[HM_MAX][HM_MAX];
+    int got;               /* измерени точки */
+    bool done, apply;
+} hmap_t;
+extern hmap_t HM;
+void hmap_grid(void);                   /* nx, ny от областта и стъпката; изчиства картата */
+void hmap_scan(uint32_t now_ms);
+double hmap_corr(double x, double y);   /* корекция на Z (0 извън областта или без карта) */
+
+/* Нулеви точки и детайли (екранът „Офсети“) */
+void machine_wcs_select(int n, uint32_t now_ms);      /* 1 … 6 */
+void machine_wcs_toggle(int n, uint32_t now_ms);      /* отметка за G55 … G59 */
+bool machine_wcs_isset(int n);
+int machine_parts(int *list);                         /* списък на детайлите (G54 + отметнатите) */
+void machine_probe_cycle(const char *k, int corner, uint32_t now_ms);   /* corner 0 fl, 1 fr, 2 bl, 3 br */
+extern bool prb_warn;
+void machine_skip_part(uint32_t now_ms);              /* пропуска текущия детайл (при пауза) */                                 /* цикълът иска T10 в шпиндела */
 
 double machine_work(int ax);
 bool machine_need_home(void);

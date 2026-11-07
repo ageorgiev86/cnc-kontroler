@@ -210,7 +210,7 @@ void ctrl_update(ctrl_t *c, uint32_t now)
     static int shown = -1;
     if (shown != M.rov) { for (int i = 0; i < 3; i++) ui_btn_set_kind(c->r_btn[i], RV[i] == M.rov ? BTN_ON : BTN_NORMAL); shown = M.rov; }
 
-    float tot = P.t_total > 0 ? P.t_total : 1, pct = M.done_t / tot * 100;
+    float tot = M.t_total > 0 ? M.t_total : P.t_total > 0 ? P.t_total : 1, pct = M.done_t / tot * 100;
     lv_bar_set_value(c->bar, (int32_t)(pct * 10), LV_ANIM_OFF);
     snprintf(b, sizeof b, "%d %%", (int)pct);
     ui_set_text(c->pct, b);

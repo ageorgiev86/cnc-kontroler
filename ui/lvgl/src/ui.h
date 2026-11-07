@@ -96,7 +96,11 @@ void set_show(void);
 void files_create(lv_obj_t *scr);
 void files_update(uint32_t now);
 void files_show(void);
-void ui_test_screen(const char *act);   /* тестови действия на отделните екрани */
+void ui_test_screen(const char *act);
+void hmap_open(void);
+void hmap_label(char *b, size_t n);
+void hmap_result(lv_obj_t *parent);
+void hmap_tick(void);   /* тестови действия на отделните екрани */
 
 /* Диалози (ui_dlg.c) */
 typedef void (*dlg_num_cb)(double v, void *ud);

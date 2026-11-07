@@ -210,6 +210,10 @@ void ui_test(const char *act)
     else if (!strncmp(act, "start", 5)) machine_start(now);
     else if (!strncmp(act, "tc:", 3)) machine_tool_change(atoi(arg), now);
     else if (!strncmp(act, "measure", 7)) machine_measure_tool(now);
+    else if (!strncmp(act, "cyc:", 4)) machine_probe_cycle(arg, 0, now);
+    else if (!strncmp(act, "hmapscan", 8)) hmap_scan(now);
+    else if (!strncmp(act, "hmap", 4)) hmap_open();
+    else if (!strncmp(act, "part:", 5)) machine_wcs_toggle(atoi(arg), now);
     else if (!strncmp(act, "cfg:", 4)) {   /* cfg:ключ=стойност — направо в записаните настройки */
         char k[64];
         snprintf(k, sizeof k, "%s", arg);
