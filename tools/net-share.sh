@@ -26,10 +26,29 @@ if [ "${1:-}" = "--off" ]; then
 fi
 
 if [ "${1:-}" = "--list" ]; then
-  command -v smbclient >/dev/null || apt-get install -y -qq smbclient >/dev/null
-  echo "Дялове на ${2:?адрес на сървъра}:"
-  smbclient -L "//$2" -N -g 2>/dev/null | awk -F'|' '$1=="Disk"{print "  //'"$2"'/"$2}' \
-    || echo "  няма отговор без парола; пробвайте: smbclient -L //$2 -U потребител"
+  SRV="${2:-}"
+  GW=$(ip route 2>/dev/null | awk '/^default/{print $3; exit}')
+  [ -n "$SRV" ] || SRV="$GW"
+  echo "Рутерът (шлюзът) е: ${GW:-неизвестен}. Проверява се: $SRV"
+  if ! command -v smbclient >/dev/null; then
+    echo "Инсталиране на smbclient…"
+    apt-get install -y -qq smbclient >/dev/null || { echo "ГРЕШКА: smbclient не се инсталира (мрежа?)"; exit 1; }
+  fi
+  ok=0
+  for opt in "" "--option=client min protocol=NT1"; do
+    out=$(smbclient -L "//$SRV" -N -g $opt 2>&1)
+    if echo "$out" | grep -q '^Disk|'; then
+      echo "Дялове (SMB${opt:+ 1.0}):"
+      echo "$out" | awk -F'|' -v s="$SRV" '$1=="Disk"{print "  //" s "/" $2 "   " $3}'
+      ok=1; break
+    fi
+  done
+  if [ $ok = 0 ]; then
+    echo "Няма отговор с дялове. Последният отговор на сървъра:"
+    echo "$out" | head -5 | sed 's/^/  /'
+    echo "Ако пише NT_STATUS_ACCESS_DENIED или LOGON_FAILURE: дялът иска потребител и парола."
+    echo "Ако пише Connection refused/timed out: в рутера включете споделянето на файлове (Samba/SMB) за USB."
+  fi
   exit 0
 fi
 
