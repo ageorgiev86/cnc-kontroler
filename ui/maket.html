@@ -317,6 +317,18 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .mag .ring{position:absolute;inset:1.4em;border-radius:50%;border:1px dashed var(--line)}
 .pk{position:absolute;left:50%;top:50%;border-radius:50%;background:var(--surf2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--f-num);font-weight:600}
 .mag.chain{width:23em;max-width:100%;height:12.5em}
+.mag.multi{width:100%;height:21em}
+.mag.chain.big{width:100%;height:17em}
+.panel.portrait .mag.multi,.panel.portrait .mag.chain.big{width:24em;height:15em}
+/* дребни гнезда (много гнезда): запълнени точки без номер */
+.pk.tiny{border-color:transparent;background:var(--edge2)}
+.pk.tiny.empty{background:var(--line);border-style:solid}
+.pk.tiny.sel{background:var(--acc)}
+.pk.tiny.top{background:var(--hi);border-color:var(--hi);box-shadow:0 0 .5em var(--glow)}
+.mag.multi .ring,.mag.multi .hub,.mag.multi .mk{display:none}
+.mag .wl{position:absolute;left:50%;top:50%;text-align:center;font:600 .78em/1.2 var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.mag .wl small{display:block;font:400 .9em var(--f-num);letter-spacing:0;color:var(--faint)}
+.mag .wl.on{color:var(--hi)}
 .panel.portrait .tools .card-b:has(.mag.linear){display:flex}
 .mag.chain .ring{inset:1.25em;border-radius:5em}
 .mag.linear{width:100%;max-width:none;height:8em}
@@ -1102,12 +1114,13 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
    act('затягане на T'+T,.6,()=>{S.tool=T;S.clamped=true});
    mv('Z нагоре',()=>toW({Z:0}));
   }else{
-   const nm=M.mtype==='chain'?'веригата':'магазинът',N=M.mn;
-   const dist=(a,b)=>{const d=Math.abs(a-b)%N;return Math.min(d,N-d)};
-   let at=S.magPos;
-   if(old){act(nm+' към гнездо '+old,Math.max(.3,dist(at,old)*M.msp),()=>{S.magPos=old;S.magMoving=true});at=old;
+   const nm=M.mtype==='chain'?'веригата':'магазинът',N=M.mn,{Wn,per,wh,lc}=magWheels(M);
+   const dist=(a,b)=>{const d=Math.abs(a-b)%per;return Math.min(d,per-d)};
+   const at=S.wpos.slice(),lb=i=>(Wn>1?'колело '+(wh(i)+1):nm)+' към гнездо '+i;
+   if(old){const w=wh(old);act(lb(old),Math.max(.3,dist(at[w],lc(old))*M.msp),()=>{S.wpos[w]=lc(old);S.magPos=old;S.magMoving=true});at[w]=lc(old);
            act('освобождаване на T'+old,.6,()=>{S.magMoving=false;S.clamped=false;S.tool=0})}
-   act(nm+' към гнездо '+T,Math.max(.3,dist(at,T)*M.msp),()=>{S.magPos=T;S.magMoving=true});
+   const w=wh(T);if(Wn>1&&(!old||wh(old)!==w))act('избор на колело '+(w+1),.5,()=>{S.magPos=(w*per)+at[w]});
+   act(lb(T),Math.max(.3,dist(at[w],lc(T))*M.msp),()=>{S.wpos[w]=lc(T);S.magPos=T;S.magMoving=true});
    act('затягане на T'+T,.6,()=>{S.magMoving=false;S.tool=T;S.clamped=true});
   }
   act('корекция на дължината G43 H'+T,.3,()=>{S.orient=false});
@@ -1606,11 +1619,18 @@ function renderTools(){
  toolBody.innerHTML=rows.join('');
  set($('#btnTc'),(autoTc()?'Смени с T':'Ръчна смяна с T')+S.sel);set($('#toolCnt'),N+(MT()!=='lathe'&&!S.cfg.mag.mOn?' инструмента':' гнезда'));
 }
-const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],magKey='';
+const mag=$('#mag'),MTYPE={carousel:'карусел',chain:'верига',linear:'линеен'};let PK=[],WL=[],magKey='';
+/* колелата на карусела: гнездо i е на колело wh(i), място lc(i); S.wpos/S.wph са позициите на колелата */
+function magWheels(M){
+ const Wn=M.mtype==='carousel'?Math.max(1,Math.min(6,M.mWheels||1)):1,per=Math.ceil(M.mn/Wn),wh=i=>Math.min(Wn-1,Math.floor((i-1)/per)),lc=i=>(i-1)%per+1;
+ if(!S.wpos||S.wpos.length!==Wn||S.wper!==per){S.wper=per;S.wpos=Array(Wn).fill(1);if(S.magPos>=1&&S.magPos<=M.mn)S.wpos[wh(S.magPos)]=lc(S.magPos);S.wph=S.wpos.slice()}
+ return{Wn,per,wh,lc};
+}
 function buildMag(){
- const M=magCfg();PK.forEach(p=>p.remove());PK=[];
+ const M=magCfg();PK.forEach(p=>p.remove());PK=[];WL.forEach(p=>p.remove());WL=[];
+ {const{Wn,per}=magWheels(M);if(Wn>1)for(let w=0;w<Wn;w++){const l=document.createElement('div');l.className='wl';l.innerHTML=`колело ${w+1}<small>${w*per+1}–${Math.min(M.mn,(w+1)*per)}</small>`;mag.appendChild(l);WL.push(l)}}
  for(let i=1;i<=M.mn;i++){const p=document.createElement('div');p.className='pk';p.textContent=i;mag.appendChild(p);PK.push(p)}
- mag.className='mag '+M.mtype;S.magPh=S.magPos;set($('#magTitle'),MT()==='lathe'?'Револверна глава':'Магазин · '+MTYPE[M.mtype]);
+ mag.className='mag '+M.mtype+(magWheels(M).Wn>1?' multi':'')+(M.mtype==='chain'&&M.mn>60?' big':'');S.magPh=S.magPos;set($('#magTitle'),MT()==='lathe'?'Револверна глава':'Магазин · '+MTYPE[M.mtype]);
 }
 function updMag(dt){
  if(MT()!=='lathe'&&!S.cfg.mag.mOn){
@@ -1622,15 +1642,19 @@ function updMag(dt){
   if(atc.dataset.t!==k1){atc.dataset.t=k1;atc.innerHTML=`<i class="led ${busy?'hot':'on'}"></i><span>${txt}</span>`+(S.mtc&&S.state==='hold'?'<button class="btn sm go" data-act="start" type="button">Готово, продължи</button>':'')}
   return}
  mag.hidden=false;mag.parentElement.classList.remove('nomag');
- const M=magCfg(),N=M.mn,key=MT()+'|'+M.mtype+'|'+N;
+ const M=magCfg(),N=M.mn,key=MT()+'|'+M.mtype+'|'+N+'|'+(M.mWheels||1),MW=magWheels(M);
  if(key!==magKey){magKey=key;buildMag()}
  let d=S.magPos-S.magPh;if(M.mtype!=='linear')d=((d%N)+N*1.5)%N-N/2;
  const sp=(M.mtype==='linear'?4:1/Math.max(.05,M.msp))*dt;S.magPh+=Math.abs(d)<=sp?d:Math.sign(d)*sp;
  const ph=S.magPh,W=mag.clientWidth,H=mag.clientHeight,em=parseFloat(panel.style.fontSize);
  let size,pos;
  if(M.mtype==='carousel'){
-  const R0=W/2-1.6*em;size=Math.min(2.7*em,2*Math.PI*R0/N*.8);const R=W/2-size/2-.2*em;
-  pos=i=>{const g=(i-ph)/N*2*Math.PI;return[Math.sin(g)*R,-Math.cos(g)*R]};
+  const{Wn,per,wh,lc}=MW,s2=1/Math.max(.05,M.msp)*dt;
+  for(let w=0;w<Wn;w++){let dd=S.wpos[w]-S.wph[w];dd=((dd%per)+per*1.5)%per-per/2;S.wph[w]+=Math.abs(dd)<=s2?dd:Math.sign(dd)*s2}
+  const cols=Wn<=3?Wn:Math.ceil(Wn/2),rows=Math.ceil(Wn/cols),cw=W/cols,chh=H/rows,D=Math.min(cw,chh);
+  const R0=D/2-(Wn>1?.9:1.6)*em;size=Math.min(2.7*em,2*Math.PI*R0/per*.8);const R=D/2-size/2-.2*em;
+  pos=i=>{const w=wh(i),cx=(w%cols+.5)*cw-W/2,cy=(Math.floor(w/cols)+.5)*chh-H/2,g=(lc(i)-S.wph[w])/per*2*Math.PI;return[cx+Math.sin(g)*R,cy-Math.cos(g)*R]};
+  WL.forEach((l,w)=>{l.style.transform=`translate(${(w%cols+.5)*cw-W/2}px,${(Math.floor(w/cols)+.5)*chh-H/2}px) translate(-50%,-50%)`;l.classList.toggle('on',w===wh(S.magPos))});
  }else if(M.mtype==='chain'){
   size=2*em;for(let k=0;k<2;k++){const Rr=H/2-size/2-.25*em,L=Math.max(0,W-2*Rr-size-.5*em),P=2*L+2*Math.PI*Rr;size=Math.min(2.4*em,P/N*.78)}
   const Rr=H/2-size/2-.25*em,L=Math.max(0,W-2*Rr-size-.5*em),P=2*L+2*Math.PI*Rr;
@@ -1641,19 +1665,19 @@ function updMag(dt){
    if(u<Math.PI*Rr){const g=u/Rr;return[-L/2-Math.sin(g)*Rr,Math.cos(g)*Rr]}u-=Math.PI*Rr;
    return[-L/2+u,-Rr]};
  }else{
-  const rows=N>20?2:1,per=Math.ceil(N/rows),cw=W/per;size=Math.min(2.6*em,cw*.82);
-  pos=i=>{const k=i-1,r=Math.floor(k/per),c=k%per;return[(c+.5)*cw-W/2,(rows===1?.6:r?1.35:-.05)*size+H*.1]};
+  const rows=Math.min(3,Math.ceil(N/20)),per=Math.ceil(N/rows),cw=W/per;size=Math.min(2.6*em,cw*.82);
+  pos=i=>{const k=i-1,r=Math.floor(k/per),c=k%per;return[(c+.5)*cw-W/2,(rows===1?.6:(r-(rows-1)/2)*1.4+.65)*size+H*.1]};
  }
  PK.forEach((p,k)=>{const i=k+1,[x,y]=pos(i);
-  p.style.width=p.style.height=size+'px';p.style.margin=(-size/2)+'px 0 0 '+(-size/2)+'px';p.style.fontSize=(size*.38)+'px';
+  p.style.width=p.style.height=size+'px';p.style.margin=(-size/2)+'px 0 0 '+(-size/2)+'px';p.style.fontSize=size<1.15*em?'0px':(size*.38)+'px';p.classList.toggle('tiny',size<1.15*em);  /* дребните гнезда са без номер (има го при посочване) */
   p.style.transform=`translate(${x}px,${y}px)`;
   p.classList.toggle('empty',i===S.tool||!!toolOf(i).empty);
-  p.classList.toggle('top',i===S.magPos&&Math.abs(S.magPh-S.magPos)<.05);
+  p.classList.toggle('top',i===S.magPos&&(M.mtype==='carousel'?Math.abs(S.wph[MW.wh(i)]-MW.lc(i))<.05:Math.abs(S.magPh-S.magPos)<.05));
   p.classList.toggle('sel',i===S.sel&&i!==S.tool);const tt=toolOf(i),tl='T'+i+' · '+(tt?tt.d:'');if(p.title!==tl)p.title=tl});
  const spm=$('#spm');spm.hidden=M.mtype!=='linear';
  if(M.mtype==='linear'){const a=Math.floor(ph),f=ph-a,p0=pos(Math.max(1,a)),p1=pos(Math.min(N,a+1));
   const x=p0[0]+(p1[0]-p0[0])*f,y=Math.min(p0[1],p1[1])-size*.55-1.9*em;spm.style.transform=`translate(${x}px,${y}px) translateX(-50%)`;set($('#spmT'),S.tool?'T'+S.tool:'празен')}
- set($('#hubT'),S.tool?'T'+S.tool:'—');set($('#magPos'),'гнездо '+S.magPos);
+ set($('#hubT'),S.tool?'T'+S.tool:'—');set($('#magPos'),(MW.Wn>1?'колело '+(MW.wh(S.magPos)+1)+' · ':'')+'гнездо '+S.magPos+(MW.Wn>1?' · в шпиндела '+(S.tool?'T'+S.tool:'—'):''));
  const busy=S.actLabel.startsWith('Смяна')||!!S.mtc;const atc=$('#atc');atc.classList.toggle('busy',busy);
  const lt=MT()==='lathe',man=!lt&&!S.cfg.mag.atcOn;atc.classList.toggle('off',man&&!busy);
  const txt=S.mtc?'Ръчна смяна: поставете T'+S.mtc+' и натиснете „Готово“':busy?S.actLabel.replace(/^Смяна на инструмент /,''):lt?'Револверът е заключен':man?'Автоматичната смяна е изключена · M6 = ръчна смяна':'Магазинът е готов · инструментът е затегнат';
@@ -1888,11 +1912,14 @@ const P_HOME=[
  {k:'hidx',n:'Z индекс на енкодера',t:'bool',on:'Да',off:'Не',h:'След датчика оста продължава до първия Z импулс на енкодера. Повторяемостта става от порядъка на микрони.',ref:'LinuxCNC: HOME_USE_INDEX'},
  {k:'hseq',n:'Ред на реферирване',t:'num',d:0,min:0,max:5,h:'Осите с по-малък номер се реферират първи, а осите с еднакъв номер тръгват заедно. Z обикновено е 0, за да се вдигне преди останалите.',ref:'LinuxCNC: HOME_SEQUENCE'}
 ];
+/* горна граница на гнездата: 255 (верига, карусел, без магазин), линеен до 60 */
+const magMax=D=>D.mOn&&D.mtype==='linear'?60:255;
 const P_MAG=[
  {k:'mOn',n:'Магазин',t:'bool',on:'Има',off:'Няма',h:'Без магазин инструментите се сменят ръчно: при M6 шпинделът отива на позицията за ръчна смяна и машината чака ЦИКЪЛ СТАРТ. Таблицата на инструментите остава за дължините и диаметрите.'},
  {k:'atcOn',n:'Автоматична смяна',t:'bool',on:'Включена',off:'Изключена',show:D=>!!D.mOn,h:'Изключена: магазинът остава настроен, но M6 се изпълнява като ръчна смяна. За ремонт или настройка на магазина, или за инструмент, който не е в гнездо. Превключва се и от екрана „Инструменти“.'},
  {k:'mtype',n:'Тип на магазина',t:'enum',opts:[['carousel','Карусел'],['chain','Верига'],['linear','Линеен']],h:'Карусел: въртящ се диск, гнездото идва при шпиндела. Верига: гнездата са на верига, която се придвижва до позицията за смяна, и побира повече инструменти. Линеен: неподвижна поставка, а шпинделът отива до гнездото с осите X и Y.'},
- {k:'mn',n:'Брой гнезда / инструменти',t:'num',d:0,min:4,max:40,h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой. Без магазин: колко реда има таблицата.'},
+ {k:'mWheels',n:'Брой колела',t:'num',d:0,min:1,max:6,only:['carousel'],h:'Карусел с няколко колела (дискове), както при многодисковите магазини на DMG Mori. Всяко колело се върти отделно и при смяна се завърта само колелото с нужното гнездо. Гнездата се разделят поравно: при 120 гнезда и 3 колела гнезда 1–40 са на колело 1, 41–80 на колело 2, 81–120 на колело 3.'},
+ {k:'mn',n:'Брой гнезда / инструменти',t:'num',d:0,min:4,get max(){return magMax(S.draft.mag)},h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой. Максимум 255 (верига, карусел, без магазин), линеен 60. При карусел с няколко колела гнездата се разпределят поравно и се номерират подред по колела. Без магазин: колко реда има таблицата.'},
  {k:'mz',n:'Z за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Височината на шпиндела, при която инструментът се хваща или пуска.'},
  {k:'mor',n:'Ориентация на шпиндела',u:'°',t:'num',d:1,min:0,max:359.9,h:'Ъгълът, в който шпинделът спира преди смяна, за да влязат шпонките на държача в гнездото.'},
  {k:'msp',n:'Време за едно гнездо',u:'s',t:'num',d:2,min:.05,max:5,only:['carousel','chain'],h:'Колко време отнема преместването с едно гнездо. Използва се като изчакване и като граница за аларма, ако датчикът за позиция не сработи.'},
@@ -2200,7 +2227,7 @@ S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Наляга�
 S.cfg.lube={luOn:1,luMode:'time',luMin:30,luDist:500,luPulse:5,luStart:1,luPress:0,luLow:'warn'};
 S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
-S.cfg.mag={mOn:1,atcOn:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
+S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.disp={dRes:'auto',dRot:'0'};
 S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'192.168.1.1',dns:'192.168.1.1',shOn:0,shType:'smb',shSrv:'192.168.1.10',shPath:'cnc/programi',shUser:'operator',shPass:'',shMount:1,ssh:1,web:0};
@@ -2710,6 +2737,7 @@ panel.addEventListener('click',e=>{
    const tCh=S.cfg.mach.type!==S.draft.mach.type,mCh=JSON.stringify(S.cfg.mach)!==JSON.stringify(S.draft.mach);
    const axCh=tCh||['miAx','lzAx','plAx','ltY'].some(k=>S.cfg.mach[k]!==S.draft.mach[k]);
    if(axCh){const pr=axProf(S.draft.mach);AX.forEach(a=>{const on=pr.includes(a)?1:0;if(S.draft[a].active!==on){S.draft[a].active=on;S.homed[a]=false}})}
+   if(S.draft.mag.mn>magMax(S.draft.mag)){toast('Магазин „'+(S.draft.mag.mOn?MTYPE[S.draft.mag.mtype]:'няма')+'“ има най-много '+magMax(S.draft.mag)+' гнезда. Намалете броя.');break}
    if(!tCh&&S.draft.mach.type==='mill'&&S.tool>S.draft.mag.mn){toast('В шпиндела е T'+S.tool+', а магазинът ще има '+S.draft.mag.mn+' гнезда. Първо сменете инструмента.');break}
    const dOld=clone(S.cfg.disp),dCh=JSON.stringify(dOld)!==JSON.stringify(S.draft.disp);
    logChanges();
