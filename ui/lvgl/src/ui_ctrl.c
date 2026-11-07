@@ -16,7 +16,7 @@ static void ev_start(lv_event_t *e) { machine_start(lv_tick_get()); }
 static void ev_hold(lv_event_t *e) { machine_hold(); }
 static void ev_stop(lv_event_t *e) { machine_stop(lv_tick_get()); }
 static void ev_rewind(lv_event_t *e) { machine_rewind(lv_tick_get()); }
-static void ev_here(lv_event_t *e) { machine_toast("„Run from here“ идва със списъка на файловете (избор на ред)", lv_tick_get(), 3500); }
+static void ev_here(lv_event_t *e) { ui_run_from_line(); }
 
 /* карта на оверрайд: надпис + програмирана стойност, голяма стойност, ред с бутони */
 static lv_obj_t *ov_card(lv_obj_t *parent, const char *title, lv_obj_t **prog, lv_obj_t **act)

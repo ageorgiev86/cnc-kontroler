@@ -96,6 +96,7 @@ int main(int argc, char **argv)
     if (!mouse && !touch) fprintf(stderr, "Няма мишка или тъч (libinput). Потребителят в група input ли е?\n");
 
     ui_create(disp);
+    ui_load_config(NULL);
 
     for (;;) {
         uint32_t idle = lv_timer_handler();

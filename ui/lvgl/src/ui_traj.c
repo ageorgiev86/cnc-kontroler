@@ -226,6 +226,36 @@ static void on_drag(lv_event_t *e)
     t->base_dirty = true;
 }
 
+/* легенда: по един ред за инструмент и бързия ход */
+void traj_legend(traj_t *t)
+{
+    lv_obj_clean(t->leg);
+    for (int i = 0; i <= P.ntools; i++) {
+        lv_obj_t *r = ui_box(t->leg);
+        ui_flex(r, LV_FLEX_FLOW_ROW, 0.45f);
+        lv_obj_t *sw = ui_box(r);
+        lv_obj_set_size(sw, EM(1.2f * 0.74f), EM(0.28f * 0.74f) + 1);
+        lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
+        char buf[64];
+        if (i < P.ntools) {
+            lv_obj_set_style_bg_color(sw, lv_color_hex(PAL[i % 8]), 0);
+            snprintf(buf, sizeof buf, "T%d · %s", P.tools[i], machine_tool_name(P.tools[i], NULL));
+        } else {
+            lv_obj_set_style_bg_color(sw, lv_color_hex(0x5b6f8f), 0);
+            snprintf(buf, sizeof buf, "бърз ход");
+        }
+        ui_label(r, F.txt_sm, C_DIM, buf);
+    }
+}
+
+void traj_reload(traj_t *t)
+{
+    traj_legend(t);
+    t->zoom = 1;
+    t->base_dirty = true;
+    t->drawn_op = -1;
+}
+
 void traj_create(traj_t *t, lv_obj_t *parent)
 {
     memset(t, 0, sizeof *t);
@@ -264,22 +294,7 @@ void traj_create(traj_t *t, lv_obj_t *parent)
     lv_obj_set_style_radius(t->leg, EM(0.25f), 0);
     ui_flex(t->leg, LV_FLEX_FLOW_COLUMN, 0.15f);
     lv_obj_set_flex_align(t->leg, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    for (int i = 0; i <= P.ntools; i++) {
-        lv_obj_t *r = ui_box(t->leg);
-        ui_flex(r, LV_FLEX_FLOW_ROW, 0.45f);
-        lv_obj_t *sw = ui_box(r);
-        lv_obj_set_size(sw, EM(1.2f * 0.74f), EM(0.28f * 0.74f) + 1);
-        lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
-        char buf[64];
-        if (i < P.ntools) {
-            lv_obj_set_style_bg_color(sw, lv_color_hex(PAL[i % 8]), 0);
-            snprintf(buf, sizeof buf, "T%d · %s", P.tools[i], machine_tool_name(P.tools[i], NULL));
-        } else {
-            lv_obj_set_style_bg_color(sw, lv_color_hex(0x5b6f8f), 0);
-            snprintf(buf, sizeof buf, "бърз ход");
-        }
-        ui_label(r, F.txt_sm, C_DIM, buf);
-    }
+    traj_legend(t);
     lv_obj_t *hint = ui_label(b, F.txt_sm, C_FAINT, "плъзни: завъртане");
     lv_obj_set_ignore_layout(hint, true);
     lv_obj_align(hint, LV_ALIGN_TOP_RIGHT, -EM(0.6f), EM(0.55f));

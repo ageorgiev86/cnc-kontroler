@@ -50,7 +50,6 @@ set(APP_SOURCES
   src/ui_dlg.c
   src/ui_jog.c
   src/ui_mdi.c
-  src/ui_stub.c
   src/config.c
   src/machine_tc.c
   src/ui_tools.c
@@ -61,6 +60,7 @@ set(APP_SOURCES
   src/io.c
   src/ui_diag.c
   src/ui_set.c
+  src/ui_files.c
   src/config_defs.c
 )
 

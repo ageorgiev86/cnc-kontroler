@@ -16,7 +16,7 @@
 
 static void usage(void)
 {
-    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc] [--screen име] [--act действие]\n");
+    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc] [--screen име] [--act действие] [--conf файл]\n");
     exit(2);
 }
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     float zoom = 1.0f;
     const char *shot = NULL;
     int press_reset = 0, run = 0;
-    const char *prog = NULL, *screen = NULL, *act[8];
+    const char *prog = NULL, *screen = NULL, *conf = NULL, *act[8];
     int nact = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--res") && i + 1 < argc) {
@@ -41,6 +41,8 @@ int main(int argc, char **argv)
             press_reset = 1;
         } else if (!strcmp(argv[i], "--run")) {
             press_reset = run = 1;
+        } else if (!strcmp(argv[i], "--conf") && i + 1 < argc) {
+            conf = argv[++i];
         } else if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
             screen = argv[++i];
         } else if (!strcmp(argv[i], "--act") && i + 1 < argc && nact < 8) {
@@ -63,6 +65,7 @@ int main(int argc, char **argv)
     lv_sdl_keyboard_create();
 
     ui_create(disp);
+    if (conf) ui_load_config(conf);   /* в симулатора само при --conf, за да са снимките повторими */
     if (press_reset) machine_reset(lv_tick_get());
     if (screen && ui_go_name(screen)) { fprintf(stderr, "Няма екран „%s“\n", screen); return 2; }
 

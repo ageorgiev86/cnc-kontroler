@@ -8,8 +8,10 @@
 #include "ui.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "config.h"
 #include "program.h"
@@ -29,6 +31,44 @@ static const int NAV_SCR[7] = {SCR_RUN, SCR_JOG, SCR_MDI, SCR_TOOLS, SCR_PROBE, 
 #define UPDATE_MS 50
 
 lv_obj_t *ui_traj_card(void) { return traj.card; }
+
+static void on_line(double v, void *ud)
+{
+    int n = (int)lround(v), k = 0;
+    while (k < P.nop - 1 && (P.op[k].line < n - 1 || P.op[k].kind != OP_MOVE)) k++;
+    /* инструментът и шпинделът преди реда се възстановяват (последният OP_TOOL/OP_SPINDLE преди него) */
+    int tool = -1, sp = -1;
+    for (int i = 0; i < k; i++) {
+        if (P.op[i].kind == OP_TOOL) tool = P.op[i].tool;
+        if (P.op[i].kind == OP_SPINDLE) sp = P.op[i].s;
+    }
+    if (tool > 0 && tool != M.tool) machine_select_tool(tool);
+    if (sp >= 0) { M.sp_cmd = sp; M.sp_on = sp > 0; }
+    M.op = 0; M.prog_done = false;
+    M.start_op = k;
+    M.start_line = n;
+    M.line = P.op[k].line;
+    char t[96];
+    snprintf(t, sizeof t, "Старт от ред %d с ЦИКЪЛ СТАРТ (T%d, S%d)", n, M.tool, M.sp_cmd);
+    machine_toast(t, lv_tick_get(), 5000);
+    ui_go(SCR_RUN);
+}
+
+void ui_run_from_line(void)
+{
+    uint32_t now = lv_tick_get();
+    if (M.state != MS_IDLE) { machine_toast(M.state == MS_HOLD ? "Програмата е на пауза. Натиснете ЦИКЪЛ СТАРТ или СТОП." : "Машината работи", now, 3500); return; }
+    if (!P.nop) { machine_toast("Няма заредена програма", now, 3000); return; }
+    dlg_num("Изпълни от ред", "", "Преди този ред се възстановяват инструментът и оборотите; машината отива направо до началото на хода.",
+            M.line >= 0 ? M.line + 1 : 1, 1, P.nlines, 0, on_line, NULL);
+}
+
+void ui_program_changed(void)
+{
+    M.op = 0; M.op_s = 0; M.line = -1; M.prog_done = false; M.done_t = 0; M.run_time = 0; M.t_total = 0;
+    traj_reload(&traj);
+    gcode_reload(&gc);
+}
 
 void ui_traj_slot(int scr, int col, int cspan, int row, int rspan)
 {
@@ -186,6 +226,24 @@ void ui_create(lv_display_t *disp)
     lv_timer_create(update_cb, UPDATE_MS, NULL);
 }
 
+/* Настройките се пазят в $CNC_UI_CONF или ~/.config/cnc-ui.conf (записва ги „Запиши“) */
+void ui_load_config(const char *path)
+{
+    char p[400];
+    if (!path) {
+        const char *e = getenv("CNC_UI_CONF"), *h = getenv("HOME");
+        if (e && *e) snprintf(p, sizeof p, "%s", e);
+        else {
+            snprintf(p, sizeof p, "%s/.config", h ? h : ".");
+            mkdir(p, 0755);
+            snprintf(p, sizeof p, "%s/.config/cnc-ui.conf", h ? h : ".");
+        }
+        path = p;
+    }
+    cfg_set_file(path);
+    machine_apply_cfg();
+}
+
 static const char *const SCR_NAME[SCR_N] = {"run", "jog", "mdi", "tools", "probe", "diag", "set", "files"};
 
 int ui_go_name(const char *name)
@@ -214,6 +272,8 @@ void ui_test(const char *act)
     else if (!strncmp(act, "hmapscan", 8)) hmap_scan(now);
     else if (!strncmp(act, "hmap", 4)) hmap_open();
     else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
+    else if (!strncmp(act, "load", 4)) files_load();
+    else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));
     else if (!strncmp(act, "part:", 5)) machine_wcs_toggle(atoi(arg), now);
     else if (!strncmp(act, "cfg:", 4)) {   /* cfg:ключ=стойност — направо в записаните настройки */
         char k[64];
@@ -221,7 +281,7 @@ void ui_test(const char *act)
         char *eq = strchr(k, '=');
         if (eq) { *eq = 0; drf_set(k, eq + 1); cfg_commit_key(k); machine_apply_cfg(); }
     }
-    else ui_test_screen(act);
+    else fprintf(stderr, "Непознато тестово действие: %s\n", act);
 }
 
 /* 32-битов BMP отгоре надолу; достатъчно за снимки от симулатора */

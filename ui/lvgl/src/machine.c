@@ -316,6 +316,14 @@ void machine_start(uint32_t now)
         M.run_time = 0; M.op_s = 0; M.line = -1;
         build_sched();
         sched_enter(0, true);
+        if (M.start_op > 0 && M.part_n == 1) {   /* от избран ред: машината отива направо до началото на хода */
+            M.op = M.start_op;
+            M.done_t = P.op[M.start_op].t0;
+            fresh = true;
+            fresh_from = (p3_t){(float)machine_work(AX_X), (float)machine_work(AX_Y), (float)machine_work(AX_Z)};
+        }
+        M.start_op = 0;
+        M.start_line = 0;
         if (M.part_n > 1) {
             char t[160];
             snprintf(t, sizeof t, "%d детайла: всеки инструмент минава по всички нули", M.part_n);

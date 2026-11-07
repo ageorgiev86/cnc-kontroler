@@ -75,6 +75,8 @@ typedef struct {
     float run_time;        /* s от старта */
     float done_t;          /* изпълнено номинално време, s */
     float t_total;         /* номинално време за всички детайли, s */
+    int start_op;          /* „Изпълни от ред“: първият ход (0 = от началото) */
+    int start_line;
     int fov, sov, rov;     /* оверрайди: подаване, шпиндел, бърз ход, % */
     float feed_act;        /* мм/мин */
     float feed_prog;       /* F от програмата */

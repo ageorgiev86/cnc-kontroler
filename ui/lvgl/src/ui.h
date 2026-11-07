@@ -6,6 +6,7 @@
 #include "machine.h"
 
 void ui_create(lv_display_t *disp);
+void ui_load_config(const char *path);   /* NULL = ~/.config/cnc-ui.conf */
 /* Записва текущия екран като BMP (за снимки от симулатора). 0 при успех. */
 int ui_save_bmp(const char *path);
 /* За симулатора: екран по име и тестови действия */
@@ -62,6 +63,11 @@ typedef struct {
 
 void traj_create(traj_t *t, lv_obj_t *parent);
 void traj_update(traj_t *t, uint32_t now);
+void traj_legend(traj_t *t);
+void traj_reload(traj_t *t);
+void gcode_reload(gcode_t *g);
+void ui_program_changed(void);
+void ui_run_from_line(void);     /* „Изпълни от ред“: избор на ред, старт с ЦИКЪЛ СТАРТ */   /* след зареждане на нова програма */
 void gcode_create(gcode_t *g, lv_obj_t *parent);
 void gcode_update(gcode_t *g, uint32_t now);
 lv_obj_t *ctrl_create(ctrl_t *c, lv_obj_t *parent);
@@ -97,7 +103,8 @@ void set_test(int level, const char *sec);
 void files_create(lv_obj_t *scr);
 void files_update(uint32_t now);
 void files_show(void);
-void ui_test_screen(const char *act);
+void files_test(int src, int sel);
+void files_load(void);
 void hmap_open(void);
 void hmap_label(char *b, size_t n);
 void hmap_result(lv_obj_t *parent);

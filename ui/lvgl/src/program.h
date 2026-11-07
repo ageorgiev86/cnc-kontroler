@@ -38,11 +38,16 @@ typedef struct {
     int tools[PROG_MAX_TOOLS];
     int ntools;
     float t_total;     /* номинално време, s */
+    int cap_pt, cap_op, cap_line;
 } program_t;
 
 extern program_t P;
 
 int program_load_text(const char *name, const char *text);
+int program_parse_into(program_t *dst, const char *name, const char *text);   /* за прегледа на файлове */
+void program_free_into(program_t *p);
+char *program_read_file(const char *path, long *size);   /* целия файл (malloc) или NULL */
+const char *program_demo_text(int i, const char **name);   /* вградените примери; NULL след последния */
 int program_load_file(const char *path);
 void program_load_demo(void);
 

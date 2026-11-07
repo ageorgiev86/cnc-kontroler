@@ -144,3 +144,10 @@ void gcode_update(gcode_t *g, uint32_t now)
         fill(g);
     }
 }
+
+void gcode_reload(gcode_t *g)
+{
+    g->scroll = 0;
+    g->first = -1;
+    g->cur = -2;
+}
