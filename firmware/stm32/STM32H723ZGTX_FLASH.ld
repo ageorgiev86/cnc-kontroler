@@ -8,6 +8,7 @@
  *   RAM_D1   0x24000000  320 KB  AXI SRAM: .data, .bss, heap (достъпна за DMA)
  *   RAM_D2   0x30000000   32 KB  SRAM1/2: буфери за DMA (.dma_buffer)
  *   RAM_D3   0x38000000   16 KB  SRAM4
+ *   BKPSRAM  0x38800000    4 KB  backup SRAM (.backup_sram), пази се от VBAT
  */
 
 ENTRY(Reset_Handler)
@@ -23,6 +24,7 @@ MEMORY
   RAM_D1   (xrw) : ORIGIN = 0x24000000, LENGTH = 320K
   RAM_D2   (xrw) : ORIGIN = 0x30000000, LENGTH = 32K
   RAM_D3   (xrw) : ORIGIN = 0x38000000, LENGTH = 16K
+  BKPSRAM  (rw)  : ORIGIN = 0x38800000, LENGTH = 4K
 }
 
 /* стекът е в DTCM: най-бърз достъп, без кеш */
@@ -112,6 +114,15 @@ SECTIONS
     *(.dma_buffer) *(.dma_buffer*)
     . = ALIGN(32);
   } >RAM_D2
+
+  /* backup SRAM: съдържанието оцелява при рестарт и (с батерия на VBAT) без ток;
+   * затова NOLOAD, без нулиране при старт */
+  .backup_sram (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.backup_sram) *(.backup_sram*)
+    . = ALIGN(4);
+  } >BKPSRAM
 
   /DISCARD/ :
   {

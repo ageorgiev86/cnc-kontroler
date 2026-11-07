@@ -6,6 +6,7 @@
 #include "main.h"
 #include "usb_cdc.h"
 #include "stepgen.h"
+#include "resume.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -123,6 +124,35 @@ static void cmd_move(int argc, char **argv)
   }
 }
 
+/* resume [ред детайл] | resume clear: прекъснатата програма в backup SRAM */
+static void cmd_resume(int argc, char **argv)
+{
+  struct prog_pos p = {0};
+
+  if (argc >= 3) {                             /* проба без Linux: записва ред и детайл */
+    p.file_crc = 0x12345678u;
+    p.line     = (uint32_t)strtoul(argv[1], NULL, 0);
+    p.part     = (uint32_t)strtoul(argv[2], NULL, 0);
+    resume_store(&p);
+    console_printf("записано: ред %lu, детайл %lu (изключи и включи, после пак resume)\r\n",
+                   (unsigned long)p.line, (unsigned long)p.part);
+    return;
+  }
+  if (argc == 2 && strcmp(argv[1], "clear") == 0) {
+    resume_store(&p);
+    console_printf("изчистено\r\n");
+    return;
+  }
+  console_printf("батерия на VBAT (backup регулатор): %s\r\n", resume_battery_ok() ? "да" : "НЕ");
+  if (resume_boot_info(&p)) {
+    console_printf("при старта: прекъсната програма, файл %08lX, ред %lu, детайл %lu, сегмент %lu\r\n",
+                   (unsigned long)p.file_crc, (unsigned long)p.line, (unsigned long)p.part,
+                   (unsigned long)p.segment);
+  } else {
+    console_printf("при старта: няма прекъсната програма\r\n");
+  }
+}
+
 static void cmd_stop(int argc, char **argv)
 {
   (void)argc;
@@ -152,6 +182,7 @@ static const struct command commands[] = {
   { "move",   cmd_move,   "move x=3200 y=-1600 f=8000 [acc=50000]: права линия по осите" },
   { "stop",   cmd_stop,   "спиране по рампа" },
   { "reset",  cmd_reset,  "изчистване на грешка" },
+  { "resume", cmd_resume, "resume [ред детайл | clear]: прекъснатата програма (backup SRAM)" },
 };
 
 static void cmd_help(int argc, char **argv)

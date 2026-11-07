@@ -5,12 +5,14 @@
  * Етап 0: стартиране, такт 400 MHz от вътрешния осцилатор HSI, кешове, MPU
  * и мигащ светодиод.
  * Етап 1: USB CDC конзола за съобщения при отстраняване на грешки.
- * Етап 2: генериране на стъпки с TIM15 + DMA за 1 ос (тест от конзолата).
- * Следващите модули (генериране на стъпки, енкодери, SPI към Linux платката,
- * watchdog) се добавят върху тази основа.
+ * Етап 2: генериране на стъпки с TIM15 + DMA за 6 оси (тест от конзолата).
+ * Редът на прекъснатата програма се пази в backup SRAM (resume.c).
+ * Следващите модули (енкодери, SPI към Linux платката, watchdog) се добавят
+ * върху тази основа.
  */
 #include "main.h"
 #include "console.h"
+#include "resume.h"
 #include "stepgen.h"
 #include "usb_cdc.h"
 
@@ -28,6 +30,7 @@ int main(void)
   HAL_Init();
   SystemClock_Config();
   LED_Init();
+  resume_init();
   usb_cdc_init();
   stepgen_init();
 
@@ -97,7 +100,8 @@ static void SystemClock_Config(void)
 
 /*
  * MPU: забранява спекулативния достъп до неизползваното адресно пространство
- * (стандартна защита при Cortex-M7 с включен кеш) и прави RAM_D2 некеширана.
+ * (стандартна защита при Cortex-M7 с включен кеш) и прави RAM_D2 и backup
+ * SRAM некеширани.
  */
 static void MPU_Config(void)
 {
@@ -127,6 +131,20 @@ static void MPU_Config(void)
   r.AccessPermission = MPU_REGION_FULL_ACCESS;
   r.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
   r.IsShareable      = MPU_ACCESS_NOT_SHAREABLE;
+  r.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;
+  r.IsBufferable     = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&r);
+
+  /* backup SRAM (редът на прекъснатата програма): без кеш и без буфер за
+   * запис, за да е записът в паметта още преди следващата инструкция */
+  r.Number           = MPU_REGION_NUMBER2;
+  r.BaseAddress      = 0x38800000;
+  r.Size             = MPU_REGION_SIZE_4KB;
+  r.SubRegionDisable = 0x00;
+  r.TypeExtField     = MPU_TEX_LEVEL0;
+  r.AccessPermission = MPU_REGION_FULL_ACCESS;
+  r.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
+  r.IsShareable      = MPU_ACCESS_SHAREABLE;
   r.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;
   r.IsBufferable     = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&r);

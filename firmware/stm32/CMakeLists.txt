@@ -58,6 +58,7 @@ set(OWN_SOURCES
   Core/Src/usb_cdc.c
   Core/Src/console.c
   Core/Src/stepgen.c
+  Core/Src/resume.c
 )
 
 set(APP_SOURCES
