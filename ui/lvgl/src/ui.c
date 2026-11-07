@@ -213,6 +213,7 @@ void ui_test(const char *act)
     else if (!strncmp(act, "cyc:", 4)) machine_probe_cycle(arg, 0, now);
     else if (!strncmp(act, "hmapscan", 8)) hmap_scan(now);
     else if (!strncmp(act, "hmap", 4)) hmap_open();
+    else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
     else if (!strncmp(act, "part:", 5)) machine_wcs_toggle(atoi(arg), now);
     else if (!strncmp(act, "cfg:", 4)) {   /* cfg:ключ=стойност — направо в записаните настройки */
         char k[64];

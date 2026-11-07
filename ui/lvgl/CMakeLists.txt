@@ -60,6 +60,7 @@ set(APP_SOURCES
   src/ui_hmap.c
   src/io.c
   src/ui_diag.c
+  src/ui_set.c
   src/config_defs.c
 )
 

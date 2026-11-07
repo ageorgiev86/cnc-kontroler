@@ -265,3 +265,23 @@ int32_t ui_text_w(const char *txt, const lv_font_t *font)
     a.max_width = LV_COORD_MAX;
     return lv_text_get_width(txt, (uint32_t)strlen(txt), font, &a);
 }
+
+void ui_upper(char *d, size_t n, const char *s)
+{
+    size_t o = 0;
+    while (*s && o + 3 < n) {
+        unsigned char c = (unsigned char)*s;
+        if (c < 0x80) { d[o++] = (char)(c >= 'a' && c <= 'z' ? c - 32 : c); s++; continue; }
+        if ((c & 0xE0) == 0xC0 && s[1]) {
+            unsigned cp = ((c & 0x1Fu) << 6) | ((unsigned char)s[1] & 0x3Fu);
+            if (cp >= 0x430 && cp <= 0x44F) cp -= 0x20;
+            else if (cp == 0x451) cp = 0x401;
+            d[o++] = (char)(0xC0 | (cp >> 6));
+            d[o++] = (char)(0x80 | (cp & 0x3F));
+            s += 2;
+            continue;
+        }
+        d[o++] = *s++;
+    }
+    d[o] = 0;
+}

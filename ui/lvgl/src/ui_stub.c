@@ -6,9 +6,6 @@ static void stub(lv_obj_t *scr, const char *t)
     lv_obj_t *c = ui_card(scr, t, NULL);
     lv_obj_set_size(c, LV_PCT(100), LV_PCT(100));
 }
-void set_create(lv_obj_t *scr) { stub(scr, "НАСТРОЙКИ"); }
-void set_update(uint32_t now) {}
-void set_show(void) {}
 void files_create(lv_obj_t *scr) { stub(scr, "ПРОГРАМИ"); }
 void files_update(uint32_t now) {}
 void files_show(void) {}

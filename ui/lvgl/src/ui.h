@@ -93,6 +93,7 @@ void diag_update(uint32_t now);
 void set_create(lv_obj_t *scr);
 void set_update(uint32_t now);
 void set_show(void);
+void set_test(int level, const char *sec);
 void files_create(lv_obj_t *scr);
 void files_update(uint32_t now);
 void files_show(void);

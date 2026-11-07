@@ -83,6 +83,7 @@ void ui_led_set(lv_obj_t *led, lv_color_t c, bool on);
 lv_obj_t *ui_body(lv_obj_t *card, float gap_em);   /* .card-b: тялото на картата, колона */
 void ui_grid(lv_obj_t *obj, const int32_t *cols, const int32_t *rows, float gap_em);
 void ui_cell(lv_obj_t *obj, int col, int cspan, int row, int rspan);
+void ui_upper(char *dst, size_t n, const char *src);   /* главни букви (латиница и кирилица) */
 int32_t ui_text_w(const char *txt, const lv_font_t *font);   /* ширина на текст в пиксели */   /* STRETCH в клетката */
 
 #endif
