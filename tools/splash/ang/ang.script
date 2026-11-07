@@ -1,0 +1,52 @@
+# Начален екран на CNC контролера (tools/cnc-splash.sh): логото в средата,
+# под него лента за напредъка в цветовете на интерфейса. Черен фон.
+
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+sw = Window.GetWidth();
+sh = Window.GetHeight();
+
+# логото: 60 % от ширината (и в портретна, и в хоризонтална ориентация), до 40 % от височината
+logo_src = Image("logo.png");
+lw = sw * 0.6;
+lh = logo_src.GetHeight() * lw / logo_src.GetWidth();
+if (lh > sh * 0.4) {
+    lh = sh * 0.4;
+    lw = logo_src.GetWidth() * lh / logo_src.GetHeight();
+}
+lw = Math.Int(lw);
+lh = Math.Int(lh);
+lx = Math.Int((sw - lw) / 2);
+ly = Math.Int(sh * 0.45 - lh / 2);
+logo = Sprite(logo_src.Scale(lw, lh));
+logo.SetPosition(lx, ly, 1);
+
+# лентата: широка колкото логото, тънка
+bh = Math.Int(sh / 120);
+if (bh < 4) bh = 4;
+by = Math.Int(ly + lh + sh * 0.07);
+track = Sprite(Image("track.png").Scale(lw, bh));
+track.SetPosition(lx, by, 2);
+
+fill_src = Image("fill.png");
+fill = Sprite();
+fill.SetPosition(lx, by, 3);
+
+fun progress_cb(duration, progress) {
+    w = Math.Int(lw * progress);
+    if (w < 1) w = 1;
+    if (w > lw) w = lw;
+    fill.SetImage(fill_src.Scale(w, bh));
+}
+Plymouth.SetBootProgressFunction(progress_cb);
+
+# при изключване: само логото
+if (Plymouth.GetMode() == "shutdown" || Plymouth.GetMode() == "reboot") {
+    track.SetOpacity(0);
+    fill.SetOpacity(0);
+}
+
+# съобщенията и паролите не се показват (няма криптирани дискове)
+fun message_cb(text) { }
+Plymouth.SetMessageFunction(message_cb);

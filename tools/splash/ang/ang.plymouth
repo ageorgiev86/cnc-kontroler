@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=ANG systems
+Description=Начален екран на CNC контролера: лого и лента за напредъка
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ang
+ScriptFile=/usr/share/plymouth/themes/ang/ang.script
