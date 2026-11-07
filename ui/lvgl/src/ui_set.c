@@ -931,6 +931,21 @@ void set_update(uint32_t now)
 }
 
 /* за снимките от симулатора: вход и раздел */
+/* тест: отваря редакцията на параметър от текущия раздел, напр. „ip“ */
+void set_test_edit(const char *k)
+{
+    int n;
+    const pdef_t *P = sec_form(sec, &n);
+    for (int i = 0; P && i < n; i++)
+        if (P[i].k && !strcmp(P[i].k, k)) {
+            char key[40];
+            snprintf(key, sizeof key, "%s.%s", SEC_K[sec], k);
+            edit(&P[i], key);
+            return;
+        }
+    fprintf(stderr, "set_test_edit: няма параметър %s\n", k);
+}
+
 void set_test(int level, const char *s)
 {
     M.acc_level = level;

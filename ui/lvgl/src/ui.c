@@ -355,6 +355,7 @@ void ui_test(const char *act)
     else if (!strncmp(act, "hmapscan", 8)) hmap_scan(now);
     else if (!strncmp(act, "hmap", 4)) hmap_open();
     else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
+    else if (!strncmp(act, "edit:", 5)) set_test_edit(arg);
     else if (!strncmp(act, "load", 4)) files_load();
     else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
     else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));

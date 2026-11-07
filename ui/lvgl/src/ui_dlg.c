@@ -320,7 +320,7 @@ static void on_tk(lv_event_t *e)
 {
     lv_obj_t *b = lv_event_get_target_obj(e);
     const char *k = lv_label_get_text(ui_btn_label(b));
-    if (strlen(D.txt) + strlen(k) < (size_t)D.maxlen) strcat(D.txt, k);
+    if (strlen(D.txt) + strlen(k) <= (size_t)D.maxlen) strcat(D.txt, k);   /* maxlen = позволени байтове */
     D.shift = false;
     text_render();
 }
@@ -336,7 +336,7 @@ static void on_tk_fn(lv_event_t *e)
     } else if (f == 1) D.txt[0] = 0;
     else if (f == 2) D.shift = !D.shift;
     else if (f == 3) D.cyr = !D.cyr;
-    else if (f == 4 && n + 1 < (size_t)D.maxlen) strcat(D.txt, " ");
+    else if (f == 4 && n + 1 <= (size_t)D.maxlen) strcat(D.txt, " ");
     text_render();
 }
 
@@ -495,7 +495,7 @@ bool dlg_key(uint32_t key)
         else if (key == LV_KEY_BACKSPACE || key == LV_KEY_DEL) {
             if (n) { n--; while (n && ((unsigned char)D.txt[n] & 0xC0) == 0x80) n--; D.txt[n] = 0; }
             text_render();
-        } else if (key >= 0x20 && key < 0x800 && n + 3 < (size_t)D.maxlen) {   /* латиница и кирилица (UTF-8) */
+        } else if (key >= 0x20 && key < 0x800 && n + (key < 0x80 ? 1 : 2) <= (size_t)D.maxlen) {   /* латиница и кирилица (UTF-8) */
             if (key < 0x80) D.txt[n++] = (char)key;
             else { D.txt[n++] = (char)(0xC0 | (key >> 6)); D.txt[n++] = (char)(0x80 | (key & 0x3F)); }
             D.txt[n] = 0;
