@@ -16,6 +16,8 @@
 | [`docs/ui-iziskvania.md`](docs/ui-iziskvania.md) | Всички изисквания към интерфейса, екран по екран |
 | [`docs/makrosi-logika.md`](docs/makrosi-logika.md) | Макроси, фонова логика и скриптове: разширение след стабилната версия |
 | [`docs/otvoreni-vaprosi.md`](docs/otvoreni-vaprosi.md) | Неуточнени въпроси и следващи стъпки |
+| [`docs/interpretator-planer.md`](docs/interpretator-planer.md) | Интерпретатор и планер на G-code: устройство, диалекти Mach3/Haas, стъпки |
+| [`core/`](core/) | Ядро на C: интерпретатор и планер (тестове с `ctest`); инструкция в [`core/README.md`](core/README.md) |
 | [`firmware/stm32/`](firmware/stm32/) | Firmware за STM32H723ZG (CMake, VS Code); инструкция в [`firmware/stm32/README.md`](firmware/stm32/README.md) |
 | [`ui/maket.html`](ui/maket.html) | Интерактивен макет на интерфейса (отваря се в браузър) |
 

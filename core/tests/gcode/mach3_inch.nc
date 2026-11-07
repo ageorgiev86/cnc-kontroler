@@ -1,0 +1,7 @@
+; test: mach3 axes=XYZA
+G20 G90 G54
+G0 X1 Y2 Z0.5 A90
+G1 X1.5 F10
+G21
+G1 X0 F100
+M2

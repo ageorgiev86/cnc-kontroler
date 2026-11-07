@@ -1,0 +1,7 @@
+; test: haas axes=XYZ
+G0 X10 Y20 Z-5
+G0 X0 Y0 Z0
+G28 Z1
+G28
+G91 G10 L2 P1 X5
+G90 G0 X0
