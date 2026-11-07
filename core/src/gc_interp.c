@@ -62,7 +62,9 @@ static const char *later_g(int g)
     switch (g) {
     case 730: case 810: case 820: case 830: case 850: case 860: case 870: case 880: case 890:
         return "идва в стъпка 2 (цикли)";
-    case 50: case 51: case 52: case 120: case 130: case 150: case 160: case 410: case 411: case 420: case 421:
+    case 410: case 411: case 420: case 421:
+        return "идва в стъпка 2а (компенсация на радиуса)";
+    case 50: case 51: case 52: case 120: case 130: case 150: case 160:
     case 431: case 500: case 510: case 520: case 680: case 690: case 700: case 710: case 720: case 930: case 1500:
         return "идва в стъпка 5";
     case 382: case 383: case 384: case 385:
