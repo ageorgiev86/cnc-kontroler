@@ -77,7 +77,7 @@ static void add_dir(const char *dir, int depth)
 static bool net_ready(void)
 {
     struct stat st;
-    return cfg_num("net.shOn") && !stat("/mnt/cnc-net", &st) && S_ISDIR(st.st_mode);
+    return !stat("/mnt/cnc-net", &st) && S_ISDIR(st.st_mode);   /* tools/net-share.sh */
 }
 
 static void scan(void)
@@ -261,8 +261,8 @@ static void render_list(void)
     bool nw = src == 2 && !net_ready();
     lv_obj_set_hidden(warn, !nw);
     if (nw) {
-        ui_set_text(warn_txt, cfg_num("net.shOn") ? "Мрежовият дял не е свързан (/mnt/cnc-net). Настройва се от Настройки → Мрежа."
-                                                  : "Мрежовият дял е изключен. Настройва се от Настройки → Мрежа.");
+        ui_set_text(warn_txt, "Мрежовият диск не е настроен. По SSH: sudo bash tools/net-share.sh //сървър/дял [потребител парола]. "
+                              "После файловете се виждат тук.");
         return;
     }
     if (!nfl) {
