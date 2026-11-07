@@ -1,6 +1,7 @@
 #include "machine.h"
 #include "program.h"
 #include "config.h"
+#include "io.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -21,6 +22,7 @@ void machine_init(void)
 {
     memset(&M, 0, sizeof M);
     cfg_init();
+    io_defaults();
     tools_init();
     static const double mach[AX_N] = {-250, -180, -70, 0, 0, 0};
     static const double off[7][3] = {{0}, {-250, -180, -95}, {-140, -180, -95}, {-250, -110, -95}, {-140, -110, -95}, {0}, {0}};
@@ -116,6 +118,7 @@ void machine_reset(uint32_t now_ms)
     if (M.state == MS_RUN || M.state == MS_HOLD) { machine_toast("Спрете машината", now_ms, 3500); return; }
 
     M.state = MS_IDLE;
+    M.alarm[0] = 0;
     M.enabled = true;
     home_group = next_group(-1);
     if (home_group < 0) {
@@ -138,6 +141,22 @@ void machine_reset(uint32_t now_ms)
 }
 
 static void mq_clear(void);
+
+void machine_alarm(const char *why)
+{
+    mq_clear();
+    M.run_kind = RK_NONE;
+    M.jog_dir = 0;
+    M.off = M.wcs_off[M.wcs];
+    M.wcs_run = 0;
+    M.sp_on = false;
+    M.coolant = false;
+    M.feed_act = 0;
+    M.state = MS_ALARM;
+    M.enabled = false;
+    M.ready = false;
+    snprintf(M.alarm, sizeof M.alarm, "%s. Машината е спряна.", why);
+}
 
 void machine_estop(void)
 {
@@ -475,7 +494,8 @@ void machine_tick(uint32_t now_ms, uint32_t dt_ms)
     mq_tick(now_ms, dt_ms / 1000.0f);
     jog_tick(dt_ms / 1000.0f);
     machine_mag_tick(dt_ms / 1000.0f);
-    if (M.state != MS_RUN && !M.homing)
+    io_tick(dt_ms / 1000.0f, now_ms);
+    if (M.state != MS_RUN && M.state != MS_ALARM && !M.homing)
         for (int a = 0; a < AX_N; a++) M.ferr[a] *= 0.8;
 }
 

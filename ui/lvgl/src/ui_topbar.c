@@ -162,6 +162,9 @@ void topbar_update(topbar_t *tb, uint32_t now)
     if (M.state == MS_ESTOP) {
         txt = "Аварийният стоп е натиснат. Захранването на драйверите и шпиндела е прекъснато.";
         mc = C_BAD;
+    } else if (M.state == MS_ALARM && M.alarm[0]) {
+        txt = M.alarm;
+        mc = C_BAD;
     } else if ((int32_t)(M.msg_until - now) > 0) {
         txt = M.msg;
         mc = M.msg_kind == MSG_BAD ? C_BAD : M.msg_kind == MSG_ACT ? C_ACC : C_DIM;

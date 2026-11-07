@@ -103,6 +103,9 @@ typedef struct {
     int prb_cnt, ts_cnt;   /* брой сработвания на входовете */
     uint32_t prb_flash, ts_flash;
 
+    char alarm[200];       /* причината за алармата */
+    int acc_level;         /* достъп: 0 оператор, 1 настройчик, 2 производител */
+
     char msg[200];
     msg_kind_t msg_kind;
     uint32_t msg_until;    /* lv_tick, до кога се показва временното съобщение */
@@ -117,6 +120,7 @@ void machine_tick(uint32_t now_ms, uint32_t dt_ms);
 /* Действия от интерфейса */
 void machine_reset(uint32_t now_ms);
 void machine_estop(void);
+void machine_alarm(const char *why);   /* спира движението и изключва задвижванията */
 
 /* Програма: старт (и продължаване от пауза), пауза, стоп, връщане в началото, оверрайди */
 void machine_start(uint32_t now_ms);

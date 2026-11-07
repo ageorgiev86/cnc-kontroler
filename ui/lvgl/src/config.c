@@ -50,6 +50,8 @@ static void add(const char *key, const char *val)
     H[h] = (short)n_e;
 }
 
+void cfg_add(const char *key, const char *val) { add(key, val); }
+
 static void add_sec(const char *sec, const pdef_t *p, int n)
 {
     char k[40];

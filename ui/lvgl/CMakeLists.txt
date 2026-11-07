@@ -58,6 +58,8 @@ set(APP_SOURCES
   src/machine_hmap.c
   src/ui_probe.c
   src/ui_hmap.c
+  src/io.c
+  src/ui_diag.c
   src/config_defs.c
 )
 
