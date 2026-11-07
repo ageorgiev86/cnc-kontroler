@@ -1,5 +1,6 @@
 #include "machine.h"
 #include "program.h"
+#include "config.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -10,14 +11,17 @@
 machine_t M;
 const char *const AX_NAME[AX_N] = {"X", "Y", "Z", "A", "B", "C"};
 
-#define HOME_POS (-2.0)       /* позиция след Home (маш. координата) */
+static double home_pos(int a) { char k[16]; snprintf(k, sizeof k, "%s.hpos", AX_NAME[a]); return cfg_num(k); }
 #define HOME_SPEED 120.0      /* мм/с — ускорено, само за демото */
 
 static int home_group = -1;   /* текуща група от реферирването */
+static void tools_init(void);
 
 void machine_init(void)
 {
     memset(&M, 0, sizeof M);
+    cfg_init();
+    tools_init();
     static const double mach[AX_N] = {-250, -180, -70, 0, 0, 0};
     static const double off[AX_N] = {-250, -180, -95, 0, 0, 0};
     static const int seq[AX_N] = {1, 1, 0, 2, 2, 2};
@@ -43,20 +47,38 @@ void machine_init(void)
     M.line = -1;
     M.jog_inc = 0.1;
     M.jog_f = 1000;
+    M.sel_tool = 3;
+    M.mag_pos = 5;
+    M.mag_ph = 5;
+    M.clamped = true;
+    machine_apply_cfg();
 }
 
-/* Таблицата на инструментите (като в макета); по-късно идва от настройките */
-static const struct { const char *n; double d; } TOOLS[] = {
-    {"", 0}, {"Фреза 2Z", 6}, {"Фреза 3Z", 10}, {"Сферична R3", 6}, {"Свредло", 8.5}, {"Фреза 3Z ALU", 10},
-    {"Метчик M10", 10}, {"Центрово 90°", 6}, {"Челна фреза", 50}, {"Гравьор 30°", 3}, {"3D пробник", 2},
-    {"Фаска 45°", 12}, {"Фреза 4Z", 16},
-};
+/* Таблицата на инструментите (както в макета); по-късно се пази с настройките */
+tool_t TT[TOOL_MAX + 1];
+
+static void tools_init(void)
+{
+    static const struct { const char *n; double d, l, w; } T0[] = {
+        {"Фреза 2Z", 6, 72.315, 0}, {"Фреза 3Z", 10, 84.902, 0.004}, {"Сферична R3", 6, 77.120, 0},
+        {"Свредло", 8.5, 118.440, 0}, {"Фреза 3Z ALU", 10, 92.405, 0.002}, {"Метчик M10", 10, 96.770, 0},
+        {"Центрово 90°", 6, 68.050, 0}, {"Челна фреза", 50, 61.230, 0.010}, {"Гравьор 30°", 3, 70.880, 0},
+        {"3D пробник", 2, 104.600, 0}, {"Фаска 45°", 12, 80.310, 0}, {"Фреза 4Z", 16, 99.015, 0.006},
+    };
+    memset(TT, 0, sizeof TT);
+    for (int i = 0; i < 12; i++) {
+        snprintf(TT[i + 1].name, sizeof TT[i + 1].name, "%s", T0[i].n);
+        TT[i + 1].dia = T0[i].d;
+        TT[i + 1].len = T0[i].l;
+        TT[i + 1].wear = T0[i].w;
+    }
+}
 
 const char *machine_tool_name(int t, double *dia)
 {
-    if (t < 1 || t >= (int)(sizeof TOOLS / sizeof TOOLS[0])) { if (dia) *dia = 0; return "Празно гнездо"; }
-    if (dia) *dia = TOOLS[t].d;
-    return TOOLS[t].n;
+    if (t < 1 || t > TOOL_MAX || !TT[t].name[0]) { if (dia) *dia = 0; return "Празно гнездо"; }
+    if (dia) *dia = TT[t].dia;
+    return TT[t].name;
 }
 
 double machine_work(int ax) { return M.mach[ax] - M.off[ax]; }
@@ -140,9 +162,9 @@ static void tick_homing(uint32_t now_ms, double dt)
     bool moving = false;
     for (int a = 0; a < AX_N; a++) {
         if (!homes(a) || M.home_seq[a] != home_group || M.homed[a] != HOMED_NO) continue;
-        double d = HOME_POS - M.mach[a], step = HOME_SPEED * dt;
+        double d = home_pos(a) - M.mach[a], step = HOME_SPEED * dt;
         if (fabs(d) <= step) {
-            M.mach[a] = HOME_POS;
+            M.mach[a] = home_pos(a);
             M.homed[a] = HOMED_SENSOR;
             M.ferr[a] = 0;
         } else {
@@ -302,7 +324,15 @@ static void tick_program(uint32_t now, float dt)
             char t[96];
             if (o->kind == OP_TOOL) {
                 if (o->tool == M.tool) dur = 0;
-                else { snprintf(t, sizeof t, "Смяна на инструмент T%d", o->tool); act_msg(t, now); M.sp_on = false; }
+                else {
+                    snprintf(t, sizeof t, "Смяна на инструмент T%d", o->tool);
+                    act_msg(t, now);
+                    snprintf(M.act_label, sizeof M.act_label, "%s", t);
+                    M.sp_on = false;
+                    M.mag_pos = o->tool;
+                    int per = (mag_n() + mag_wheels() - 1) / mag_wheels();
+                    M.wpos[(o->tool - 1) / per < 6 ? (o->tool - 1) / per : 5] = (o->tool - 1) % per + 1;
+                }
             } else if (o->kind == OP_SPINDLE) {
                 M.sp_cmd = o->s; M.sp_on = o->s > 0;
                 if (o->s) { snprintf(t, sizeof t, "Шпинделът се пуска: S%d", o->s); act_msg(t, now); }
@@ -313,12 +343,7 @@ static void tick_program(uint32_t now, float dt)
         M.feed_act = 0;
         if (M.op_s + budget >= dur) {
             budget -= dur - M.op_s;
-            if (o->kind == OP_TOOL && o->tool != M.tool) {
-                M.tool = o->tool;
-                double dia;
-                snprintf(M.tool_desc, sizeof M.tool_desc, "%s", machine_tool_name(o->tool, &dia));
-                M.tool_dia = dia;
-            }
+            if (o->kind == OP_TOOL && o->tool != M.tool) { machine_select_tool(o->tool); M.act_label[0] = 0; }
             M.op_s = 0; M.op++; M.done_t = o->t1;
             continue;
         }
@@ -338,6 +363,7 @@ void machine_tick(uint32_t now_ms, uint32_t dt_ms)
     tick_program(now_ms, dt_ms / 1000.0f);
     mq_tick(now_ms, dt_ms / 1000.0f);
     jog_tick(dt_ms / 1000.0f);
+    machine_mag_tick(dt_ms / 1000.0f);
     if (M.state != MS_RUN && !M.homing)
         for (int a = 0; a < AX_N; a++) M.ferr[a] *= 0.8;
 }
@@ -359,7 +385,7 @@ static bool mq_started;
 static double mq_from[AX_N];
 static float mq_len, mq_s;
 
-static void mq_clear(void) { mq_n = mq_i = 0; mq_started = false; }
+static void mq_clear(void) { mq_n = mq_i = 0; mq_started = false; M.act_label[0] = 0; M.mtc = 0; M.mag_moving = false; M.orient = false; }
 bool mq_busy(void) { return mq_i < mq_n; }
 
 void mq_begin(runkind_t kind)
@@ -411,7 +437,7 @@ static void mq_tick(uint32_t now, float dt)
         if (!mq_started) {
             mq_started = true;
             mq_s = 0;
-            if (o->label[0]) act_msg(o->label, now);
+            if (o->label[0]) { act_msg(o->label, now); snprintf(M.act_label, sizeof M.act_label, "%s", o->label); }
             if (o->move) {
                 double l2 = 0;
                 for (int a = 0; a < AX_N; a++) {
@@ -451,6 +477,7 @@ static void mq_tick(uint32_t now, float dt)
     }
     if (mq_i >= mq_n && M.state == MS_RUN) {
         mq_clear();
+        M.act_label[0] = 0;
         M.state = MS_IDLE;
         M.run_kind = RK_NONE;
         M.feed_act = 0;
@@ -557,7 +584,7 @@ void machine_home(int ax, uint32_t now)
         double t[AX_N];
         keep(t);
         for (int a = 0; a < AX_N; a++)
-            if (homes(a) && M.home_seq[a] == g && (ax < 0 || a == ax)) { mask |= 1 << a; t[a] = HOME_POS; M.homed[a] = HOMED_NO; }
+            if (homes(a) && M.home_seq[a] == g && (ax < 0 || a == ax)) { mask |= 1 << a; t[a] = home_pos(a); M.homed[a] = HOMED_NO; }
         if (!mask) continue;
         char lbl[64] = "Реферирване ";
         for (int a = 0; a < AX_N; a++)

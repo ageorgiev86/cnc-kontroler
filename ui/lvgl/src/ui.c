@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "config.h"
 #include "program.h"
 #include "ui_style.h"
 
@@ -207,6 +208,14 @@ void ui_test(const char *act)
     else if (!strncmp(act, "home", 4)) machine_home(-1, now);
     else if (!strncmp(act, "gozero", 6)) machine_goto_zero(now);
     else if (!strncmp(act, "start", 5)) machine_start(now);
+    else if (!strncmp(act, "tc:", 3)) machine_tool_change(atoi(arg), now);
+    else if (!strncmp(act, "measure", 7)) machine_measure_tool(now);
+    else if (!strncmp(act, "cfg:", 4)) {   /* cfg:ключ=стойност — направо в записаните настройки */
+        char k[64];
+        snprintf(k, sizeof k, "%s", arg);
+        char *eq = strchr(k, '=');
+        if (eq) { *eq = 0; drf_set(k, eq + 1); cfg_commit_key(k); machine_apply_cfg(); }
+    }
     else ui_test_screen(act);
 }
 

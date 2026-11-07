@@ -190,7 +190,7 @@ void jog_create(lv_obj_t *scr)
     }
     ui_grid(scr, cols, rows, 0.6f);
     dro_create(&dro, scr, DRO_ZERO);
-    ui_cell(dro.card, 0, 1, 0, 1);
+    lv_obj_set_grid_cell(dro.card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_START, 0, 1);
     lv_obj_t *pc, *par;
     pad_card(scr, &pc);
     ui_cell(pc, 0, 1, 1, 1);

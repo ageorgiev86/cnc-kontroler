@@ -3,6 +3,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "src/misc/lv_text_private.h"
+
 #define DECL_TIER(t)                                                           \
     LV_FONT_DECLARE(font_ui_xs_t##t) LV_FONT_DECLARE(font_ui_sm_t##t)          \
     LV_FONT_DECLARE(font_ui_md_t##t) LV_FONT_DECLARE(font_ui_ax_t##t)          \
@@ -255,4 +257,11 @@ void ui_grid(lv_obj_t *obj, const int32_t *cols, const int32_t *rows, float gap_
 void ui_cell(lv_obj_t *obj, int col, int cspan, int row, int rspan)
 {
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, col, cspan, LV_GRID_ALIGN_STRETCH, row, rspan);
+}
+
+int32_t ui_text_w(const char *txt, const lv_font_t *font)
+{
+    lv_text_attributes_t a = {0};
+    a.max_width = LV_COORD_MAX;
+    return lv_text_get_width(txt, (uint32_t)strlen(txt), font, &a);
 }

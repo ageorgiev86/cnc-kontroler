@@ -16,6 +16,23 @@ typedef enum { MSG_NONE, MSG_INFO, MSG_ACT, MSG_BAD } msg_kind_t;
 /* какво изпълнява машината в момента: програма или опашка от движения (ръчно, MDI, реферирване …) */
 typedef enum { RK_NONE, RK_PROG, RK_JOG, RK_MDI, RK_HOME, RK_PROBE, RK_TOOL } runkind_t;
 
+#define TOOL_MAX 255
+typedef struct {
+    char name[40];         /* празно = празно гнездо */
+    double len, dia, wear;
+} tool_t;
+extern tool_t TT[TOOL_MAX + 1];
+
+/* резултат от измерване (картата „Резултат“ в Офсети) */
+typedef struct {
+    int seq;               /* расте при всеки нов резултат */
+    char title[80];
+    char rows[6][2][48];
+    int nrows;
+    char note[200];
+    bool warn;
+} prb_result_t;
+
 typedef struct {
     mstate_t state;
     bool enabled;          /* задвижванията са включени */
@@ -68,6 +85,19 @@ typedef struct {
     bool ref_manual;       /* реферирване „Ръчно, тук“ вместо с датчик */
     int jog_ax, jog_dir;   /* задържан бутон при непрекъснато движение; jog_dir 0 = няма */
 
+    /* инструменти и магазин */
+    int sel_tool;          /* избраният в таблицата (за „Смени“) */
+    int mag_pos;           /* гнездото на позицията за смяна */
+    float mag_ph;          /* плавна позиция за анимацията */
+    int wpos[6];           /* карусел с колела: гнездото на всяко колело при смяната */
+    float wph[6];
+    bool clamped, orient, mag_moving;
+    int mtc;               /* ръчна смяна: чака се поставяне на T (0 = не) */
+    char act_label[96];    /* текущото действие от опашката */
+    prb_result_t res;
+    int prb_cnt, ts_cnt;   /* брой сработвания на входовете */
+    uint32_t prb_flash, ts_flash;
+
     char msg[200];
     msg_kind_t msg_kind;
     uint32_t msg_until;    /* lv_tick, до кога се показва временното съобщение */
@@ -105,6 +135,15 @@ int machine_set_pos(int ax, bool mach, double v, uint32_t now_ms);
 int machine_mdi(const char *text, uint32_t now_ms);   /* 0 = прието за изпълнение */
 void machine_coolant(uint32_t now_ms);
 void machine_select_tool(int t);                      /* T в шпиндела (след смяна) */
+int mag_n(void);                                      /* брой гнезда / инструменти */
+int mag_wheels(void);
+bool machine_auto_tc(void);                           /* има магазин и автоматичната смяна е включена */
+void machine_tool_change(int t, uint32_t now_ms);
+void machine_measure_tool(uint32_t now_ms);
+void machine_mag_tick(float dt);
+void machine_result(const char *title, const char *note);   /* нов резултат; редовете се добавят с machine_result_row */
+void machine_result_row(const char *k, const char *v);
+void machine_apply_cfg(void);                         /* след „Запиши“ в настройките */
 
 /* Опашка от движения и действия: координатите са машинни, NAN = без промяна.
  * feed 0 = бърз ход. fn се вика в края на действието. */
