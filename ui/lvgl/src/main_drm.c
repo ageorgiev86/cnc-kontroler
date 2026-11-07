@@ -14,6 +14,7 @@
 #include "config.h"
 #include "drm_disp.h"
 #include "kbd_evdev.h"
+#include "mouse_wheel.h"
 #include "machine.h"
 #include "program.h"
 #include "ui.h"
@@ -101,6 +102,7 @@ int main(int argc, char **argv)
         if (in) {
             lv_indev_set_display(in, disp);
             lv_indev_set_cursor(in, make_cursor());
+            mouse_wheel_start(mouse, in);
             printf("Мишка: %s\n", mouse);
         }
     }

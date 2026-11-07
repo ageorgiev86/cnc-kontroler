@@ -91,7 +91,7 @@ if(CNC_UI_BUILD_SIM)
 endif()
 
 if(CNC_UI_BUILD_DEVICE)
-  cnc_ui_target(cnc-ui 0 "src/main_drm.c;src/drm_disp.c;src/kbd_evdev.c")
+  cnc_ui_target(cnc-ui 0 "src/main_drm.c;src/drm_disp.c;src/kbd_evdev.c;src/mouse_wheel.c")
   target_link_libraries(cnc-ui_lvgl PUBLIC PkgConfig::DRM PkgConfig::LIBINPUT)
   message(STATUS "cnc-ui: DRM + libinput")
 endif()

@@ -10,9 +10,20 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <SDL2/SDL.h>
+
 #include "lvgl.h"
 #include "program.h"
 #include "ui.h"
+
+/* колелцето на мишката: както на платката, превърта областта под курсора (ui_wheel) */
+static int wheel_acc;
+static int on_sdl_event(void *ud, SDL_Event *e)
+{
+    (void)ud;
+    if (e->type == SDL_MOUSEWHEEL) wheel_acc += e->wheel.y;
+    return 0;
+}
 
 static void usage(void)
 {
@@ -60,8 +71,8 @@ int main(int argc, char **argv)
     if (!disp) { fprintf(stderr, "SDL прозорецът не може да се създаде\n"); return 1; }
     lv_sdl_window_set_title(disp, "CNC интерфейс — симулатор");
     if (zoom > 0 && zoom != 1.0f) lv_sdl_window_set_zoom(disp, zoom);
-    lv_sdl_mouse_create();
-    lv_sdl_mousewheel_create();
+    lv_indev_t *mouse = lv_sdl_mouse_create();
+    SDL_AddEventWatch(on_sdl_event, NULL);
 
     ui_create(disp);
     ui_keys_attach(lv_sdl_keyboard_create());
@@ -72,6 +83,12 @@ int main(int argc, char **argv)
     uint32_t start = lv_tick_get();
     for (;;) {
         uint32_t idle = lv_timer_handler();
+        if (wheel_acc) {
+            lv_point_t p;
+            lv_indev_get_point(mouse, &p);
+            ui_wheel(p.x, p.y, wheel_acc);
+            wheel_acc = 0;
+        }
         if (run && M.ready && M.state == MS_IDLE) { machine_start(lv_tick_get()); run = 0; }
         /* тестовите действия: по едно, когато машината е свободна (след реферирането, ако е пуснато с --reset) */
         static int ai;

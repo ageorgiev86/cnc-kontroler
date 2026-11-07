@@ -337,6 +337,41 @@ int ui_go_name(const char *name)
 }
 
 /* Тестови действия за снимките от симулатора: име[:аргумент] */
+/* Колелцето превърта областта под курсора (а не последната натисната, както прави LVGL): първата
+ * област от ui_scroll_v() нагоре по дървото, която има накъде да се движи. При отворен
+ * диалог курсорът е върху фона му и екранът отдолу не се превърта. */
+/* най-вътрешният видим обект под точката (lv_indev_search_obj търси само такива, които се натискат) */
+static lv_obj_t *obj_at(lv_obj_t *o, const lv_point_t *p)
+{
+    if (lv_obj_is_hidden(o)) return NULL;
+    lv_area_t a;
+    lv_obj_get_coords(o, &a);
+    if (p->x < a.x1 || p->x > a.x2 || p->y < a.y1 || p->y > a.y2) return NULL;
+    for (int i = (int)lv_obj_get_child_count(o) - 1; i >= 0; i--) {
+        lv_obj_t *r = obj_at(lv_obj_get_child(o, i), p);
+        if (r) return r;
+    }
+    return o;
+}
+
+void ui_wheel(int32_t x, int32_t y, int notches)
+{
+    if (!notches) return;
+    lv_display_t *d = lv_display_get_default();
+    lv_point_t p = {x, y};
+    lv_obj_t *top = lv_display_get_layer_top(d);
+    lv_obj_t *o = obj_at(top, &p);
+    if (!o || o == top) o = obj_at(lv_screen_active(), &p);   /* самият слой: няма диалог */
+    for (; o; o = lv_obj_get_parent(o)) {
+        /* само областите от ui_scroll_v (посока точно VER); картите по подразбиране са LV_DIR_ALL */
+        if (!lv_obj_is_scrollable(o) || lv_obj_get_scroll_dir(o) != LV_DIR_VER) continue;
+        int32_t room = notches > 0 ? lv_obj_get_scroll_top(o) : lv_obj_get_scroll_bottom(o);
+        if (room <= 0) continue;
+        lv_obj_scroll_by_bounded(o, 0, EM(5) * notches, LV_ANIM_ON);
+        return;
+    }
+}
+
 void ui_test(const char *act)
 {
     uint32_t now = lv_tick_get();
@@ -357,6 +392,10 @@ void ui_test(const char *act)
     else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
     else if (!strncmp(act, "edit:", 5)) set_test_edit(arg);
     else if (!strncmp(act, "dscroll:", 8)) diag_test_scroll(atoi(arg));
+    else if (!strncmp(act, "wheel:", 6)) {   /* wheel:x,y,щраквания (− = надолу) */
+        int x = 0, y = 0, n = 0;
+        if (sscanf(arg, "%d,%d,%d", &x, &y, &n) == 3) ui_wheel(x, y, n);
+    }
     else if (!strncmp(act, "load", 4)) files_load();
     else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
     else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));
