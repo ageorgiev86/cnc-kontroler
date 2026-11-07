@@ -8,7 +8,7 @@
 #include "ui.h"
 #include "ui_style.h"
 
-static void on_open(lv_event_t *e) { machine_toast("Екранът с файловете идва в следваща стъпка", lv_tick_get(), 3000); }
+static void on_open(lv_event_t *e) { ui_go(SCR_FILES); }
 
 /* оцветяване като в макета: G синьо, M оранжево, T жълто, коментарите бледо */
 static void colorize(const char *src, char *out, size_t n, bool *plain)

@@ -8,6 +8,9 @@
 void ui_create(lv_display_t *disp);
 /* Записва текущия екран като BMP (за снимки от симулатора). 0 при успех. */
 int ui_save_bmp(const char *path);
+/* За симулатора: екран по име и тестови действия */
+int ui_go_name(const char *name);
+void ui_test(const char *act);
 
 /* --- вътрешно между модулите на интерфейса --- */
 typedef struct {
@@ -20,9 +23,14 @@ typedef struct {
     lv_obj_t *row, *val, *unit, *sm, *sd, *fbar, *ftxt, *dot;
 } dro_row_t;
 
+/* Видове на картата с позициите (data-dro в макета) */
+typedef enum { DRO_FULL, DRO_ZERO, DRO_COMPACT } dro_kind_t;
+
 typedef struct {
-    lv_obj_t *card, *home_btn, *seg_work, *seg_mach;
+    dro_kind_t kind;
+    lv_obj_t *card, *title, *home_btn, *seg_work, *seg_mach, *single, *cool;
     dro_row_t rows[AX_N];
+    int need_was, single_was, cool_was, wcs_was;
 } dro_t;
 
 /* 3D траектория (lv_canvas) */
@@ -62,8 +70,45 @@ void ctrl_update(ctrl_t *c, uint32_t now);
 
 void topbar_create(topbar_t *tb, lv_obj_t *parent);
 void topbar_update(topbar_t *tb, uint32_t now);
-void dro_create(dro_t *d, lv_obj_t *parent);
+void dro_create(dro_t *d, lv_obj_t *parent, dro_kind_t kind);
 void dro_update(dro_t *d, uint32_t now);
+
+/* Екраните (навигацията .navbar) */
+enum { SCR_RUN, SCR_JOG, SCR_MDI, SCR_TOOLS, SCR_PROBE, SCR_DIAG, SCR_SET, SCR_FILES, SCR_N };
+extern int g_screen;
+void ui_go(int scr);
+lv_obj_t *ui_traj_card(void);            /* картата „Траектория“ се мести между Работа, Ръчно и MDI */
+void ui_traj_slot(int scr, int col, int cspan, int row, int rspan);
+
+void jog_create(lv_obj_t *scr);
+void jog_update(uint32_t now);
+void mdi_create(lv_obj_t *scr);
+void mdi_update(uint32_t now);
+void tools_create(lv_obj_t *scr);
+void tools_update(uint32_t now);
+void probe_create(lv_obj_t *scr);
+void probe_update(uint32_t now);
+void diag_create(lv_obj_t *scr);
+void diag_update(uint32_t now);
+void set_create(lv_obj_t *scr);
+void set_update(uint32_t now);
+void set_show(void);
+void files_create(lv_obj_t *scr);
+void files_update(uint32_t now);
+void files_show(void);
+void ui_test_screen(const char *act);   /* тестови действия на отделните екрани */
+
+/* Диалози (ui_dlg.c) */
+typedef void (*dlg_num_cb)(double v, void *ud);
+typedef int (*dlg_text_cb)(const char *txt, void *ud);   /* 0 = прието */
+typedef void (*dlg_pick_cb)(int idx, void *ud);
+void dlg_setpos(int ax);
+void dlg_num(const char *title, const char *unit, const char *hint, double cur, double min, double max, int dec, dlg_num_cb cb, void *ud);
+void dlg_text(const char *title, const char *cur, int maxlen, dlg_text_cb cb, void *ud);
+void dlg_pick(const char *title, const char *const *opts, int n, int cur, dlg_pick_cb cb, void *ud);
+void dlg_confirm(const char *title, const char *text, const char *ok, dlg_pick_cb cb, void *ud);
+void dlg_close(void);
+bool dlg_open(void);
 
 /* Мигане като steps(2) в макета: първата половина на периода е видимо */
 static inline bool ui_blink_on(uint32_t now, uint32_t period) { return now % period < period / 2; }

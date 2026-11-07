@@ -1,8 +1,10 @@
 #include "machine.h"
 #include "program.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 machine_t M;
@@ -39,6 +41,8 @@ void machine_init(void)
     M.mcu_rate_hz = 1000;
     M.fov = M.sov = M.rov = 100;
     M.line = -1;
+    M.jog_inc = 0.1;
+    M.jog_f = 1000;
 }
 
 /* Таблицата на инструментите (като в макета); по-късно идва от настройките */
@@ -109,8 +113,13 @@ void machine_reset(uint32_t now_ms)
     machine_toast(t, now_ms, 3500);
 }
 
+static void mq_clear(void);
+
 void machine_estop(void)
 {
+    mq_clear();
+    M.run_kind = RK_NONE;
+    M.jog_dir = 0;
     M.sp_on = false;
     M.coolant = false;
     M.feed_act = 0;
@@ -174,6 +183,7 @@ static p3_t work_pos(void)
 void machine_start(uint32_t now)
 {
     if (M.state == MS_HOLD) { M.state = MS_RUN; return; }
+    if (M.state == MS_RUN && M.run_kind != RK_PROG) { machine_toast("Машината се движи. Изчакайте или натиснете СТОП.", now, 3500); return; }
     if (M.state == MS_ESTOP) { machine_toast("Аварийният стоп е натиснат. Натиснете RESET.", now, 3500); return; }
     if (M.state == MS_ALARM) { machine_toast("Има активна аларма. Натиснете RESET.", now, 3500); return; }
     if (!M.enabled) { machine_toast("Машината е изключена. Натиснете RESET горе вляво.", now, 3500); return; }
@@ -184,6 +194,7 @@ void machine_start(uint32_t now)
     if (M.prog_done || M.op >= P.nop - 1) { M.op = 0; M.prog_done = false; M.done_t = 0; }
     if (M.op == 0) { M.run_time = 0; M.op_s = 0; M.line = -1; }
     M.state = MS_RUN;
+    M.run_kind = RK_PROG;
 }
 
 void machine_hold(void)
@@ -194,6 +205,8 @@ void machine_hold(void)
 void machine_stop(uint32_t now)
 {
     if (M.state != MS_RUN && M.state != MS_HOLD) return;
+    mq_clear();
+    M.run_kind = RK_NONE;
     M.state = MS_IDLE;
     M.sp_on = false;
     M.coolant = false;
@@ -242,14 +255,14 @@ static void tick_program(uint32_t now, float dt)
     float tgt = M.sp_on ? (float)M.sp_cmd * M.sov / 100.0f : 0;
     float st = SP_RAMP * dt, d = tgt - M.sp_act;
     M.sp_act += fabsf(d) <= st ? d : (d > 0 ? st : -st);
-    if (M.state != MS_RUN) return;
+    if (M.state != MS_RUN || M.run_kind != RK_PROG) return;
     M.run_time += dt;
     float budget = dt * SIMX;          /* „номинални“ секунди за този кадър */
     while (budget > 0 && M.state == MS_RUN) {
         op_t *o = &P.op[M.op];
         if (M.line != o->line && o->kind != OP_END) M.line = o->line;
         if (o->kind == OP_END) {
-            M.state = MS_IDLE; M.prog_done = true; M.done_t = P.t_total; M.feed_act = 0;
+            M.state = MS_IDLE; M.run_kind = RK_NONE; M.prog_done = true; M.done_t = P.t_total; M.feed_act = 0;
             M.sp_on = false; M.coolant = false;
             for (int a = 0; a < AX_N; a++) M.togo[a] = 0;
             char t[80];
@@ -315,10 +328,415 @@ static void tick_program(uint32_t now, float dt)
     }
 }
 
+static void mq_tick(uint32_t now, float dt);
+static void jog_tick(float dt);
+
 void machine_tick(uint32_t now_ms, uint32_t dt_ms)
 {
+    if (dt_ms > 200) dt_ms = 200;   /* след пауза в опресняването не се прескача */
     if (M.homing) tick_homing(now_ms, dt_ms / 1000.0);
     tick_program(now_ms, dt_ms / 1000.0f);
+    mq_tick(now_ms, dt_ms / 1000.0f);
+    jog_tick(dt_ms / 1000.0f);
     if (M.state != MS_RUN && !M.homing)
         for (int a = 0; a < AX_N; a++) M.ferr[a] *= 0.8;
+}
+
+/* ---------- опашка от движения и действия ---------- */
+#define MQ_MAX 64
+typedef struct {
+    bool move, ov;
+    double tgt[AX_N];
+    float feed, dur;
+    mq_fn_t fn;
+    int arg;
+    char label[80];
+} mq_t;
+
+static mq_t mq[MQ_MAX];
+static int mq_n, mq_i;
+static bool mq_started;
+static double mq_from[AX_N];
+static float mq_len, mq_s;
+
+static void mq_clear(void) { mq_n = mq_i = 0; mq_started = false; }
+bool mq_busy(void) { return mq_i < mq_n; }
+
+void mq_begin(runkind_t kind)
+{
+    mq_clear();
+    M.run_kind = kind;
+}
+
+static mq_t *mq_add(const char *label)
+{
+    if (mq_n >= MQ_MAX) return NULL;
+    mq_t *o = &mq[mq_n++];
+    memset(o, 0, sizeof *o);
+    if (label) snprintf(o->label, sizeof o->label, "%s", label);
+    return o;
+}
+
+void mq_move(const double tgt[AX_N], float feed, bool ov, const char *label)
+{
+    mq_t *o = mq_add(label);
+    if (!o) return;
+    o->move = true;
+    o->ov = ov;
+    o->feed = feed;
+    memcpy(o->tgt, tgt, sizeof o->tgt);
+}
+
+void mq_act(float dur, mq_fn_t fn, int arg, const char *label)
+{
+    mq_t *o = mq_add(label);
+    if (!o) return;
+    o->dur = dur;
+    o->fn = fn;
+    o->arg = arg;
+}
+
+void mq_go(void)
+{
+    if (!mq_n) { M.run_kind = RK_NONE; return; }
+    M.state = MS_RUN;
+}
+
+static void mq_tick(uint32_t now, float dt)
+{
+    if (M.state != MS_RUN || M.run_kind == RK_PROG || M.run_kind == RK_NONE) return;
+    float budget = dt * SIMX;
+    while (budget > 0 && mq_i < mq_n && M.state == MS_RUN) {
+        mq_t *o = &mq[mq_i];
+        if (!mq_started) {
+            mq_started = true;
+            mq_s = 0;
+            if (o->label[0]) act_msg(o->label, now);
+            if (o->move) {
+                double l2 = 0;
+                for (int a = 0; a < AX_N; a++) {
+                    mq_from[a] = M.mach[a];
+                    if (isnan(o->tgt[a])) o->tgt[a] = M.mach[a];
+                    double d = o->tgt[a] - M.mach[a];
+                    l2 += d * d;
+                }
+                mq_len = (float)sqrt(l2);
+            }
+        }
+        if (o->move) {
+            float feed = o->feed <= 0 ? RAPID * M.rov / 100.0f : o->ov ? o->feed * M.fov / 100.0f : o->feed;
+            float v = feed / 60.0f;
+            if (v <= 0) return;   /* оверрайд 0 % */
+            M.feed_act = feed;
+            float need = (mq_len - mq_s) / v;
+            bool end = need <= budget;
+            mq_s = end ? mq_len : mq_s + v * budget;
+            budget = end ? budget - need : 0;
+            float f = mq_len > 0 ? mq_s / mq_len : 1;
+            for (int a = 0; a < AX_N; a++) {
+                M.mach[a] = mq_from[a] + (o->tgt[a] - mq_from[a]) * f;
+                M.togo[a] = o->tgt[a] - M.mach[a];
+                if (a <= AX_Z) M.ferr[a] = M.enc_on[a] && !end ? 0.04f * feed / 60.0f * (0.6f + 0.4f * sinf(now / 70.0f + a)) : 0;
+            }
+            if (!end) return;
+        } else {
+            M.feed_act = 0;
+            if (mq_s + budget < o->dur) { mq_s += budget; return; }
+            budget -= o->dur - mq_s;
+            if (o->fn) o->fn(o->arg, now);
+            if (M.state != MS_RUN) return;   /* действието може да спре машината */
+        }
+        mq_i++;
+        mq_started = false;
+    }
+    if (mq_i >= mq_n && M.state == MS_RUN) {
+        mq_clear();
+        M.state = MS_IDLE;
+        M.run_kind = RK_NONE;
+        M.feed_act = 0;
+        for (int a = 0; a < AX_N; a++) M.togo[a] = 0;
+    }
+}
+
+/* ---------- ръчно управление ---------- */
+static void keep(double t[AX_N]) { for (int a = 0; a < AX_N; a++) t[a] = NAN; }
+
+bool machine_can_move(uint32_t now)
+{
+    const char *why = NULL;
+    if (M.state == MS_ESTOP) why = "Аварийният стоп е натиснат. Освободете го и натиснете RESET.";
+    else if (M.state == MS_ALARM) why = "Има активна аларма. Отстранете причината и натиснете RESET.";
+    else if (!M.enabled) why = "Машината е изключена. Натиснете RESET горе вляво.";
+    else if (M.state != MS_IDLE || M.homing) why = "Машината се движи. Изчакайте или натиснете СТОП.";
+    if (why) machine_toast(why, now, 3500);
+    return !why;
+}
+
+static bool need_homed(uint32_t now)
+{
+    char t[96] = "";
+    for (int a = 0; a < AX_N; a++)
+        if (M.active[a] && M.homed[a] == HOMED_NO) {
+            if (t[0]) strcat(t, ", ");
+            strcat(t, AX_NAME[a]);
+        }
+    if (!t[0]) return false;
+    char msg[160];
+    snprintf(msg, sizeof msg, "Осите %s не са реферирани. Натиснете HOME.", t);
+    machine_toast(msg, now, 3500);
+    return true;
+}
+
+void machine_jog(int ax, int dir, uint32_t now)
+{
+    if (!M.active[ax]) { machine_toast("Оста е изключена в Настройки → Оси", now, 3500); return; }
+    if (!machine_can_move(now)) return;
+    if (M.jog_inc <= 0) { M.jog_ax = ax; M.jog_dir = dir; return; }
+    double t[AX_N];
+    keep(t);
+    t[ax] = M.mach[ax] + dir * M.jog_inc;
+    mq_begin(RK_JOG);
+    mq_move(t, (float)M.jog_f, false, NULL);
+    mq_go();
+}
+
+void machine_jog_release(void)
+{
+    if (!M.jog_dir) return;
+    M.jog_dir = 0;
+    M.feed_act = 0;
+}
+
+static void jog_tick(float dt)
+{
+    if (!M.jog_dir) return;
+    if (M.state != MS_IDLE || !M.enabled) { M.jog_dir = 0; return; }
+    M.mach[M.jog_ax] += M.jog_dir * M.jog_f / 60.0 * dt;
+    M.feed_act = (float)M.jog_f;
+}
+
+static void home_done(int mask, uint32_t now)
+{
+    for (int a = 0; a < AX_N; a++)
+        if (mask & (1 << a)) { M.homed[a] = HOMED_SENSOR; M.ferr[a] = 0; }
+}
+
+static void home_msg(int mask, uint32_t now)
+{
+    char t[120] = "Реферирането завърши: ";
+    bool first = true;
+    for (int a = 0; a < AX_N; a++)
+        if (mask & (1 << a)) { if (!first) strcat(t, ", "); strcat(t, AX_NAME[a]); first = false; }
+    machine_toast(t, now, 6000);
+}
+
+void machine_home(int ax, uint32_t now)
+{
+    if (!machine_can_move(now)) return;
+    if (ax >= 0 && !M.active[ax]) { machine_toast("Оста е изключена в Настройки → Оси", now, 3500); return; }
+    if (M.ref_manual) {
+        char t[96] = "Ръчна референтна точка: ";
+        bool first = true;
+        for (int a = 0; a < AX_N; a++) {
+            if (!M.active[a] || (ax >= 0 && a != ax)) continue;
+            M.mach[a] = 0;
+            M.homed[a] = HOMED_MANUAL;
+            if (!first) strcat(t, ", ");
+            strcat(t, AX_NAME[a]);
+            first = false;
+        }
+        strcat(t, " = 0 (маш.)");
+        machine_toast(t, now, 4000);
+        return;
+    }
+    int all = 0;
+    mq_begin(RK_HOME);
+    /* по групи, както при RESET: първо Z, после X и Y, после въртящите */
+    for (int g = next_group(-1); g >= 0; g = next_group(g)) {
+        int mask = 0;
+        double t[AX_N];
+        keep(t);
+        for (int a = 0; a < AX_N; a++)
+            if (homes(a) && M.home_seq[a] == g && (ax < 0 || a == ax)) { mask |= 1 << a; t[a] = HOME_POS; M.homed[a] = HOMED_NO; }
+        if (!mask) continue;
+        char lbl[64] = "Реферирване ";
+        for (int a = 0; a < AX_N; a++)
+            if (mask & (1 << a)) strcat(lbl, AX_NAME[a]);
+        mq_move(t, 3000, false, lbl);
+        mq_act(0.3f, home_done, mask, NULL);
+        all |= mask;
+    }
+    if (!all) { M.run_kind = RK_NONE; machine_toast("Оста няма датчик за Home. Използвайте „Ръчно, тук“.", now, 4000); return; }
+    mq_act(0, home_msg, all, NULL);
+    mq_go();
+}
+
+static void zero_msg(int arg, uint32_t now)
+{
+    char t[96];
+    snprintf(t, sizeof t, "На програмната нула G%d. Z е на 5.000 над детайла.", 53 + M.wcs);
+    machine_toast(t, now, 5000);
+}
+
+void machine_goto_zero(uint32_t now)
+{
+    if (!machine_can_move(now) || need_homed(now)) return;
+    double t[AX_N];
+    mq_begin(RK_JOG);
+    keep(t);
+    t[AX_Z] = 0;   /* Z нагоре до машинна нула */
+    mq_move(t, 0, false, "Go to 0: Z нагоре до машинна нула");
+    keep(t);
+    for (int a = 0; a < AX_N; a++)
+        if (a != AX_Z && M.active[a]) t[a] = M.off[a];
+    mq_move(t, 0, false, "Go to 0: към програмната нула");
+    keep(t);
+    t[AX_Z] = fmin(5.0 + M.off[AX_Z], 0);
+    mq_move(t, 0, false, "Go to 0: Z до безопасна височина");
+    mq_act(0, zero_msg, 0, NULL);
+    mq_go();
+}
+
+void machine_zero(int ax, uint32_t now)
+{
+    if (!machine_can_move(now)) return;
+    char t[64];
+    if (ax < 0) {
+        for (int a = 0; a <= AX_Z; a++)
+            if (M.active[a]) M.off[a] = M.mach[a];
+        snprintf(t, sizeof t, "G%d X, Y, Z = 0", 53 + M.wcs);
+    } else {
+        if (!M.active[ax]) { machine_toast("Оста е изключена", now, 3000); return; }
+        M.off[ax] = M.mach[ax];
+        snprintf(t, sizeof t, "G%d %s = 0", 53 + M.wcs, AX_NAME[ax]);
+    }
+    machine_toast(t, now, 3500);
+}
+
+int machine_set_pos(int ax, bool mach, double v, uint32_t now)
+{
+    if (!M.active[ax]) { machine_toast("Оста е изключена в Настройки → Оси", now, 3500); return -1; }
+    if (!machine_can_move(now)) return -1;
+    char t[96];
+    if (mach) {
+        M.mach[ax] = v;
+        M.homed[ax] = HOMED_MANUAL;
+        snprintf(t, sizeof t, "Референтна точка %s: машинна позиция = %.3f", AX_NAME[ax], v);
+    } else {
+        M.off[ax] = M.mach[ax] - v;
+        snprintf(t, sizeof t, "G%d %s: работна позиция = %.3f", 53 + M.wcs, AX_NAME[ax], v);
+    }
+    machine_toast(t, now, 3500);
+    return 0;
+}
+
+void machine_coolant(uint32_t now)
+{
+    if (!M.enabled) { machine_can_move(now); return; }
+    M.coolant = !M.coolant;
+}
+
+void machine_select_tool(int t)
+{
+    double dia;
+    M.tool = t;
+    snprintf(M.tool_desc, sizeof M.tool_desc, "%s", machine_tool_name(t, &dia));
+    M.tool_dia = dia;
+}
+
+/* ---------- MDI ---------- */
+static void mdi_spindle(int s, uint32_t now) { M.sp_cmd = s > 0 ? s : M.sp_cmd; M.sp_on = s > 0; }
+static void mdi_cool(int on, uint32_t now) { M.coolant = on; }
+static void mdi_tool(int t, uint32_t now) { M.sp_on = false; machine_select_tool(t); }
+static void mdi_done(int n, uint32_t now) { machine_toast("MDI: изпълнено", now, 2500); }
+
+int machine_mdi(const char *text, uint32_t now)
+{
+    if (!text || !*text) { machine_toast("Въведете команда", now, 3000); return -1; }
+    if (!machine_can_move(now)) return -1;
+    static int mode = 0;          /* модални: G0/G1, G90/G91, F */
+    static bool inc = false;
+    static float feed = 500;
+    double pos[AX_N];
+    for (int a = 0; a < AX_N; a++) pos[a] = machine_work(a);
+    bool moves = false;
+    mq_begin(RK_MDI);
+    const char *s = text;
+    int ln = 0;
+    while (*s) {
+        ln++;
+        const char *e = strchr(s, '\n');
+        size_t n = e ? (size_t)(e - s) : strlen(s);
+        char line[256];
+        if (n >= sizeof line) n = sizeof line - 1;
+        memcpy(line, s, n);
+        line[n] = 0;
+        s = e ? e + 1 : s + n;
+
+        double tgt[AX_N];
+        memcpy(tgt, pos, sizeof tgt);
+        bool has = false;
+        int T = -1, S = -1;
+        for (char *p = line; *p;) {
+            if (*p == '(') { while (*p && *p != ')') p++; if (*p) p++; continue; }
+            if (*p == ';') break;
+            if (!isalpha((unsigned char)*p)) { p++; continue; }
+            char l = (char)toupper((unsigned char)*p++);
+            char *end;
+            double v = strtod(p, &end);
+            if (end == p) {
+                char t[80];
+                snprintf(t, sizeof t, "Ред %d: липсва стойност след %c", ln, l);
+                machine_toast(t, now, 4000);
+                mq_clear(); M.run_kind = RK_NONE;
+                return -1;
+            }
+            p = end;
+            int iv = (int)lround(v);
+            int ax = l == 'X' ? AX_X : l == 'Y' ? AX_Y : l == 'Z' ? AX_Z : l == 'A' ? AX_A : l == 'B' ? AX_B : l == 'C' ? AX_C : -1;
+            if (ax >= 0) {
+                if (!M.active[ax]) {
+                    char t[80];
+                    snprintf(t, sizeof t, "Ос %c е изключена", l);
+                    machine_toast(t, now, 4000);
+                    mq_clear(); M.run_kind = RK_NONE;
+                    return -1;
+                }
+                tgt[ax] = inc ? pos[ax] + v : v;
+                has = true;
+                continue;
+            }
+            switch (l) {
+            case 'G':
+                if (iv == 0 || iv == 1) mode = iv;
+                else if (iv == 90) inc = false;
+                else if (iv == 91) inc = true;
+                else if (iv == 2 || iv == 3) { machine_toast("MDI: дъгите G2/G3 идват с интерпретатора", now, 4000); mq_clear(); M.run_kind = RK_NONE; return -1; }
+                break;
+            case 'F': feed = (float)v; break;
+            case 'S': S = iv; break;
+            case 'T': T = iv; break;
+            case 'M':
+                if (iv == 3 || iv == 4) mq_act(0.5f, mdi_spindle, S > 0 ? S : (M.sp_cmd ? M.sp_cmd : 10000), "MDI: шпинделът се пуска");
+                else if (iv == 5) mq_act(0, mdi_spindle, 0, NULL);
+                else if (iv == 8 || iv == 9) mq_act(0, mdi_cool, iv == 8, NULL);
+                else if (iv == 6 && T >= 0) { mq_act(3.0f, mdi_tool, T, "MDI: смяна на инструмент"); moves = true; }
+                break;
+            default: break;
+            }
+        }
+        if (S > 0 && M.sp_on) M.sp_cmd = S;
+        if (has) {
+            double t[AX_N];
+            for (int a = 0; a < AX_N; a++) t[a] = tgt[a] + M.off[a];
+            mq_move(t, mode == 0 ? 0 : feed, true, NULL);
+            memcpy(pos, tgt, sizeof pos);
+            moves = true;
+        }
+    }
+    if (!mq_n) { M.run_kind = RK_NONE; machine_toast("MDI: няма какво да се изпълни", now, 3000); return -1; }
+    if (moves && need_homed(now)) { mq_clear(); M.run_kind = RK_NONE; return -1; }
+    mq_act(0, mdi_done, 0, NULL);
+    mq_go();
+    return 0;
 }

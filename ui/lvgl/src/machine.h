@@ -13,6 +13,8 @@ typedef enum { MS_IDLE, MS_RUN, MS_HOLD, MS_ALARM, MS_ESTOP } mstate_t;
 typedef enum { HOMED_NO, HOMED_SENSOR, HOMED_MANUAL } homed_t;
 typedef enum { MT_MILL, MT_LASER, MT_PLASMA, MT_LATHE } mtype_t;
 typedef enum { MSG_NONE, MSG_INFO, MSG_ACT, MSG_BAD } msg_kind_t;
+/* какво изпълнява машината в момента: програма или опашка от движения (ръчно, MDI, реферирване …) */
+typedef enum { RK_NONE, RK_PROG, RK_JOG, RK_MDI, RK_HOME, RK_PROBE, RK_TOOL } runkind_t;
 
 typedef struct {
     mstate_t state;
@@ -58,6 +60,13 @@ typedef struct {
     float sp_act;          /* действителни обороти */
     bool sp_on, coolant;
     bool single;           /* единичен блок */
+    runkind_t run_kind;
+
+    /* ръчно движение */
+    double jog_inc;        /* стъпка, мм; 0 = непрекъснато (докато бутонът е натиснат) */
+    int jog_f;             /* мм/мин */
+    bool ref_manual;       /* реферирване „Ръчно, тук“ вместо с датчик */
+    int jog_ax, jog_dir;   /* задържан бутон при непрекъснато движение; jog_dir 0 = няма */
 
     char msg[200];
     msg_kind_t msg_kind;
@@ -84,6 +93,27 @@ void machine_sov(int delta, uint32_t now_ms);
 void machine_rov(int pct);
 const char *machine_tool_name(int t, double *dia);
 float machine_remaining_s(void);
+
+/* Ръчно управление (екраните Ръчно и MDI) */
+bool machine_can_move(uint32_t now_ms);          /* иначе показва причината */
+void machine_jog(int ax, int dir, uint32_t now_ms);   /* една стъпка или начало на непрекъснато */
+void machine_jog_release(void);
+void machine_home(int ax, uint32_t now_ms);           /* ax -1 = всички активни */
+void machine_goto_zero(uint32_t now_ms);
+void machine_zero(int ax, uint32_t now_ms);           /* ax -1 = X, Y и Z */
+int machine_set_pos(int ax, bool mach, double v, uint32_t now_ms);
+int machine_mdi(const char *text, uint32_t now_ms);   /* 0 = прието за изпълнение */
+void machine_coolant(uint32_t now_ms);
+void machine_select_tool(int t);                      /* T в шпиндела (след смяна) */
+
+/* Опашка от движения и действия: координатите са машинни, NAN = без промяна.
+ * feed 0 = бърз ход. fn се вика в края на действието. */
+typedef void (*mq_fn_t)(int arg, uint32_t now_ms);
+void mq_begin(runkind_t kind);
+void mq_move(const double tgt[AX_N], float feed, bool ov, const char *label);
+void mq_act(float dur_s, mq_fn_t fn, int arg, const char *label);
+void mq_go(void);
+bool mq_busy(void);
 
 double machine_work(int ax);
 bool machine_need_home(void);

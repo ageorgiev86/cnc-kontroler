@@ -9,14 +9,16 @@
     LV_FONT_DECLARE(font_txt_t##t) LV_FONT_DECLARE(font_num_sm_t##t)           \
     LV_FONT_DECLARE(font_num_md_t##t) LV_FONT_DECLARE(font_num_lg_t##t)        \
     LV_FONT_DECLARE(font_num_gc_t##t) LV_FONT_DECLARE(font_num_ov_t##t)        \
-    LV_FONT_DECLARE(font_num_pg_t##t) LV_FONT_DECLARE(font_txt_sm_t##t)
+    LV_FONT_DECLARE(font_num_pg_t##t) LV_FONT_DECLARE(font_txt_sm_t##t)        \
+    LV_FONT_DECLARE(font_ui_lg_t##t)
 DECL_TIER(16)
 DECL_TIER(24)
 
 #define TIER(t)                                                                \
     {&font_ui_xs_t##t, &font_ui_sm_t##t, &font_ui_md_t##t, &font_ui_ax_t##t,  \
      &font_txt_t##t,   &font_num_sm_t##t, &font_num_md_t##t, &font_num_lg_t##t, \
-     &font_num_gc_t##t, &font_num_ov_t##t, &font_num_pg_t##t, &font_txt_sm_t##t}
+     &font_num_gc_t##t, &font_num_ov_t##t, &font_num_pg_t##t, &font_txt_sm_t##t, \
+     &font_ui_lg_t##t}
 static const ui_fonts_t TIER16 = TIER(16);
 static const ui_fonts_t TIER24 = TIER(24);
 
@@ -178,4 +180,79 @@ lv_obj_t *ui_card(lv_obj_t *parent, const char *title, lv_obj_t **hdr_right)
     ui_flex(r, LV_FLEX_FLOW_ROW, 0.5f);
     if (hdr_right) *hdr_right = r;
     return c;
+}
+
+lv_obj_t *ui_btn_label(lv_obj_t *btn) { return lv_obj_get_child(btn, 0); }
+
+void ui_seg_set(lv_obj_t **btns, int n, int on)
+{
+    for (int i = 0; i < n; i++)
+        if (btns[i]) ui_btn_set_kind(btns[i], i == on ? BTN_ON : BTN_NORMAL);
+}
+
+lv_obj_t *ui_lab(lv_obj_t *parent, const char *txt)
+{
+    lv_obj_t *l = ui_label(parent, F.ui_xs, C_DIM, txt);
+    lv_obj_set_style_text_letter_space(l, EM(0.1f), 0);
+    return l;
+}
+
+lv_obj_t *ui_kv(lv_obj_t *parent, const char *key, lv_obj_t **val)
+{
+    lv_obj_t *r = ui_box(parent);
+    lv_obj_set_width(r, LV_PCT(100));
+    ui_flex(r, LV_FLEX_FLOW_ROW, 0.6f);
+    lv_obj_set_flex_align(r, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *k = ui_label(r, F.txt_sm, C_DIM, key);
+    lv_obj_set_flex_grow(k, 1);
+    lv_obj_set_width(k, 1);
+    lv_label_set_long_mode(k, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_t *v = ui_label(r, F.num_sm, C_FG, "");
+    if (val) *val = v;
+    return r;
+}
+
+lv_obj_t *ui_led(lv_obj_t *parent, float size_em)
+{
+    lv_obj_t *l = ui_box(parent);
+    lv_obj_set_size(l, EM(size_em), EM(size_em));
+    lv_obj_set_style_radius(l, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(l, C_SURF3, 0);
+    return l;
+}
+
+void ui_led_set(lv_obj_t *led, lv_color_t c, bool on)
+{
+    lv_obj_set_style_bg_color(led, on ? c : C_SURF3, 0);
+    if (on && CNC_UI_GLOW) {
+        lv_obj_set_style_shadow_width(led, EM(0.6f), 0);
+        lv_obj_set_style_shadow_color(led, c, 0);
+        lv_obj_set_style_shadow_opa(led, 150, 0);
+    } else {
+        lv_obj_set_style_shadow_width(led, 0, 0);
+    }
+}
+
+lv_obj_t *ui_body(lv_obj_t *card, float gap_em)
+{
+    lv_obj_t *b = ui_box(card);
+    lv_obj_set_width(b, LV_PCT(100));
+    lv_obj_set_flex_grow(b, 1);
+    lv_obj_set_style_pad_all(b, EM(0.7f), 0);
+    ui_flex(b, LV_FLEX_FLOW_COLUMN, gap_em);
+    lv_obj_set_flex_align(b, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    return b;
+}
+
+void ui_grid(lv_obj_t *obj, const int32_t *cols, const int32_t *rows, float gap_em)
+{
+    lv_obj_set_layout(obj, LV_LAYOUT_GRID);
+    lv_obj_set_grid_dsc_array(obj, cols, rows);
+    lv_obj_set_style_pad_gap(obj, EM(gap_em), 0);
+}
+
+void ui_cell(lv_obj_t *obj, int col, int cspan, int row, int rspan)
+{
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, col, cspan, LV_GRID_ALIGN_STRETCH, row, rspan);
 }

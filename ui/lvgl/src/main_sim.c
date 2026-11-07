@@ -3,7 +3,8 @@
  *   cnc-ui-sim --res 1920x1200 --shot екран.bmp [--after 500] [--reset] [--run] [--prog файл.nc]
  * --shot записва снимка на екрана след --after ms и излиза (ползва се и без дисплей:
  * SDL_VIDEODRIVER=dummy). --reset натиска RESET в началото, --run след реферирането пуска
- * програмата (демо или --prog). */
+ * програмата (демо или --prog). --screen отваря екран (run jog mdi tools probe diag set files),
+ * --act изпълнява тестово действие от ui_test() (за снимки на диалози и състояния). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,7 @@
 
 static void usage(void)
 {
-    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc]\n");
+    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc] [--screen име] [--act действие]\n");
     exit(2);
 }
 
@@ -25,7 +26,8 @@ int main(int argc, char **argv)
     float zoom = 1.0f;
     const char *shot = NULL;
     int press_reset = 0, run = 0;
-    const char *prog = NULL;
+    const char *prog = NULL, *screen = NULL, *act[8];
+    int nact = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--res") && i + 1 < argc) {
             if (sscanf(argv[++i], "%dx%d", &w, &h) != 2 || w < 320 || h < 320) usage();
@@ -39,6 +41,10 @@ int main(int argc, char **argv)
             press_reset = 1;
         } else if (!strcmp(argv[i], "--run")) {
             press_reset = run = 1;
+        } else if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
+            screen = argv[++i];
+        } else if (!strcmp(argv[i], "--act") && i + 1 < argc && nact < 8) {
+            act[nact++] = argv[++i];
         } else if (!strcmp(argv[i], "--prog") && i + 1 < argc) {
             prog = argv[++i];
         } else {
@@ -58,11 +64,17 @@ int main(int argc, char **argv)
 
     ui_create(disp);
     if (press_reset) machine_reset(lv_tick_get());
+    if (screen && ui_go_name(screen)) { fprintf(stderr, "Няма екран „%s“\n", screen); return 2; }
 
     uint32_t start = lv_tick_get();
     for (;;) {
         uint32_t idle = lv_timer_handler();
         if (run && M.ready && M.state == MS_IDLE) { machine_start(lv_tick_get()); run = 0; }
+        /* тестовите действия чакат реферирането, ако е пуснато с --reset */
+        if (nact && (!press_reset || M.ready) && M.state == MS_IDLE) {
+            for (int k = 0; k < nact; k++) ui_test(act[k]);
+            nact = 0;
+        }
         if (shot && lv_tick_elaps(start) >= (uint32_t)after) {
             lv_refr_now(disp);
             int rc = ui_save_bmp(shot);

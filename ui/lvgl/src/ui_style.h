@@ -50,6 +50,7 @@ typedef struct {
     const lv_font_t *num_ov; /* стойностите на оверрайдите           (JetBrains Mono 500) */
     const lv_font_t *num_pg; /* таймерите на програмата              (JetBrains Mono 500) */
     const lv_font_t *txt_sm; /* легенда и подсказки                  (Roboto 500) */
+    const lv_font_t *ui_lg;  /* бутоните за ръчно движение           (Roboto Condensed 700) */
 } ui_fonts_t;
 
 extern ui_fonts_t F;
@@ -73,5 +74,14 @@ void ui_btn_set_kind(lv_obj_t *btn, btn_kind_t kind);
 lv_obj_t *ui_card(lv_obj_t *parent, const char *title, lv_obj_t **hdr_right);
 void ui_flex(lv_obj_t *obj, lv_flex_flow_t flow, float gap_em);
 void ui_set_text(lv_obj_t *label, const char *txt);
+lv_obj_t *ui_btn_label(lv_obj_t *btn);
+void ui_seg_set(lv_obj_t **btns, int n, int on);   /* един включен бутон от група (.seg) */
+lv_obj_t *ui_lab(lv_obj_t *parent, const char *txt);   /* .lab: малък надпис над група */
+lv_obj_t *ui_kv(lv_obj_t *parent, const char *key, lv_obj_t **val);   /* .kv: ключ вляво, стойност вдясно */
+lv_obj_t *ui_led(lv_obj_t *parent, float size_em);
+void ui_led_set(lv_obj_t *led, lv_color_t c, bool on);
+lv_obj_t *ui_body(lv_obj_t *card, float gap_em);   /* .card-b: тялото на картата, колона */
+void ui_grid(lv_obj_t *obj, const int32_t *cols, const int32_t *rows, float gap_em);
+void ui_cell(lv_obj_t *obj, int col, int cspan, int row, int rspan);   /* STRETCH в клетката */
 
 #endif

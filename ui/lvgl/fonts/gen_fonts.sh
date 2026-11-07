@@ -15,8 +15,8 @@ cd "$(dirname "$0")"
 CONV="${LV_FONT_CONV:-npx lv_font_conv}"
 mkdir -p gen
 
-# Латиница, кирилица и знаците, които се ползват в интерфейса (° µ · × Ø ø – — „ “ … ″ −)
-FULL="0x20-0x7E,0xB0,0xB5,0xB7,0xD7,0xD8,0xF8,0x401,0x410-0x44F,0x451,0x2013,0x2014,0x201C,0x201E,0x2026,0x2033,0x2212"
+# Латиница, кирилица и знаците, които се ползват в интерфейса (° ± µ · × Ø ø – — „ “ … ″ −)
+FULL="0x20-0x7E,0xB0,0xB1,0xB5,0xB7,0xD7,0xD8,0xF8,0x401,0x410-0x44F,0x451,0x2013,0x2014,0x201C,0x201E,0x2026,0x2033,0x2212"
 
 # име  шрифт  em-множител  знаци
 ROLES="
@@ -32,6 +32,7 @@ num_gc JetBrainsMono-Regular.ttf    0.82 full
 num_ov JetBrainsMono-Medium.ttf     1.55 digits
 num_pg JetBrainsMono-Medium.ttf     1.15 full
 txt_sm Roboto-Medium.ttf            0.74 full
+ui_lg  RobotoCondensed-Bold.ttf     1.45 full
 "
 
 for tier in 16 24; do

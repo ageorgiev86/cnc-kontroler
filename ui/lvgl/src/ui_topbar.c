@@ -143,6 +143,7 @@ void topbar_update(topbar_t *tb, uint32_t now)
     ui_set_text(tb->pill_lbl, off ? "ИЗКЛЮЧЕНА" : STATE_TXT[M.state]);
 
     ui_set_text(tb->mach, MACH_TXT[M.type]);
+    ui_set_text(tb->mode, g_screen == SCR_JOG ? "РЪЧЕН" : g_screen == SCR_MDI ? "MDI" : "АВТО");
     snprintf(buf, sizeof buf, "G%d", 53 + M.wcs);
     ui_set_text(tb->gmodes_wcs, buf);
     if (M.tool) snprintf(buf, sizeof buf, "T%d · %s Ø%g", M.tool, M.tool_desc, M.tool_dia);

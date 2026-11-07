@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "program.h"
 #include "ui_style.h"
@@ -19,7 +20,21 @@ static traj_t traj;
 static gcode_t gc;
 static ctrl_t ctrl;
 
+int g_screen = SCR_RUN;
+static lv_obj_t *scr_box[SCR_N], *nav_btn[7];
+static struct { bool has; int col, cspan, row, rspan; } tslot[SCR_N];
+static const int NAV_SCR[7] = {SCR_RUN, SCR_JOG, SCR_MDI, SCR_TOOLS, SCR_PROBE, SCR_DIAG, SCR_SET};
+
 #define UPDATE_MS 50
+
+lv_obj_t *ui_traj_card(void) { return traj.card; }
+
+void ui_traj_slot(int scr, int col, int cspan, int row, int rspan)
+{
+    tslot[scr].has = true;
+    tslot[scr].col = col; tslot[scr].cspan = cspan;
+    tslot[scr].row = row; tslot[scr].rspan = rspan;
+}
 
 static void update_cb(lv_timer_t *t)
 {
@@ -28,21 +43,43 @@ static void update_cb(lv_timer_t *t)
     machine_tick(now, last ? now - last : 0);
     last = now;
     topbar_update(&tb, now);
-    dro_update(&dro, now);
-    traj_update(&traj, now);
-    gcode_update(&gc, now);
-    ctrl_update(&ctrl, now);
+    switch (g_screen) {
+    case SCR_RUN:
+        dro_update(&dro, now);
+        gcode_update(&gc, now);
+        ctrl_update(&ctrl, now);
+        break;
+    case SCR_JOG: jog_update(now); break;
+    case SCR_MDI: mdi_update(now); break;
+    case SCR_TOOLS: tools_update(now); break;
+    case SCR_PROBE: probe_update(now); break;
+    case SCR_DIAG: diag_update(now); break;
+    case SCR_SET: set_update(now); break;
+    case SCR_FILES: files_update(now); break;
+    }
+    if (tslot[g_screen].has) traj_update(&traj, now);
 }
 
-/* навигация (.navbar): засега само „Работа“; другите екрани са следващите стъпки */
-static void on_nav(lv_event_t *e)
+void ui_go(int s)
 {
-    const char *n = lv_label_get_text(lv_obj_get_child(lv_event_get_target_obj(e), 0));
-    char t[96];
-    snprintf(t, sizeof t, "Екранът „%s“ идва в следваща стъпка", n);
-    machine_toast(t, lv_tick_get(), 3000);
+    if (s < 0 || s >= SCR_N) return;
+    if (tslot[s].has && s != g_screen) {
+        lv_obj_set_parent(traj.card, scr_box[s]);
+        lv_obj_set_grid_cell(traj.card, LV_GRID_ALIGN_STRETCH, tslot[s].col, tslot[s].cspan, LV_GRID_ALIGN_STRETCH, tslot[s].row, tslot[s].rspan);
+        /* в портрет заглавието се скрива само в „Работа“ (.ttl в макета) */
+        lv_obj_set_hidden(lv_obj_get_child(lv_obj_get_child(traj.card, 0), 0), g_portrait && s == SCR_RUN);
+    }
+    for (int i = 0; i < SCR_N; i++) lv_obj_set_hidden(scr_box[i], i != s);
+    for (int i = 0; i < 7; i++) ui_btn_set_kind(nav_btn[i], NAV_SCR[i] == s ? BTN_ON : BTN_NORMAL);
+    g_screen = s;
+    if (s == SCR_FILES) files_show();
+    if (s == SCR_SET) set_show();
+    update_cb(NULL);
 }
 
+static void on_nav(lv_event_t *e) { ui_go((int)(intptr_t)lv_event_get_user_data(e)); }
+
+/* навигация (.navbar) */
 static void navbar_create(lv_obj_t *parent)
 {
     lv_obj_t *n = ui_box(parent);
@@ -61,14 +98,46 @@ static void navbar_create(lv_obj_t *parent)
     lv_obj_set_style_pad_column(n, EM(0.35f), 0);
     static const char *const NAV[7] = {"РАБОТА", "РЪЧНО", "MDI", "ИНСТРУМЕНТИ", "ОФСЕТИ", "ДИАГНОСТИКА", "НАСТРОЙКИ"};
     for (int i = 0; i < 7; i++) {
-        lv_obj_t *b = ui_btn(n, NAV[i], i == 0 ? BTN_ON : BTN_NORMAL, false);
+        lv_obj_t *b = nav_btn[i] = ui_btn(n, NAV[i], i == 0 ? BTN_ON : BTN_NORMAL, false);
         lv_obj_set_height(b, EM(3.3f));
         lv_obj_set_style_text_font(b, g_portrait ? F.ui_sm : F.ui_md, 0);
         lv_obj_set_style_text_letter_space(b, EM(g_portrait ? 0.02f : 0.07f), 0);
         lv_obj_set_style_pad_hor(b, EM(0.2f), 0);
-        if (i) lv_obj_add_event_cb(b, on_nav, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(b, on_nav, LV_EVENT_CLICKED, (void *)(intptr_t)NAV_SCR[i]);
         lv_obj_set_grid_cell(b, LV_GRID_ALIGN_STRETCH, i, 1, LV_GRID_ALIGN_CENTER, 0, 1);
     }
+}
+
+/* екранът „Работа“ (.screens + .run): две колони (63/37, в портрет 57/43), четири реда */
+static void run_create(lv_obj_t *run)
+{
+    static int32_t cols[3], rows[5];
+    cols[0] = LV_GRID_FR((g_portrait ? 57 : 63));  /* LV_GRID_FR не слага скоби */
+    cols[1] = LV_GRID_FR((g_portrait ? 43 : 37));
+    cols[2] = LV_GRID_TEMPLATE_LAST;
+    rows[0] = LV_GRID_CONTENT;
+    rows[1] = LV_GRID_FR(1);
+    rows[2] = LV_GRID_CONTENT;
+    rows[3] = LV_GRID_CONTENT;
+    rows[4] = LV_GRID_TEMPLATE_LAST;
+    lv_obj_set_layout(run, LV_LAYOUT_GRID);
+    lv_obj_set_grid_dsc_array(run, cols, rows);
+
+    dro_create(&dro, run, DRO_FULL);
+    lv_obj_set_grid_cell(dro.card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_START, 0, 1);
+
+    traj_create(&traj, run);
+    ui_traj_slot(SCR_RUN, 0, 1, 1, 1);
+    lv_obj_set_grid_cell(traj.card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
+
+    gcode_create(&gc, run);
+    lv_obj_set_grid_cell(gc.card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 0, 2);
+
+    lv_obj_t *c = ctrl_create(&ctrl, run);
+    lv_obj_set_grid_cell(c, LV_GRID_ALIGN_STRETCH, 0, 2, LV_GRID_ALIGN_START, 2, 1);
+
+    lv_obj_t *cb = cbtns_create(run);
+    lv_obj_set_grid_cell(cb, LV_GRID_ALIGN_STRETCH, 0, 2, LV_GRID_ALIGN_START, 3, 1);
 }
 
 void ui_create(lv_display_t *disp)
@@ -91,43 +160,54 @@ void ui_create(lv_display_t *disp)
 
     topbar_create(&tb, scr);
 
-    /* .screens + .run: две колони (63/37, в портрет 57/43), четири реда */
-    lv_obj_t *run = ui_box(scr);
-    lv_obj_set_width(run, LV_PCT(100));
-    lv_obj_set_flex_grow(run, 1);
-    lv_obj_set_style_pad_all(run, EM(0.6f), 0);
-    lv_obj_set_style_pad_gap(run, EM(0.6f), 0);
-    static int32_t cols[3], rows[5];
-    cols[0] = LV_GRID_FR((g_portrait ? 57 : 63));  /* LV_GRID_FR не слага скоби */
-    cols[1] = LV_GRID_FR((g_portrait ? 43 : 37));
-    cols[2] = LV_GRID_TEMPLATE_LAST;
-    rows[0] = LV_GRID_CONTENT;
-    rows[1] = LV_GRID_FR(1);
-    rows[2] = LV_GRID_CONTENT;
-    rows[3] = LV_GRID_CONTENT;
-    rows[4] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_layout(run, LV_LAYOUT_GRID);
-    lv_obj_set_grid_dsc_array(run, cols, rows);
-
-    dro_create(&dro, run);
-    lv_obj_set_grid_cell(dro.card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_START, 0, 1);
-
-    traj_create(&traj, run);
-    lv_obj_set_grid_cell(traj.card, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
-
-    gcode_create(&gc, run);
-    lv_obj_set_grid_cell(gc.card, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_STRETCH, 0, 2);
-
-    lv_obj_t *c = ctrl_create(&ctrl, run);
-    lv_obj_set_grid_cell(c, LV_GRID_ALIGN_STRETCH, 0, 2, LV_GRID_ALIGN_START, 2, 1);
-
-    lv_obj_t *cb = cbtns_create(run);
-    lv_obj_set_grid_cell(cb, LV_GRID_ALIGN_STRETCH, 0, 2, LV_GRID_ALIGN_START, 3, 1);
+    lv_obj_t *screens = ui_box(scr);
+    lv_obj_set_width(screens, LV_PCT(100));
+    lv_obj_set_flex_grow(screens, 1);
+    for (int i = 0; i < SCR_N; i++) {
+        lv_obj_t *b = scr_box[i] = ui_box(screens);
+        lv_obj_set_size(b, LV_PCT(100), LV_PCT(100));
+        lv_obj_set_style_pad_all(b, EM(0.6f), 0);
+        lv_obj_set_style_pad_gap(b, EM(0.6f), 0);
+        lv_obj_set_hidden(b, i != SCR_RUN);
+    }
+    run_create(scr_box[SCR_RUN]);
+    jog_create(scr_box[SCR_JOG]);
+    mdi_create(scr_box[SCR_MDI]);
+    tools_create(scr_box[SCR_TOOLS]);
+    probe_create(scr_box[SCR_PROBE]);
+    diag_create(scr_box[SCR_DIAG]);
+    set_create(scr_box[SCR_SET]);
+    files_create(scr_box[SCR_FILES]);
 
     navbar_create(scr);
 
     update_cb(NULL);
     lv_timer_create(update_cb, UPDATE_MS, NULL);
+}
+
+static const char *const SCR_NAME[SCR_N] = {"run", "jog", "mdi", "tools", "probe", "diag", "set", "files"};
+
+int ui_go_name(const char *name)
+{
+    for (int i = 0; i < SCR_N; i++)
+        if (!strcmp(name, SCR_NAME[i])) { ui_go(i); return 0; }
+    return -1;
+}
+
+/* Тестови действия за снимките от симулатора: име[:аргумент] */
+void ui_test(const char *act)
+{
+    uint32_t now = lv_tick_get();
+    const char *arg = strchr(act, ':');
+    arg = arg ? arg + 1 : "";
+    if (!strncmp(act, "screen:", 7)) ui_go_name(arg);
+    else if (!strncmp(act, "setpos", 6)) dlg_setpos(AX_X);
+    else if (!strncmp(act, "mdi:", 4)) machine_mdi(arg, now);
+    else if (!strncmp(act, "jog:", 4)) machine_jog(arg[0] - 'X', arg[1] == '-' ? -1 : 1, now);
+    else if (!strncmp(act, "home", 4)) machine_home(-1, now);
+    else if (!strncmp(act, "gozero", 6)) machine_goto_zero(now);
+    else if (!strncmp(act, "start", 5)) machine_start(now);
+    else ui_test_screen(act);
 }
 
 /* 32-битов BMP отгоре надолу; достатъчно за снимки от симулатора */
@@ -136,6 +216,18 @@ int ui_save_bmp(const char *path)
     lv_draw_buf_t *db = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_XRGB8888);
     if (!db) return -1;
     uint32_t w = db->header.w, h = db->header.h, stride = db->header.stride;
+    /* диалозите са в горния слой: смесват се отгоре по алфа */
+    if (lv_obj_get_child_count(lv_layer_top())) {
+        lv_draw_buf_t *top = lv_snapshot_take(lv_layer_top(), LV_COLOR_FORMAT_ARGB8888);
+        if (top && top->header.w == w && top->header.h == h) {
+            for (uint32_t y = 0; y < h; y++) {
+                uint8_t *d = db->data + y * stride, *t = top->data + y * top->header.stride;
+                for (uint32_t x = 0; x < w; x++, d += 4, t += 4)
+                    for (int c = 0; c < 3; c++) d[c] = (uint8_t)((t[c] * t[3] + d[c] * (255 - t[3])) / 255);
+            }
+        }
+        if (top) lv_draw_buf_destroy(top);
+    }
     FILE *f = fopen(path, "wb");
     if (!f) { lv_draw_buf_destroy(db); return -1; }
     uint32_t img = w * h * 4, fsz = 54 + img;
