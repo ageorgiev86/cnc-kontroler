@@ -437,8 +437,7 @@ void dlg_pick(const char *title, const char *const *opts, int n, int cur, dlg_pi
     lv_obj_t *l = ui_box(d);
     lv_obj_set_width(l, LV_PCT(100));
     lv_obj_set_style_max_height(l, EM(30), 0);
-    lv_obj_set_scrollable(l, true);
-    lv_obj_set_scroll_dir(l, LV_DIR_VER);
+    ui_scroll_v(l);
     ui_flex(l, LV_FLEX_FLOW_COLUMN, 0.3f);
     for (int i = 0; i < n; i++) {
         lv_obj_t *b = ui_btn(l, opts[i], i == cur ? BTN_ON : BTN_NORMAL, false);

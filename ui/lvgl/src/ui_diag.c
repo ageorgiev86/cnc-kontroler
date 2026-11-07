@@ -282,10 +282,20 @@ static lv_obj_t *link_row(lv_obj_t *scr)
     return r;
 }
 
+static lv_obj_t *diag_scr;
+/* тест: превърта екрана до y (px); -1 = до края */
+void diag_test_scroll(int y)
+{
+    if (!diag_scr) return;
+    lv_obj_update_layout(diag_scr);
+    if (y < 0) lv_obj_scroll_to_y(diag_scr, LV_COORD_MAX, LV_ANIM_OFF);
+    else lv_obj_scroll_to_y(diag_scr, y, LV_ANIM_OFF);
+}
+
 void diag_create(lv_obj_t *scr)
 {
-    lv_obj_set_scrollable(scr, true);
-    lv_obj_set_scroll_dir(scr, LV_DIR_VER);
+    diag_scr = scr;
+    ui_scroll_v(scr);
     static int32_t cols[3], rows[7];
     if (g_portrait) {
         cols[0] = LV_GRID_FR(1); cols[1] = LV_GRID_TEMPLATE_LAST;
@@ -293,14 +303,24 @@ void diag_create(lv_obj_t *scr)
         rows[5] = LV_GRID_TEMPLATE_LAST;
     } else {
         cols[0] = LV_GRID_FR(52); cols[1] = LV_GRID_FR(48); cols[2] = LV_GRID_TEMPLATE_LAST;
-        for (int i = 0; i < 4; i++) rows[i] = LV_GRID_CONTENT;
-        rows[4] = LV_GRID_TEMPLATE_LAST;
+        rows[0] = LV_GRID_CONTENT; rows[1] = LV_GRID_CONTENT; rows[2] = LV_GRID_TEMPLATE_LAST;
     }
     ui_grid(scr, cols, rows, 0.6f);
-    lv_obj_t *e = enc_card(scr), *s = sys_card(scr), *a = aio_card(scr), *g = gio_card(scr), *l = link_row(scr);
+    /* хоризонтално: левите карти са в една колона. Карта през няколко реда не става: LVGL смята
+     * височината на редовете само от картите в един ред и долният ред застъпва входовете и изходите */
+    lv_obj_t *left = scr;
+    if (!g_portrait) {
+        left = ui_box(scr);
+        ui_flex(left, LV_FLEX_FLOW_COLUMN, 0.6f);
+        lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    }
+    lv_obj_t *e = enc_card(left), *s = sys_card(left), *a = aio_card(left), *g = gio_card(scr), *l = link_row(scr);
 #define TOP(o, c, cs, r, rs) lv_obj_set_grid_cell(o, LV_GRID_ALIGN_STRETCH, c, cs, LV_GRID_ALIGN_START, r, rs)
     if (g_portrait) { TOP(e, 0, 1, 0, 1); TOP(s, 0, 1, 1, 1); TOP(a, 0, 1, 2, 1); TOP(g, 0, 1, 3, 1); TOP(l, 0, 1, 4, 1); }
-    else { TOP(e, 0, 1, 0, 1); TOP(s, 0, 1, 1, 1); TOP(a, 0, 1, 2, 1); TOP(g, 1, 1, 0, 3); TOP(l, 0, 2, 3, 1); }
+    else {
+        TOP(left, 0, 1, 0, 1); TOP(g, 1, 1, 0, 1); TOP(l, 0, 2, 1, 1);
+        lv_obj_set_width(e, LV_PCT(100)); lv_obj_set_width(s, LV_PCT(100)); lv_obj_set_width(a, LV_PCT(100));
+    }
 #undef TOP
 }
 

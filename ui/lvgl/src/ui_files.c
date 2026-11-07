@@ -343,8 +343,7 @@ void files_create(lv_obj_t *scr)
     list = ui_box(b);
     lv_obj_set_width(list, LV_PCT(100));
     lv_obj_set_flex_grow(list, 1);
-    lv_obj_set_scrollable(list, true);
-    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    ui_scroll_v(list);
     ui_flex(list, LV_FLEX_FLOW_COLUMN, 0.3f);
     lv_obj_t *up = ui_btn(b, "КАЧИ ФАЙЛ ОТ КОМПЮТЪРА", BTN_NORMAL, false);
     lv_obj_set_width(up, LV_PCT(100));

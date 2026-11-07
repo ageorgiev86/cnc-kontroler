@@ -857,8 +857,7 @@ void set_create(lv_obj_t *scr)
         lv_obj_set_width(nav, LV_PCT(100));
         lv_obj_set_grid_cell(nav, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0, 1);
     } else {
-        lv_obj_set_scrollable(nav, true);
-        lv_obj_set_scroll_dir(nav, LV_DIR_VER);
+        ui_scroll_v(nav);
         ui_cell(nav, 0, 1, 0, 1);
     }
     for (int i = 0; i < S_N; i++) {
@@ -880,8 +879,7 @@ void set_create(lv_obj_t *scr)
     lv_obj_set_width(body, LV_PCT(100));
     lv_obj_set_flex_grow(body, 1);
     lv_obj_set_style_pad_all(body, EM(0.7f), 0);
-    lv_obj_set_scrollable(body, true);
-    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    ui_scroll_v(body);
     ui_flex(body, LV_FLEX_FLOW_COLUMN, 0.5f);
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     help = ui_label(m, F.txt, C_DIM, "");

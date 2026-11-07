@@ -362,7 +362,7 @@ void tools_create(lv_obj_t *scr)
     lv_obj_remove_style_all(tbl);
     lv_obj_set_width(tbl, LV_PCT(100));
     lv_obj_set_flex_grow(tbl, 1);
-    lv_obj_set_scroll_dir(tbl, LV_DIR_VER);
+    ui_scroll_v(tbl);
     lv_obj_set_style_text_font(tbl, F.txt, LV_PART_ITEMS);
     lv_obj_set_style_text_color(tbl, C_FG, LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(tbl, EM(0.5f), LV_PART_ITEMS);

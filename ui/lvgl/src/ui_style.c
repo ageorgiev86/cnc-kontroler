@@ -49,6 +49,33 @@ void ui_flex(lv_obj_t *obj, lv_flex_flow_t flow, float gap_em)
     lv_obj_set_style_pad_gap(obj, EM(gap_em), 0);
 }
 
+/* Вертикално превъртане с тънък плъзгач вдясно. Без тема на LVGL плъзгачът няма стил и е невидим,
+ * затова всяка превъртаща се област минава оттук. Вижда се винаги, когато съдържанието не се побира. */
+void ui_scroll_v(lv_obj_t *obj)
+{
+    static lv_style_t st, st_act;
+    static bool init;
+    if (!init) {
+        lv_style_init(&st);
+        lv_style_set_width(&st, EM(0.4f));
+        lv_style_set_bg_color(&st, C_EDGE);
+        lv_style_set_bg_opa(&st, LV_OPA_COVER);
+        lv_style_set_radius(&st, EM(0.2f));
+        lv_style_set_pad_right(&st, EM(0.1f));
+        lv_style_set_pad_ver(&st, EM(0.3f));
+        lv_style_init(&st_act);
+        lv_style_set_bg_color(&st_act, C_ACC);
+        init = true;
+    }
+    lv_obj_set_scrollable(obj, true);
+    lv_obj_set_scroll_dir(obj, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_AUTO);
+    /* място за плъзгача вдясно, за да не лежи върху съдържанието */
+    lv_obj_set_style_pad_right(obj, lv_obj_get_style_pad_right(obj, LV_PART_MAIN) + EM(0.7f), 0);
+    lv_obj_add_style(obj, &st, LV_PART_SCROLLBAR);
+    lv_obj_add_style(obj, &st_act, LV_PART_SCROLLBAR | LV_STATE_SCROLLED);
+}
+
 /* Сияние като box-shadow 0 0 W в макета; 0 = без */
 void ui_glow(lv_obj_t *obj, float width_em, lv_opa_t opa)
 {

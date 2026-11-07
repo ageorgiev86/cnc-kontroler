@@ -119,8 +119,7 @@ static void cmd_card(lv_obj_t *scr, lv_obj_t **card)
     lv_obj_set_width(hist_box, LV_PCT(100));
     lv_obj_set_flex_grow(hist_box, 1);
     if (g_portrait) lv_obj_set_style_max_height(hist_box, EM(11), 0);
-    lv_obj_set_scrollable(hist_box, true);
-    lv_obj_set_scroll_dir(hist_box, LV_DIR_VER);
+    ui_scroll_v(hist_box);
     ui_flex(hist_box, LV_FLEX_FLOW_COLUMN, 0.3f);
 }
 

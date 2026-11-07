@@ -73,6 +73,7 @@ lv_obj_t *ui_btn(lv_obj_t *parent, const char *txt, btn_kind_t kind, bool small)
 void ui_btn_set_kind(lv_obj_t *btn, btn_kind_t kind);
 lv_obj_t *ui_card(lv_obj_t *parent, const char *title, lv_obj_t **hdr_right);
 void ui_flex(lv_obj_t *obj, lv_flex_flow_t flow, float gap_em);
+void ui_scroll_v(lv_obj_t *obj);   /* вертикално превъртане с тънък плъзгач (scrollbar-width:thin в макета) */
 void ui_set_text(lv_obj_t *label, const char *txt);
 lv_obj_t *ui_btn_label(lv_obj_t *btn);
 void ui_seg_set(lv_obj_t **btns, int n, int on);   /* един включен бутон от група (.seg) */
