@@ -1,5 +1,5 @@
 /* Интерфейсът на Linux платката: DRM/KMS за екрана, libinput за мишка и тъч.
- *   cnc-ui [--drm /dev/dri/card0]
+ *   cnc-ui [--drm /dev/dri/card0] [--prog файл.nc]
  * Устройството може да се зададе и с CNC_DRM_DEVICE. Без него се търси автоматично.
  * Курсорът на мишката се рисува от LVGL (няма X сървър). */
 #include <stdio.h>
@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "lvgl.h"
+#include "program.h"
 #include "ui.h"
 
 static uint32_t tick_ms(void)
@@ -54,7 +55,9 @@ int main(int argc, char **argv)
     const char *dev = getenv("CNC_DRM_DEVICE");
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--drm") && i + 1 < argc) dev = argv[++i];
-        else { fprintf(stderr, "Употреба: cnc-ui [--drm /dev/dri/cardN]\n"); return 2; }
+        else if (!strcmp(argv[i], "--prog") && i + 1 < argc) {
+            if (program_load_file(argv[++i])) { fprintf(stderr, "Файлът не може да се прочете: %s\n", argv[i]); return 1; }
+        } else { fprintf(stderr, "Употреба: cnc-ui [--drm /dev/dri/cardN] [--prog файл.nc]\n"); return 2; }
     }
 
     lv_init();

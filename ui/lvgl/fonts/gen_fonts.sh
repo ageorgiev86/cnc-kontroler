@@ -26,8 +26,12 @@ ui_md  RobotoCondensed-Bold.ttf     1.05 full
 ui_ax  RobotoCondensed-Bold.ttf     1.95 axis
 txt    Roboto-Medium.ttf            0.95 full
 num_sm JetBrainsMono-Regular.ttf    0.74 full
-num_md JetBrainsMono-Medium.ttf     0.95 ascii
+num_md JetBrainsMono-Medium.ttf     0.95 full
 num_lg JetBrainsMono-Medium.ttf     1.85 digits
+num_gc JetBrainsMono-Regular.ttf    0.82 full
+num_ov JetBrainsMono-Medium.ttf     1.55 digits
+num_pg JetBrainsMono-Medium.ttf     1.15 full
+txt_sm Roboto-Medium.ttf            0.74 full
 "
 
 for tier in 16 24; do
@@ -38,7 +42,7 @@ for tier in 16 24; do
       full)   R="-r $FULL" ;;
       ascii)  R="-r 0x20-0x7E" ;;
       axis)   R="--symbols XYZABCUVWØ" ;;
-      digits) R="-r 0x20,0x2B-0x3A" ;;   # интервал + , - . / 0-9 :
+      digits) R="-r 0x20,0x25,0x2B-0x3A" ;;   # интервал % + , - . / 0-9 :
     esac
     out="gen/font_${name}_t${tier}.c"
     echo "$out ($px px)"

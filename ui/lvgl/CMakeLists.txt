@@ -43,6 +43,10 @@ set(APP_SOURCES
   src/ui_topbar.c
   src/ui_dro.c
   src/machine.c
+  src/program.c
+  src/ui_traj.c
+  src/ui_gcode.c
+  src/ui_ctrl.c
 )
 
 # Предупрежденията са грешки само за нашия код; LVGL се компилира с настройките си

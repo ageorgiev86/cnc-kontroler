@@ -7,13 +7,16 @@
     LV_FONT_DECLARE(font_ui_xs_t##t) LV_FONT_DECLARE(font_ui_sm_t##t)          \
     LV_FONT_DECLARE(font_ui_md_t##t) LV_FONT_DECLARE(font_ui_ax_t##t)          \
     LV_FONT_DECLARE(font_txt_t##t) LV_FONT_DECLARE(font_num_sm_t##t)           \
-    LV_FONT_DECLARE(font_num_md_t##t) LV_FONT_DECLARE(font_num_lg_t##t)
+    LV_FONT_DECLARE(font_num_md_t##t) LV_FONT_DECLARE(font_num_lg_t##t)        \
+    LV_FONT_DECLARE(font_num_gc_t##t) LV_FONT_DECLARE(font_num_ov_t##t)        \
+    LV_FONT_DECLARE(font_num_pg_t##t) LV_FONT_DECLARE(font_txt_sm_t##t)
 DECL_TIER(16)
 DECL_TIER(24)
 
 #define TIER(t)                                                                \
     {&font_ui_xs_t##t, &font_ui_sm_t##t, &font_ui_md_t##t, &font_ui_ax_t##t,  \
-     &font_txt_t##t,   &font_num_sm_t##t, &font_num_md_t##t, &font_num_lg_t##t}
+     &font_txt_t##t,   &font_num_sm_t##t, &font_num_md_t##t, &font_num_lg_t##t, \
+     &font_num_gc_t##t, &font_num_ov_t##t, &font_num_pg_t##t, &font_txt_sm_t##t}
 static const ui_fonts_t TIER16 = TIER(16);
 static const ui_fonts_t TIER24 = TIER(24);
 
@@ -93,6 +96,9 @@ void ui_btn_set_kind(lv_obj_t *b, btn_kind_t kind)
     case BTN_RST_HOMING: bg = C_AMB; fg = C_AMB_INK; border = C_AMB; break;
     case BTN_RST_OK: bg = C_OK; fg = lv_color_hex(0x04170d); border = C_OK; break;
     case BTN_ESTOP: bg = C_BAD; fg = lv_color_white(); border = C_BAD_RIM; bw = EM(0.15f); break;
+    case BTN_GO: bg = C_OK; fg = lv_color_hex(0x04170d); border = C_OK; break;
+    case BTN_HOLD: bg = C_AMB; fg = C_AMB_INK; border = C_AMB; break;
+    case BTN_STOP: bg = C_BAD; fg = lv_color_white(); border = C_BAD; break;
     }
     lv_obj_set_style_bg_color(b, bg, 0);
     lv_obj_set_style_bg_opa(b, bg_opa, 0);
@@ -146,6 +152,10 @@ lv_obj_t *ui_card(lv_obj_t *parent, const char *title, lv_obj_t **hdr_right)
     lv_obj_set_style_clip_corner(c, true, 0);
     ui_flex(c, LV_FLEX_FLOW_COLUMN, 0);
     lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    if (!title) {   /* карта без заглавна лента (оверрайдите) */
+        if (hdr_right) *hdr_right = NULL;
+        return c;
+    }
 
     lv_obj_t *h = ui_box(c);
     lv_obj_set_size(h, LV_PCT(100), EM(2.9f));

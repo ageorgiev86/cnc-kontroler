@@ -46,6 +46,10 @@ typedef struct {
     const lv_font_t *num_sm; /* малки числа                          (JetBrains Mono 400) */
     const lv_font_t *num_md; /* час                                  (JetBrains Mono 500) */
     const lv_font_t *num_lg; /* позициите                            (JetBrains Mono 500) */
+    const lv_font_t *num_gc; /* редовете на G-code                   (JetBrains Mono 400) */
+    const lv_font_t *num_ov; /* стойностите на оверрайдите           (JetBrains Mono 500) */
+    const lv_font_t *num_pg; /* таймерите на програмата              (JetBrains Mono 500) */
+    const lv_font_t *txt_sm; /* легенда и подсказки                  (Roboto 500) */
 } ui_fonts_t;
 
 extern ui_fonts_t F;
@@ -59,6 +63,7 @@ int32_t EM(float x);
 typedef enum {
     BTN_NORMAL, BTN_ON, BTN_GHOST, BTN_NEED, /* NEED = .homebtn.need */
     BTN_RST, BTN_RST_HOMING, BTN_RST_OK, BTN_ESTOP,
+    BTN_GO, BTN_HOLD, BTN_STOP,              /* бутоните на цикъла (.btn.go/.hold/.stop) */
 } btn_kind_t;
 
 lv_obj_t *ui_box(lv_obj_t *parent);
