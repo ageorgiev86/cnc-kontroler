@@ -105,10 +105,12 @@
 #define BOARD_ENC_SP_B          GPIOF, GPIO_PIN_12
 #define BOARD_ENC_SP_Z          GPIOF, GPIO_PIN_13   /* на конектора CAMERA (празен) */
 
-#define BOARD_ENC_RES_TIM       TIM8                 /* резерв: гантри X2 или MPG */
-#define BOARD_ENC_RES_AF        GPIO_AF3_TIM8
-#define BOARD_ENC_RES_A         GPIOC, GPIO_PIN_6    /* на конектора CAMERA */
-#define BOARD_ENC_RES_B         GPIOC, GPIO_PIN_7
+/* MPG пулт: колелото (5 V A/B през буфер на Шмит до 3,3 V). Превключвателите и бутоните на пулта
+ * са входовете IN28–IN40 от веригата 74HC165 (BOARD_IO_*), виж docs/arhitektura.md, 7.1. */
+#define BOARD_MPG_TIM           TIM8                 /* encoder mode, 16 бита */
+#define BOARD_MPG_AF            GPIO_AF3_TIM8
+#define BOARD_MPG_A             GPIOC, GPIO_PIN_6    /* на конектора CAMERA (празен) */
+#define BOARD_MPG_B             GPIOC, GPIO_PIN_7
 
 /* Връзка с Linux: SPI4 slave */
 #define BOARD_LINK_SPI          SPI4
@@ -120,7 +122,7 @@
 #define BOARD_LINK_READY        GPIOE, GPIO_PIN_15   /* изход: готов за пакет */
 #define BOARD_LINK_IRQ          GPIOE, GPIO_PIN_10   /* изход: спешно събитие */
 
-/* Входове и изходи 32 + 32, ADC и DAC зад изолатора: SPI2 master */
+/* Входове и изходи 40 + 32 (5 × 74HC165, 4 × 74HC595), ADC и DAC зад изолатора: SPI2 master */
 #define BOARD_IO_SPI            SPI2
 #define BOARD_IO_AF             GPIO_AF5_SPI2
 #define BOARD_IO_SCK            GPIOB, GPIO_PIN_13
@@ -131,6 +133,9 @@
 #define BOARD_IO_OE             GPIOE, GPIO_PIN_8    /* 74HC595, активен при 0 */
 #define BOARD_IO_ADC_CS         GPIOE, GPIO_PIN_9
 #define BOARD_IO_DAC_CS         GPIOE, GPIO_PIN_2
+#define BOARD_IO_IN_N           40                   /* входове (5 × 74HC165) */
+#define BOARD_IO_OUT_N          32
+#define BOARD_IO_MPG_FIRST      27                   /* IN28 (от 0): ос X…C, ×1/×10/×100, постоянно, Старт, Пауза (NC), Стоп (NC) */
 
 /* Бързи входове (по EXTI) */
 #define BOARD_PROBE             GPIOA, GPIO_PIN_7    /* EXTI7; и TIM14_CH1 (AF9) */
