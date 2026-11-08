@@ -125,6 +125,53 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
     lv_display_flush_ready(disp);
 }
 
+/* оценка на една карта: 0 = неизползваема; повече = по-добра */
+static int card_score(const char *path, char *drv, size_t drvn)
+{
+    int fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0) return 0;
+    int score = 0;
+    drmVersion *v = drmGetVersion(fd);
+    snprintf(drv, drvn, "%s", v && v->name ? v->name : "?");
+    if (v) drmFreeVersion(v);
+    drmModeRes *r = drmModeGetResources(fd);
+    if (r) {
+        score = 1;   /* KMS устройство */
+        for (int i = 0; i < r->count_connectors; i++) {
+            drmModeConnector *c = drmModeGetConnector(fd, r->connectors[i]);
+            if (!c) continue;
+            if (c->connection == DRM_MODE_CONNECTED && c->count_modes > 0) {
+                bool hd = c->connector_type == DRM_MODE_CONNECTOR_HDMIA || c->connector_type == DRM_MODE_CONNECTOR_HDMIB ||
+                          c->connector_type == DRM_MODE_CONNECTOR_DVID || c->connector_type == DRM_MODE_CONNECTOR_DVII;
+                int s = hd ? 4 : 2;
+                if (s > score) score = s;
+            }
+            drmModeFreeConnector(c);
+        }
+        drmModeFreeResources(r);
+        if (!strcmp(drv, "simpledrm") || !strcmp(drv, "simple-framebuffer")) score = score > 0 ? 1 : 0;   /* само ако няма друго */
+    }
+    close(fd);
+    return score;
+}
+
+char *drm_disp_find(void)
+{
+    char best[32] = "", path[32], drv[32];
+    int bs = 0;
+    for (int i = 0; i < 8; i++) {
+        snprintf(path, sizeof path, "/dev/dri/card%d", i);
+        if (access(path, F_OK)) continue;
+        int s = card_score(path, drv, sizeof drv);
+        printf("Графично устройство %s: драйвер %s%s\n", path, drv, s >= 4 ? ", свързан HDMI/DVI" : s >= 2 ? ", свързан екран" : "");
+        if (s > bs) { bs = s; snprintf(best, sizeof best, "%s", path); }
+    }
+    if (!bs) return NULL;
+    char *r = malloc(strlen(best) + 1);
+    if (r) strcpy(r, best);
+    return r;
+}
+
 void drm_disp_list(const char *dev)
 {
     int fd = open(dev, O_RDWR | O_CLOEXEC);

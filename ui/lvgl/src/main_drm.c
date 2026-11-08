@@ -1,7 +1,8 @@
 /* Интерфейсът на Linux платката: DRM/KMS за екрана, libinput за мишка и тъч.
  *   cnc-ui [--drm /dev/dri/card0] [--mode 1920x1200] [--rot 0|90|180|270] [--modes] [--prog файл.nc]
  * Без --mode и --rot се ползват Настройки → Дисплей (auto = родният режим на монитора).
- * Устройството може да се зададе и с CNC_DRM_DEVICE. Без него се търси автоматично.
+ * Устройството може да се зададе и с CNC_DRM_DEVICE. Без него се търси автоматично: картата със свързан
+ * HDMI/DVI, а не simpledrm (временният екран от U-Boot, който понякога остава като отделна карта).
  * Курсорът на мишката се рисува от LVGL (няма X сървър). */
 #include <signal.h>
 #include <stdio.h>
@@ -62,6 +63,7 @@ static void on_sig(int s) { (void)s; quit = 1; }
 
 int main(int argc, char **argv)
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);   /* под systemd съобщенията да стигат до дневника веднага */
     const char *dev = getenv("CNC_DRM_DEVICE"), *mode = NULL;
     int rot = -1, list = 0;
     for (int i = 1; i < argc; i++) {
@@ -78,7 +80,7 @@ int main(int argc, char **argv)
     lv_tick_set_cb(tick_ms);
 
     char *found = NULL;
-    if (!dev) dev = found = lv_linux_drm_find_device_path();
+    if (!dev) dev = found = drm_disp_find();
     if (!dev) { fprintf(stderr, "Не е намерено DRM устройство (/dev/dri/card*)\n"); return 1; }
     if (list) { drm_disp_list(dev); return 0; }
 
@@ -91,7 +93,7 @@ int main(int argc, char **argv)
     if (!disp) return 1;
     printf("Екран: %s, %dx%d, завъртане %d°\n", dev, (int)lv_display_get_horizontal_resolution(disp),
            (int)lv_display_get_vertical_resolution(disp), rot);
-    if (found) lv_free(found);
+    if (found) free(found);
     signal(SIGINT, on_sig);
     signal(SIGTERM, on_sig);
 
