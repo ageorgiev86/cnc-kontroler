@@ -19,14 +19,24 @@ struct record {
   uint32_t crc;                      /* CRC-32 на всичко преди него */
 };
 
+#define CANARY_MAGIC   0x42415454u   /* „BATT“ */
+
+/* контролна стойност: пише се при всеки старт; ако оцелее при power-on reset, има батерия */
+struct canary {
+  uint32_t magic;
+  int32_t  battery;                  /* последното известно: 1 да, 0 не, -1 неизвестно */
+  uint32_t check;                    /* ~magic ^ battery */
+};
+
 /* backup SRAM: секция .backup_sram (линкер скриптът), без инициализация при старт */
 static volatile struct record slot[2] __attribute__((section(".backup_sram")));
+static volatile struct canary canary __attribute__((section(".backup_sram")));
 
 static struct prog_pos boot_pos;
 static int boot_valid;
 static uint32_t next_seq;
 static unsigned next_slot;
-static int battery_ok;
+static int battery_ok = -1;
 
 uint32_t crc32_calc(uint32_t crc, const void *data, uint32_t len)
 {
@@ -67,8 +77,24 @@ void resume_init(void)
   /* достъп до домейна на backup: защитата от запис се маха, тактът се включва */
   HAL_PWR_EnableBkUpAccess();
   __HAL_RCC_BKPRAM_CLK_ENABLE();
-  /* backup регулаторът пази SRAM от VBAT, когато няма 3,3 V; без VBAT не тръгва */
-  battery_ok = (HAL_PWREx_EnableBkUpReg() == HAL_OK);
+  /* backup регулаторът пази SRAM от VBAT, когато няма 3,3 V. Готов е винаги при захранена
+   * платка, затова не казва дали има батерия. */
+  (void)HAL_PWREx_EnableBkUpReg();
+
+  /* батерия: оцеляла ли е контролната стойност при истинско изключване (POR/BOR) */
+  int power_cycle = __HAL_RCC_GET_FLAG(RCC_FLAG_PORRST) || __HAL_RCC_GET_FLAG(RCC_FLAG_BORRST);
+  __HAL_RCC_CLEAR_RESET_FLAGS();
+  int survived = (canary.magic == CANARY_MAGIC &&
+                  canary.check == (~CANARY_MAGIC ^ (uint32_t)canary.battery));
+  if (power_cycle) {
+    battery_ok = survived ? 1 : 0;
+  } else {
+    battery_ok = survived ? canary.battery : -1;    /* рестарт без изключване: последното известно */
+  }
+  canary.magic   = CANARY_MAGIC;
+  canary.battery = battery_ok;
+  canary.check   = ~CANARY_MAGIC ^ (uint32_t)battery_ok;
+  __DSB();
 
   va = slot_valid(0, &a);
   vb = slot_valid(1, &b);

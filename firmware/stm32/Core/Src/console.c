@@ -143,7 +143,10 @@ static void cmd_resume(int argc, char **argv)
     console_printf("изчистено\r\n");
     return;
   }
-  console_printf("батерия на VBAT (backup регулатор): %s\r\n", resume_battery_ok() ? "да" : "НЕ");
+  int bat = resume_battery_ok();
+  console_printf("батерия на VBAT: %s\r\n", bat > 0 ? "да (записът оцеля след изключване)" :
+                 bat == 0 ? "НЕ (последното изключване изтри записа)" :
+                 "неизвестно (изключи захранването и включи пак)");
   if (resume_boot_info(&p)) {
     console_printf("при старта: прекъсната програма, файл %08lX, ред %lu, детайл %lu, сегмент %lu\r\n",
                    (unsigned long)p.file_crc, (unsigned long)p.line, (unsigned long)p.part,
