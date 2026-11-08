@@ -54,9 +54,9 @@ if [ "${1:-}" = "--off" ]; then
   exit 0
 fi
 
-echo "1. Plymouth (apt)"
+echo "1. Plymouth (apt): на Orange Pi One отнема няколко минути, изходът е отдолу"
 export DEBIAN_FRONTEND=noninteractive
-if ! apt-get install -y -qq plymouth plymouth-themes >/dev/null; then
+if ! apt-get install -y plymouth plymouth-themes; then
   echo "ГРЕШКА: apt не мина (проверете мрежата)"; exit 1
 fi
 
@@ -66,9 +66,11 @@ rm -rf "$THEME_DIR"
 cp -r "$THEME_SRC" "$THEME_DIR"
 plymouth-set-default-theme ang || { echo "ГРЕШКА: темата не се избра"; exit 1; }
 
-echo "3. Нов initramfs (около минута)"
+echo "3. Нов initramfs: 2–5 минути на Orange Pi One, не прекъсвайте"
 before=$(stat -c %Y /boot/uInitrd 2>/dev/null || echo 0)
-update-initramfs -u >/dev/null || { echo "ГРЕШКА: update-initramfs не мина"; exit 1; }
+printf "   "
+update-initramfs -u -v 2>&1 | awk 'NR % 40 == 0 { printf "."; fflush() } END { print " готово" }'   # точка = напредък
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "ГРЕШКА: update-initramfs не мина"; exit 1; }
 [ "$(stat -c %Y /boot/uInitrd 2>/dev/null || echo 0)" != "$before" ] || echo "Внимание: /boot/uInitrd не е обновен (екранът ще се появи малко по-късно)"
 
 echo "4. Без текстове при старта ($ENVF)"

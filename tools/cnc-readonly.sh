@@ -137,7 +137,7 @@ EOF
   systemctl daemon-reload
   systemctl enable cnc-ro-home.service >/dev/null 2>&1 && echo "ОК: услугата е включена"
 
-  echo "3. Нов initramfs (около минута)"
+  echo "3. Нов initramfs: 2–5 минути на Orange Pi One, не прекъсвайте"
   local before
   before=$(stat -c %Y /boot/uInitrd)
   if ! update-initramfs -u >/dev/null; then echo "ГРЕШКА: update-initramfs не мина"; exit 1; fi
