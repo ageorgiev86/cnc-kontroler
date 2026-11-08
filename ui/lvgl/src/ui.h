@@ -103,6 +103,7 @@ void set_update(uint32_t now);
 void set_show(void);
 void set_test(int level, const char *sec);
 void set_test_edit(const char *key);
+void set_test_save(void);
 void diag_test_scroll(int y);
 /* колелцето на мишката: превърта областта под точката (x, y); notches > 0 = нагоре */
 void ui_wheel(int32_t x, int32_t y, int notches);

@@ -391,6 +391,7 @@ void ui_test(const char *act)
     else if (!strncmp(act, "hmap", 4)) hmap_open();
     else if (!strncmp(act, "set:", 4)) { ui_go(SCR_SET); set_test(atoi(arg), strchr(arg, ':') ? strchr(arg, ':') + 1 : "mach"); }
     else if (!strncmp(act, "edit:", 5)) set_test_edit(arg);
+    else if (!strncmp(act, "setsave", 7)) set_test_save();
     else if (!strncmp(act, "dscroll:", 8)) diag_test_scroll(atoi(arg));
     else if (!strncmp(act, "wheel:", 6)) {   /* wheel:x,y,щраквания (− = надолу) */
         int x = 0, y = 0, n = 0;

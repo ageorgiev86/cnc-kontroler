@@ -63,6 +63,7 @@ set(APP_SOURCES
   src/ui_set.c
   src/ui_files.c
   src/config_defs.c
+  src/net_apply.c
 )
 
 # Предупрежденията са грешки само за нашия код; LVGL се компилира с настройките си

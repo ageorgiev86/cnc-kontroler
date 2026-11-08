@@ -37,7 +37,7 @@ int main(int argc, char **argv)
     float zoom = 1.0f;
     const char *shot = NULL;
     int press_reset = 0, run = 0;
-    const char *prog = NULL, *screen = NULL, *conf = NULL, *act[8];
+    const char *prog = NULL, *screen = NULL, *conf = NULL, *act[16];
     int nact = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--res") && i + 1 < argc) {
@@ -56,7 +56,7 @@ int main(int argc, char **argv)
             conf = argv[++i];
         } else if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
             screen = argv[++i];
-        } else if (!strcmp(argv[i], "--act") && i + 1 < argc && nact < 8) {
+        } else if (!strcmp(argv[i], "--act") && i + 1 < argc && nact < 16) {
             act[nact++] = argv[++i];
         } else if (!strcmp(argv[i], "--prog") && i + 1 < argc) {
             prog = argv[++i];

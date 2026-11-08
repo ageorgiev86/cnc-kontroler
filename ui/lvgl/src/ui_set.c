@@ -4,6 +4,7 @@
  * Промените са в черновата; „Запиши“ ги прилага, „Отмени промените“ ги връща. */
 #include <math.h>
 #include <stdio.h>
+#include "net_apply.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -644,6 +645,13 @@ static void on_save(lv_event_t *e)
         machine_toast(t, now, 4000);
         return;
     }
+    /* статичен адрес: трите полета са задължителни (DNS по избор, тогава е шлюзът) */
+    if (!strcmp(drf_str("net.mode"), "static") && (!drf_str("net.ip")[0] || !drf_str("net.mask")[0] || !drf_str("net.gw")[0])) {
+        machine_toast("Попълнете IP, маска и шлюз", now, 4000);
+        return;
+    }
+    bool net_addr = cfg_changed("net.mode") || cfg_changed("net.ip") || cfg_changed("net.mask") || cfg_changed("net.gw") || cfg_changed("net.dns");
+    bool net_host = cfg_changed("net.host");
     /* осите според вида и профила (axProf в макета) */
     bool type_ch = cfg_changed("mach.type"), ax_ch = type_ch || cfg_changed("mach.miAx") || cfg_changed("mach.lzAx") || cfg_changed("mach.plAx") || cfg_changed("mach.ltY");
     if (ax_ch) {
@@ -695,6 +703,13 @@ static void on_save(lv_event_t *e)
     else if (disp_ch) snprintf(t, sizeof t, "Записано. Новият режим на екрана важи след рестарт на интерфейса.");
     else if (re[0]) snprintf(t, sizeof t, "Записано. Осите %s трябва да се реферират отново.", re);
     else snprintf(t, sizeof t, "Настройките са записани");
+    if (net_addr || net_host) {   /* мрежата на системата: отговорът на cnc-net (ОК … или ГРЕШКА …) */
+        char nm[300];
+        bool ok = net_apply(net_addr, net_host, nm, sizeof nm);
+        dlg_confirm(ok ? "Мрежа" : "Мрежата не е сменена", nm, "ОК", NULL, NULL);   /* важно: новият адрес за SSH */
+        dirty();
+        return;
+    }
     machine_toast(t, now, 6000);
     dirty();
 }
@@ -929,6 +944,9 @@ void set_update(uint32_t now)
 }
 
 /* за снимките от симулатора: вход и раздел */
+/* тест: „Запиши“ */
+void set_test_save(void) { on_save(NULL); }
+
 /* тест: отваря редакцията на параметър от текущия раздел, напр. „ip“ */
 void set_test_edit(const char *k)
 {
