@@ -45,6 +45,7 @@ del_arg() { sed -i "/^extraargs=/ s/\([= ]\)$1\( \|$\)/\1/g; /^extraargs=/ s/  *
 if [ "${1:-}" = "--off" ]; then
   old=$(grep '^console=' "$ENVF.cnc-splash-backup" 2>/dev/null | cut -d= -f2)
   set_kv console "${old:-both}"
+  set_kv bootlogo false
   for a in $OURS; do del_arg "$a"; done
   rm -f "$DROPIN"
   systemctl daemon-reload
@@ -76,7 +77,7 @@ update-initramfs -u -v 2>&1 | awk 'NR % 40 == 0 { printf "."; fflush() } END { p
 echo "4. Без текстове при старта ($ENVF)"
 [ -f "$ENVF.cnc-splash-backup" ] || cp "$ENVF" "$ENVF.cnc-splash-backup"
 set_kv console serial
-set_kv bootlogo false
+set_kv bootlogo true   # при false Armbian добавя splash=verbose и Plymouth показва само текст
 for a in $OURS $ALSO; do add_arg "$a"; done
 sync
 echo "ОК: $(grep -E '^(console|extraargs)=' "$ENVF" | tr '\n' ' ')"
