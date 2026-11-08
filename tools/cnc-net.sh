@@ -4,7 +4,7 @@
 #
 #   sudo bash tools/cnc-net.sh --install     еднократно: слага командата cnc-net и разрешава на
 #                                            потребителя да я вика без парола (само нея)
-#   cnc-net status                           режим и текущ адрес
+#   sudo cnc-net status                      режим и текущ адрес (/usr/local/sbin не е в пътя без sudo)
 #   cnc-net dhcp                             адресът от рутера (DHCP)
 #   cnc-net static IP МАСКА ШЛЮЗ [DNS]       статичен адрес, напр. 192.168.0.50 255.255.255.0 192.168.0.1
 #   cnc-net hostname ИМЕ                     име на машината
@@ -61,10 +61,14 @@ mask2prefix() {   # само непрекъснати маски (255.255.255.0 
   echo "$n"
 }
 
+# прилагане след 2 s; после пинг до шлюза ($1), за да научи рутерът новия адрес веднага (ARP),
+# вместо да чака старият запис в таблицата му да изтече
 apply_later() {
   if ! netplan generate 2>/tmp/cnc-net.err; then return 1; fi
-  systemd-run --quiet --on-active=2 --unit="cnc-net-apply-$$" /usr/sbin/netplan apply >/dev/null 2>&1 \
-    || ( sleep 2; netplan apply ) >/dev/null 2>&1 &
+  local cmd="/usr/sbin/netplan apply"
+  [ -n "${1:-}" ] && cmd="$cmd; sleep 3; ping -c 3 -W 1 $1 >/dev/null 2>&1; true"
+  systemd-run --quiet --on-active=2 --unit="cnc-net-apply-$$" /bin/sh -c "$cmd" >/dev/null 2>&1 \
+    || ( sleep 2; sh -c "$cmd" ) >/dev/null 2>&1 &
   return 0
 }
 
@@ -127,7 +131,7 @@ network:
       nameservers:
         addresses: [$DNS]
 EOF
-  if ! apply_later; then
+  if ! apply_later "$GW"; then
     if [ -n "$OLD" ]; then printf '%s\n' "$OLD" | put_file "$YAML" 600; else del_file "$YAML"; fi
     die "netplan отказа настройката: $(head -c 150 /tmp/cnc-net.err)"
   fi
