@@ -295,6 +295,48 @@ int program_parse_into(program_t *dst, const char *name, const char *text)
 
 int program_load_text(const char *name, const char *text) { return program_parse_into(&P, name, text); }
 
+char *program_join(const program_t *p, size_t *len)
+{
+    size_t n = 0;
+    for (int i = 0; i < p->nlines; i++) n += strlen(p->line[i]) + 1;
+    char *t = malloc(n + 1), *o = t;
+    if (!t) abort();
+    for (int i = 0; i < p->nlines; i++) {
+        size_t l = strlen(p->line[i]);
+        memcpy(o, p->line[i], l);
+        o += l;
+        *o++ = '\n';
+    }
+    *o = 0;
+    if (len) *len = n;
+    return t;
+}
+
+/* Промяна на ред в заредената програма: редовете се събират в нов текст и програмата се разбира наново. */
+int program_edit(int line, int mode, const char *txt)
+{
+    if (line < 0 || line > P.nlines || (mode != PE_INSERT && line == P.nlines)) return -1;
+    size_t add = txt ? strlen(txt) : 0, n = 0;
+    for (int i = 0; i < P.nlines; i++) n += strlen(P.line[i]) + 1;
+    char *t = malloc(n + add + 2), *o = t;
+    if (!t) abort();
+    for (int i = 0; i <= P.nlines; i++) {
+        if (i == line && mode != PE_DELETE) { memcpy(o, txt, add); o += add; *o++ = '\n'; }
+        if (i == P.nlines) break;
+        if (i == line && mode != PE_INSERT) continue;
+        size_t l = strlen(P.line[i]);
+        memcpy(o, P.line[i], l);
+        o += l;
+        *o++ = '\n';
+    }
+    *o = 0;
+    char name[sizeof P.name];
+    snprintf(name, sizeof name, "%s", P.name);
+    program_load_text(name, t);
+    free(t);
+    return 0;
+}
+
 char *program_read_file(const char *path, long *size)
 {
     FILE *f = fopen(path, "rb");

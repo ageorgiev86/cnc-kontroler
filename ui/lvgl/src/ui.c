@@ -397,6 +397,9 @@ void ui_test(const char *act)
         int x = 0, y = 0, n = 0;
         if (sscanf(arg, "%d,%d,%d", &x, &y, &n) == 3) ui_wheel(x, y, n);
     }
+    else if (!strncmp(act, "gcline:", 7)) gcode_test(&gc, atoi(arg), -1);   /* редакция на ред N (от 1) */
+    else if (!strncmp(act, "gcfn:", 5)) gcode_test(&gc, 0, atoi(arg));       /* 0 изтрий реда, 1 нов ред след */
+    else if (!strncmp(act, "gcsave", 6)) gcode_test(&gc, 0, 2);
     else if (!strncmp(act, "load", 4)) files_load();
     else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
     else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));

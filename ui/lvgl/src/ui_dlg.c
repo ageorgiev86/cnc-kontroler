@@ -14,7 +14,7 @@ typedef enum { D_NONE, D_SETPOS, D_NUM, D_TEXT, D_PICK } dkind_t;
 static struct {
     dkind_t kind;
     lv_obj_t *modal, *title, *cur, *in, *unit, *note, *ax[AX_N], *tgt[2], *keys;
-    char txt[72];
+    char txt[128];
     int ax_i;
     bool mach;
     /* число */
@@ -23,7 +23,8 @@ static struct {
     dlg_num_cb ncb;
     /* текст */
     dlg_text_cb tcb;
-    bool cyr, shift;
+    dlg_line_cb lcb;
+    bool cyr, shift, gc;   /* gc: ред от G-code (главни без изключване, скоби вместо _ /) */
     int maxlen;
     /* избор */
     dlg_pick_cb pcb;
@@ -313,6 +314,7 @@ void dlg_num(const char *title, const char *unit, const char *hint, double cur, 
 /* ---------- текст (.tk): латиница и кирилица ---------- */
 static const char *const TK_LAT[4] = {"1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm._/"};
 static const char *const TK_CYR[4] = {"1234567890", "явертъуиоп", "асдфгхйкл-", "зьцжбнмчшщ"};
+static const char *const TK_GC[4] = {"1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.()"};
 
 static void text_render(void);
 
@@ -321,7 +323,7 @@ static void on_tk(lv_event_t *e)
     lv_obj_t *b = lv_event_get_target_obj(e);
     const char *k = lv_label_get_text(ui_btn_label(b));
     if (strlen(D.txt) + strlen(k) <= (size_t)D.maxlen) strcat(D.txt, k);   /* maxlen = позволени байтове */
-    D.shift = false;
+    if (!D.gc) D.shift = false;
     text_render();
 }
 
@@ -344,7 +346,7 @@ static void text_render(void)
 {
     ui_set_text(D.in, D.txt);
     /* надписите на клавишите: малки/главни, латиница/кирилица */
-    const char *const *rows = D.cyr ? TK_CYR : TK_LAT;
+    const char *const *rows = D.cyr ? TK_CYR : D.gc ? TK_GC : TK_LAT;
     int idx = 0;
     for (int r = 0; r < 4; r++) {
         const char *p = rows[r];
@@ -372,24 +374,54 @@ static void on_text_ok(lv_event_t *e)
 {
     dlg_text_cb cb = D.tcb;
     void *ud = D.ud;
-    char t[72];
+    char t[sizeof D.txt];
     snprintf(t, sizeof t, "%s", D.txt);
+    lv_obj_t *m = D.modal;
     if (cb && cb(t, ud) != 0) return;   /* проверката не е минала: диалогът остава */
-    dlg_close();
+    if (D.modal == m) dlg_close();      /* освен ако обратното извикване е отворило нов */
 }
+
+static void on_line_fn(lv_event_t *e)
+{
+    dlg_line_cb cb = D.lcb;
+    void *ud = D.ud;
+    char t[sizeof D.txt];
+    snprintf(t, sizeof t, "%s", D.txt);
+    lv_obj_t *m = D.modal;
+    if (cb) cb((int)(intptr_t)lv_event_get_user_data(e), t, ud);
+    if (D.modal == m) dlg_close();
+}
+
+static void text_build(const char *title, const char *cur, int maxlen, dlg_text_cb cb, dlg_line_cb lcb, void *ud, const char *hint);
 
 void dlg_text(const char *title, const char *cur, int maxlen, dlg_text_cb cb, void *ud)
 {
+    D.gc = false;
+    text_build(title, cur, maxlen, cb, NULL, ud, NULL);
+}
+
+void dlg_text_line(const char *title, const char *cur, const char *hint, dlg_text_cb cb, dlg_line_cb lcb, void *ud)
+{
+    D.gc = true;
+    text_build(title, cur, (int)sizeof D.txt - 1, cb, lcb, ud, hint);
+}
+
+static void text_build(const char *title, const char *cur, int maxlen, dlg_text_cb cb, dlg_line_cb lcb, void *ud, const char *hint)
+{
+    bool gc = D.gc;
     lv_obj_t *d = dlg_box(40);
     D.kind = D_TEXT;
-    D.tcb = cb; D.ud = ud; D.shift = false; D.cyr = false;
+    D.gc = gc;
+    D.tcb = cb; D.lcb = lcb; D.ud = ud; D.shift = gc; D.cyr = false;
     D.maxlen = maxlen > 0 && maxlen < (int)sizeof D.txt ? maxlen : (int)sizeof D.txt - 1;
     snprintf(D.txt, sizeof D.txt, "%s", cur ? cur : "");
     ui_set_text(D.title, title);
     lv_obj_t *in = input(d);
-    lv_obj_set_flex_align(in, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    /* дългият ред на G-code се вижда откъм края (където е курсорът) */
+    lv_obj_set_flex_align(in, gc ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     D.in = ui_label(in, F.num_pg, C_FG, "");
     caret(in, 1.1f);
+    if (hint) { D.note = note(d); ui_set_text(D.note, hint); }
     static int32_t cols[11], rows[6];
     for (int i = 0; i < 10; i++) cols[i] = LV_GRID_FR(1);
     cols[10] = LV_GRID_TEMPLATE_LAST;
@@ -413,6 +445,17 @@ void dlg_text(const char *title, const char *cur, int maxlen, dlg_text_cb cb, vo
         lv_obj_set_style_pad_hor(b, 0, 0);
         lv_obj_add_event_cb(b, on_tk_fn, LV_EVENT_CLICKED, (void *)(intptr_t)i);
         ui_cell(b, FC[i][0], FC[i][1], 4, 1);
+    }
+    if (lcb) {
+        lv_obj_t *r = ui_box(d);
+        lv_obj_set_width(r, LV_PCT(100));
+        ui_flex(r, LV_FLEX_FLOW_ROW, 0.35f);
+        static const char *const LN[2] = {"ИЗТРИЙ РЕДА", "НОВ РЕД СЛЕД"};
+        for (int i = 0; i < 2; i++) {
+            lv_obj_t *b = ui_btn(r, LN[i], BTN_NORMAL, false);
+            lv_obj_set_flex_grow(b, 1);
+            lv_obj_add_event_cb(b, on_line_fn, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        }
     }
     foot(d, NULL, NULL, "ГОТОВО", on_text_ok);
     text_render();
@@ -495,6 +538,7 @@ bool dlg_key(uint32_t key)
             if (n) { n--; while (n && ((unsigned char)D.txt[n] & 0xC0) == 0x80) n--; D.txt[n] = 0; }
             text_render();
         } else if (key >= 0x20 && key < 0x800 && n + (key < 0x80 ? 1 : 2) <= (size_t)D.maxlen) {   /* латиница и кирилица (UTF-8) */
+            if (D.gc && key >= 'a' && key <= 'z') key -= 32;
             if (key < 0x80) D.txt[n++] = (char)key;
             else { D.txt[n++] = (char)(0xC0 | (key >> 6)); D.txt[n++] = (char)(0x80 | (key & 0x3F)); }
             D.txt[n] = 0;

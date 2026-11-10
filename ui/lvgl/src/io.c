@@ -46,19 +46,19 @@ void io_defaults(void)
         {"Вакуумна маса: зона 1", "vac1"}, {"Вакуумна маса: зона 2", "vac2"}, {"Транспортьор стружки", "conv"}};
     char k[32];
     for (int i = 0; i < IO_N; i++) {
-        snprintf(k, sizeof k, "io.in%d.n", i + 1); set(k, i < 9 ? I[i][0] : "");
+        snprintf(k, sizeof k, "io.in%d.n", i + 1); set(k, "");   /* имената ги пише потребителят; дотогава се показва функцията */
         snprintf(k, sizeof k, "io.in%d.f", i + 1); set(k, i < 9 ? I[i][1] : "none");
         snprintf(k, sizeof k, "io.in%d.inv", i + 1); set(k, "0");
         snprintf(k, sizeof k, "io.in%d.flt", i + 1); set(k, "3");
-        snprintf(k, sizeof k, "io.out%d.n", i + 1); set(k, i < 12 ? O[i][0] : "");
+        snprintf(k, sizeof k, "io.out%d.n", i + 1); set(k, "");
         snprintf(k, sizeof k, "io.out%d.f", i + 1); set(k, i < 12 ? O[i][1] : "none");
         snprintf(k, sizeof k, "io.out%d.inv", i + 1); set(k, "0");
         snprintf(k, sizeof k, "io.out%d.safe", i + 1); set(k, "off");
         io_force[i] = -1;
     }
     static const char *const A[AIN_N][10] = {
-        {"Налягане въздух", "airP", "420", "0", "10", "bar", "5.5", "9", "alarm", "200"},
-        {"Температура на шпиндела", "temp", "010", "0", "100", "°C", "0", "60", "warn", "1000"},
+        {"", "airP", "420", "0", "10", "bar", "5.5", "9", "alarm", "200"},
+        {"", "temp", "010", "0", "100", "°C", "0", "60", "warn", "1000"},
         {"", "none", "010", "0", "10", "V", "0", "10", "none", "100"},
         {"", "none", "010", "0", "10", "V", "0", "10", "none", "100"}};
     static const char *const AK[10] = {"n", "f", "sig", "lo", "hi", "u", "amin", "amax", "act", "flt"};

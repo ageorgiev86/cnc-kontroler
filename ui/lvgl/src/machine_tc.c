@@ -127,6 +127,16 @@ void machine_tool_change(int t, uint32_t now)
         keep(tg); tg[AX_Z] = 0;
         mq_move(tg, 0, false, L("Z нагоре"));
     } else {
+        /* позиция за смяна: X и/или Y се включват с отметка; без отметки шпинделът остава, където е */
+        bool px = cfg_num("mag.mXOn") != 0, py = cfg_num("mag.mYOn") != 0;
+        if (px || py) {
+            keep(tg); tg[AX_Z] = 0;
+            mq_move(tg, 0, false, L("Z нагоре"));
+            keep(tg);
+            if (px) tg[AX_X] = cfg_num("mag.mX");
+            if (py) tg[AX_Y] = cfg_num("mag.mY");
+            mq_move(tg, 0, false, L("към позицията за смяна"));
+        }
         const char *nm = !strcmp(cfg_str("mag.mtype"), "chain") ? "веригата" : "магазинът";
         int per = per_wheel(), wn = mag_wheels();
         float msp = (float)cfg_num("mag.msp");

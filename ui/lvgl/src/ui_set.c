@@ -541,6 +541,10 @@ static void on_teach(lv_event_t *e)
     case 3: drf_set_num("ts.tsx", M.mach[AX_X], 3); drf_set_num("ts.tsy", M.mach[AX_Y], 3); break;
     case 4: drf_set_num("ts.tsz", M.mach[AX_Z], 3); break;
     case 5: drf_set_num("prb.prRingX", M.mach[AX_X], 3); drf_set_num("prb.prRingY", M.mach[AX_Y], 3); break;
+    case 6:   /* позиция за смяна (карусел, верига): и двете отметки се включват */
+        drf_set_num("mag.mX", M.mach[AX_X], 3); drf_set_num("mag.mY", M.mach[AX_Y], 3);
+        drf_set("mag.mXOn", "1"); drf_set("mag.mYOn", "1");
+        break;
     }
     machine_toast("Взета е текущата позиция. Натиснете „Запиши“.", now, 3500);
     dirty();
@@ -558,6 +562,7 @@ static void teach_row(void)
         bool mon = drf_num("mag.mOn"), atc = drf_num("mag.atcOn");
         if (!mon || !atc) T("РЪЧНА СМЯНА = ТЕКУЩАТА X Y Z", 0);
         if (mon && DS_IS("mag.mtype", "linear")) T("ГНЕЗДО 1 = ТЕКУЩАТА X Y", 2);
+        if (mon && !DS_IS("mag.mtype", "linear")) T("ПОЗИЦИЯ ЗА СМЯНА = ТЕКУЩАТА X Y", 6);
         if (mon) T("Z ЗА СМЯНА = ТЕКУЩАТА Z", 1);
     } else if (sec == S_TS) {
         T("ВЗЕМИ ТЕКУЩАТА X Y", 3);

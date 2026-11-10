@@ -3,6 +3,8 @@
  * Памет = вградените примери + папката с програми (CNC_PROG_DIR или ~/cnc-programi).
  * USB = /media/<потребител>/<памет> и /media/<памет>. Мрежа = /mnt/cnc-net, когато дялът е включен. */
 #include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -243,6 +245,29 @@ static bool load_sel(void)
     return true;
 }
 void files_load(void) { on_load_impl(); }
+
+/* Заредената (и редактирана) програма се записва в папката с програми под същото име.
+ * Безопасно при спиране на тока: временен файл → fsync → преименуване → fsync на папката. */
+int files_save_loaded(void)
+{
+    const char *dir = prog_dir();
+    if (!P.name[0] || strchr(P.name, '/')) return -1;
+    mkdir(dir, 0755);
+    char path[600], tmp[610];
+    snprintf(path, sizeof path, "%.330s/%.255s", dir, P.name);
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    size_t n;
+    char *t = program_join(&P, &n);
+    FILE *f = fopen(tmp, "wb");
+    bool ok = f && fwrite(t, 1, n, f) == n && fflush(f) == 0 && fsync(fileno(f)) == 0;
+    free(t);
+    if (f && fclose(f) != 0) ok = false;
+    if (!ok || rename(tmp, path) != 0) { remove(tmp); return -1; }
+    int fd = open(dir, O_RDONLY | O_DIRECTORY);
+    if (fd >= 0) { fsync(fd); close(fd); }
+    snprintf(loaded, sizeof loaded, "%s", path);
+    return 0;
+}
 static void on_load(lv_event_t *e) { on_load_impl(); }
 static void on_load_impl(void)
 {

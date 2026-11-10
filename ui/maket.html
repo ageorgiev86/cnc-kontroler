@@ -608,7 +608,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="cvslot" data-cvslot="run"><div class="canvas-wrap"><canvas id="cv"></canvas><div class="cv-leg" id="cvLeg"></div><div class="cv-info" id="cvInfo"></div><div class="cv-hint">плъзни: завъртане · колелце или два пръста: мащаб</div></div></div>
           </div>
           <div class="card">
-            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
+            <div class="card-h"><span class="gcn" id="gcName">—</span><span class="r"><span id="gcPos">0 / 0</span><button class="btn sm" data-act="gc-edit" id="btnGcEdit" type="button">Редактирай</button><button class="btn sm go" data-act="gc-save" id="btnGcSave" type="button" hidden>Запиши</button><button class="btn sm" data-act="go" data-v="files" type="button">Отвори</button></span></div>
             <div class="slbar" id="slBar" hidden><span>Старт от ред <b id="slN"></b></span><button class="btn sm" data-act="sl-clr" type="button">Отказ</button></div>
             <div class="gc-list" id="gcList"></div>
           </div>
@@ -997,6 +997,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <div class="mdi-in" id="tdIn"></div>
           <div class="dlg-note" id="tdNote"></div>
           <div class="tk" id="tkeys"></div>
+          <div class="grid3" id="tdLine" style="grid-template-columns:1fr 1fr" hidden>
+            <button class="btn" data-act="td-del" type="button">Изтрий реда</button>
+            <button class="btn" data-act="td-ins" type="button">Нов ред след</button>
+          </div>
           <div class="grid3" style="grid-template-columns:1fr 1.6fr">
             <button class="btn" data-act="td-cancel" type="button">Отказ</button>
             <button class="btn go" data-act="td-ok" type="button">Готово</button>
@@ -1176,6 +1180,8 @@ function atcOp(T,line){return{type:'act',tool:T,line,dur:0,fn:()=>{
    act('затягане на T'+T,.6,()=>{S.tool=T;S.clamped=true});
    mv('Z нагоре',()=>toW({Z:0}));
   }else{
+   if(M.mXOn||M.mYOn){const P={};if(M.mXOn)P.X=M.mX;if(M.mYOn)P.Y=M.mY;
+    mv('Z нагоре',()=>toW({Z:0}));mv('към позицията за смяна',()=>toW(P))}
    const nm=M.mtype==='chain'?'веригата':'магазинът',N=M.mn,{Wn,per,wh,lc}=magWheels(M);
    const dist=(a,b)=>{const d=Math.abs(a-b)%per;return Math.min(d,per-d)};
    const at=S.wpos.slice(),lb=i=>(Wn>1?'колело '+(wh(i)+1):nm)+' към гнездо '+i;
@@ -1489,7 +1495,14 @@ function loadProgram(f){
  if(!f.c)f.c=compile(f.text);
  PROG=f.c.lines;PROG_OPS=f.c.ops;PINFO=f.c.info;TCOL=toolColors(PINFO.tools);PREV=f.c.info.segs;BOUNDS=f.c.info.bounds;PREVMAP=new Map(PREV.map(sg=>[sg.pi,sg]));
  PROG_ID++;PROG_NAME=f.name;LOADED=f;S.curPi=-1;S.progLine=-1;S.startLine=null;S.runTime=0;
- set($('#gcName'),f.name);renderGc();renderLegend();
+ S.gcEdit=false;S.gcDirty=false;$('#btnGcEdit').classList.remove('on');$('#btnGcSave').hidden=true;
+set($('#gcName'),f.name);renderGc();renderLegend();
+}
+/* редакция на заредената програма: f(редове), после се компилира наново */
+function PROG_EDIT(fn){
+ const L=PROG.slice();fn(L);if(!L.length)L.push('');
+ const keep=S.gcEdit,top=gcList.scrollTop;LOADED.text=L.join('\n');delete LOADED.c;loadProgram(LOADED);
+ S.gcEdit=keep;S.gcDirty=true;$('#btnGcSave').hidden=false;gcList.scrollTop=top;winGc();
 }
 function lubeOut(){const i=S.cfg.io.out.findIndex(o=>o.f==='lube');return i<0?null:'OUT'+(i+1)}
 function lubePulse(why){
@@ -2022,6 +2035,10 @@ const P_MAG=[
  {k:'mn',n:'Брой гнезда / инструменти',t:'num',d:0,min:4,get max(){return magMax(S.draft.mag)},h:'Колко гнезда има магазинът. Таблицата на инструментите и номерата T следват този брой. Максимум 255 (верига, карусел, без магазин), линеен 60. При карусел с няколко колела гнездата се разпределят поравно и се номерират подред по колела. Без магазин: колко реда има таблицата.'},
  {k:'mz',n:'Z за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Височината на шпиндела, при която инструментът се хваща или пуска.'},
  {k:'mor',n:'Ориентация на шпиндела',u:'°',t:'num',d:1,min:0,max:359.9,h:'Ъгълът, в който шпинделът спира преди смяна, за да влязат шпонките на държача в гнездото.'},
+ {k:'mXOn',n:'Позиция за смяна · X',t:'bool',on:'Да',off:'Не',only:['carousel','chain'],h:'С отметка шпинделът отива на зададената X преди смяната (например над магазина отстрани на масата). Без отметка X остава, където е.'},
+ {k:'mX',n:'X за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['carousel','chain'],show:D=>!!D.mOn&&!!D.mXOn,h:'Машинната X, на която шпинделът застава при смяна. Най-лесно: доведете шпиндела и натиснете „Позиция за смяна = текущата X Y“.'},
+ {k:'mYOn',n:'Позиция за смяна · Y',t:'bool',on:'Да',off:'Не',only:['carousel','chain'],h:'С отметка шпинделът отива на зададената Y преди смяната. Без отметка Y остава, където е.'},
+ {k:'mY',n:'Y за смяна',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['carousel','chain'],show:D=>!!D.mOn&&!!D.mYOn,h:'Машинната Y, на която шпинделът застава при смяна.'},
  {k:'msp',n:'Време за едно гнездо',u:'s',t:'num',d:2,min:.05,max:5,only:['carousel','chain'],h:'Колко време отнема преместването с едно гнездо. Използва се като изчакване и като граница за аларма, ако датчикът за позиция не сработи.'},
  {k:'m1x',n:'Гнездо 1 · X',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната X на гнездо 1. Доведете шпиндела над гнездото и натиснете „Гнездо 1 = текущата X Y“.'},
  {k:'m1y',n:'Гнездо 1 · Y',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,only:['linear'],h:'Машинната Y на гнездо 1.'},
@@ -2294,6 +2311,7 @@ PDEF.lgMac={k:'lgMac',n:'Макрос',t:'num',d:0,min:100,max:199,h:'Номер
 PDEF.wcsV={k:'wcsV',n:'Отместване',u:'маш. координата',t:'num',d:3,min:-99999,max:99999,h:'Машинната координата на нулата по тази ос. Най-лесно се задава с „X = 0“ или „Задай“ в „Ръчно“ или с цикъл на пробника, при избрана активна нула.'};
 PDEF.rfZ={k:'rfZ',n:'Безопасна височина Z',u:'мм',t:'num',d:3,min:-9999,max:9999,h:'Височината в работни координати, на която инструментът минава до началната точка. Трябва да е над детайла и стягите.'};
 PDEF.rfF={k:'rfF',n:'Скорост на спускане',u:'мм/мин',t:'num',d:0,min:1,max:5000,h:'С каква скорост Z слиза от безопасната височина до началната точка.'};
+PDEF.gcLine={k:'gcLine',n:'Ред от програмата',t:'text',h:'Промяната важи веднага за заредената програма. „Запиши“ я записва в паметта; файлът на USB или в мрежата не се променя.'};
 PDEF.toolName={k:'toolName',n:'Име на инструмента',t:'text',h:'Например „Фреза Ø6 2Z“. Името се вижда в горната лента, таблицата и 3D изгледа. Празно име освобождава гнездото.'};
 PDEF.tLen={k:'tLen',n:'Дължина',u:'мм',t:'num',d:3,min:0,max:1000,h:'Дължината от челото на шпиндела до върха (G43). Измерва се най-точно с toolsetter-а.'};
 PDEF.tDia={k:'tDia',n:'Диаметър',u:'мм',t:'num',d:3,min:0,max:500,h:'Диаметърът на инструмента (за компенсация G41/G42 и за 3D изгледа).'};
@@ -2328,12 +2346,12 @@ S.cfg.mach={type:'mill',miAx:'3',lzAx:'3',plAx:'3',ltY:0,lzMax:100,lzPwm:1000,lz
 S.cfg.sp={spCtl:'modbus',spVfd:'huanyang',spPort:'uart1',spBaud:'19200',spPar:'8N1',spAddr:1,spRegCmd:8192,spRegFreq:8193,spRegFb:12288,spPoll:100,spOut:'v010',spPwmF:2000,spPwmMin:0,spPwmMax:100,spInv:0,spDirCW:'low',spEn:1,spMin:6000,spMax:24000,spRamp:4,spWait:'fb',spDelay:3,spEnc:1,spPpr:1024};
 S.cfg.io=(()=>{const I=[['Врата затворена','door'],['Налягане въздух','air'],['Ниво масло','oil'],['Бутон Старт (пулт)','start'],['Бутон Пауза (пулт)','hold'],['Детайл затегнат','clamp'],['Вакуум ОК','vac'],['Палет на място','pallet'],['Контейнер за стружки пълен','chip']];
  const O=[['Охлаждане','cool'],['Мъгла','mist'],['Обдухване','air'],['Мазане','lube'],['Аспирация','dust'],['Сигнална колона: зелено','lgreen'],['Сигнална колона: жълто','lyellow'],['Сигнална колона: червено','lred'],['Стяга','clamp'],['Вакуумна маса: зона 1','vac1'],['Вакуумна маса: зона 2','vac2'],['Транспортьор стружки','conv']];
- const inn=[],out=[];for(let i=0;i<32;i++){const a=I[i]||['','none'],b=O[i]||['','none'];inn.push({n:a[0],f:a[1],inv:0,flt:3});out.push({n:b[0],f:b[1],inv:0,safe:'off'})}
+ const inn=[],out=[];for(let i=0;i<32;i++){const a=I[i]||['','none'],b=O[i]||['','none'];inn.push({n:'',f:a[1],inv:0,flt:3});out.push({n:'',f:b[1],inv:0,safe:'off'})}  /* имената ги пише потребителят */
  return{in:inn,out}})();
 S.cfg.lube={luOn:1,luMode:'time',luMin:30,luDist:500,luPulse:5,luStart:1,luPress:0,luLow:'warn'};
 S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
-S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
+S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mXOn:0,mX:0,mYOn:0,mY:0,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.disp={dRes:'auto',dRot:'0'};
 /* Макроси и логика (docs/makrosi-logika.md). В макета: макросите се изпълняват (G/M редовете), правилата само се настройват. */
@@ -2490,7 +2508,7 @@ function renderSet(){
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
    (sec==='mach'||sec==='sp'||sec==='disp'?'':sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
-   :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
+   :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn&&S.draft.mag.mtype!=='linear'?'<button class="btn" data-act="teach" data-v="magxy" type="button">Позиция за смяна = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
   help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
@@ -2524,11 +2542,11 @@ function renderTd(){
  const d=S.td,p=PDEF[d.k];
  set($('#tdT'),p.n);set($('#tdCur'),p.t==='pass'?'':'сега '+fmtP(p,d.get?d.get():S.draft[d.a][d.k]));
  const shown=p.t==='pass'?'•'.repeat(d.txt.length):d.txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');
- $('#tdIn').innerHTML=shown+'<span class="caret"></span>';set($('#tdNote'),p.h);
+ $('#tdIn').innerHTML=shown+'<span class="caret"></span>';set($('#tdNote'),p.h);$('#tdLine').hidden=d.line==null;
  const up=c=>d.shift?c.toUpperCase():c;
 const T=d.bg?TKB:TK;
  $('#tkeys').innerHTML=T.map(r=>[...r].map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')).join('')+
-  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button>${(d.bg?['ю',',','.']:['@',':','\\']).map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')}<button class="btn" data-act="tk-lang" type="button">${d.bg?'EN':'БГ'}</button><button class="btn w2" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-clr" type="button">C</button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
+  `<button class="btn w2${d.shift?' on':''}" data-act="tk-sh" type="button">Shift</button>${(d.bg?['ю',',','.']:d.k==='gcLine'?['(',')',';']:['@',':','\\']).map(c=>`<button class="btn" data-act="tk" data-v="${up(c)}" type="button">${up(c)}</button>`).join('')}<button class="btn" data-act="tk-lang" type="button">${d.bg?'EN':'БГ'}</button><button class="btn w2" data-act="tk" data-v=" " type="button"> </button><button class="btn" data-act="tk-clr" type="button">C</button><button class="btn" data-act="tk-bs" type="button">⌫</button>`;
 }
 function renderNd(){
  const d=S.nd,p=PDEF[d.k];
@@ -2605,7 +2623,7 @@ function updPl(){
 const IN_F=[['none','Не се използва'],['lubeP','Налягане на мазането'],['door','Врата затворена'],['air','Налягане въздух'],['oil','Ниво масло'],['start','Бутон Старт'],['hold','Бутон Пауза'],['clamp','Детайл затегнат'],['vac','Вакуум ОК'],['pallet','Палет на място'],['chip','Контейнер за стружки пълен'],['user','Потребителски (M66)']];
 const OUT_F=[['none','Не се използва'],['cool','Охлаждане'],['mist','Мъгла'],['air','Обдухване'],['lube','Мазане'],['dust','Аспирация'],['lgreen','Сигнална колона: зелено'],['lyellow','Сигнална колона: жълто'],['lred','Сигнална колона: червено'],['clamp','Стяга'],['vac1','Вакуумна маса: зона 1'],['vac2','Вакуумна маса: зона 2'],['conv','Транспортьор стружки'],['user','Потребителски (M62–M65)']];
 const FN=(L,k)=>(L.find(x=>x[0]===k)||L[0])[1];
-S.cfg.aio={in:[{n:'Налягане въздух',f:'airP',sig:'420',lo:0,hi:10,u:'bar',amin:5.5,amax:9,act:'alarm',flt:200},{n:'Температура на шпиндела',f:'temp',sig:'010',lo:0,hi:100,u:'°C',amin:0,amax:60,act:'warn',flt:1000},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100}],
+S.cfg.aio={in:[{n:'',f:'airP',sig:'420',lo:0,hi:10,u:'bar',amin:5.5,amax:9,act:'alarm',flt:200},{n:'',f:'temp',sig:'010',lo:0,hi:100,u:'°C',amin:0,amax:60,act:'warn',flt:1000},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100},{n:'',f:'none',sig:'010',lo:0,hi:10,u:'V',amin:0,amax:10,act:'none',flt:100}],
  out:[{n:'',f:'none',sig:'010',lo:0,hi:100,u:'%'},{n:'',f:'none',sig:'010',lo:0,hi:100,u:'%'}]};
 S.draft.aio=JSON.parse(JSON.stringify(S.cfg.aio));
 const AIN_F=[['none','Не се използва'],['airP','Налягане на въздуха'],['oilP','Налягане на маслото'],['temp','Температура'],['load','Натоварване на шпиндела'],['flow','Дебит на охлаждането'],['user','Потребителски (M66 E)']];
@@ -2907,10 +2925,25 @@ panel.addEventListener('click',e=>{
    if(v==='ts-z')S.draft.ts.tsz=+m.Z.toFixed(3);
    if(v==='mag1'){S.draft.mag.m1x=+m.X.toFixed(3);S.draft.mag.m1y=+m.Y.toFixed(3)}
    if(v==='magz')S.draft.mag.mz=+m.Z.toFixed(3);
+   if(v==='magxy'){S.draft.mag.mX=+m.X.toFixed(3);S.draft.mag.mY=+m.Y.toFixed(3);S.draft.mag.mXOn=1;S.draft.mag.mYOn=1}
    if(v==='mtc'){S.draft.mag.mcX=+m.X.toFixed(3);S.draft.mag.mcY=+m.Y.toFixed(3);S.draft.mag.mcZ=+m.Z.toFixed(3)}
    if(v==='prring'){S.draft.prb.prRingX=+m.X.toFixed(3);S.draft.prb.prRingY=+m.Y.toFixed(3)}
    renderSet();toast('Взета е текущата позиция. Натиснете „Запиши“.');break}
-  case'tk':if(S.td.txt.length<64)S.td.txt+=v;if(S.td.shift){S.td.shift=false}renderTd();break;
+  case'tk':if(S.td.txt.length<(S.td.k==='gcLine'?120:64))S.td.txt+=v;if(S.td.shift&&S.td.k!=='gcLine'){S.td.shift=false}renderTd();break;
+  case'td-del':{const d=S.td;if(!d.ins)PROG_EDIT(L=>L.splice(d.line,1));$('#txtDlg').hidden=true;break}
+  case'td-ins':{const d=S.td,t=d.txt.trim();if(d.ins)PROG_EDIT(L=>L.splice(d.line,0,t));else if(t!==PROG[d.line])PROG_EDIT(L=>{L[d.line]=t});
+   S.td={...d,line:d.line+1,ins:true,txt:''};renderTd();break}
+  case'gc-edit':if(!LOADED){toast('Няма заредена програма');break}
+   if(S.state!=='idle'){toast('Програмата се редактира, когато машината е спряна');break}
+   S.gcEdit=!S.gcEdit;$('#btnGcEdit').classList.toggle('on',S.gcEdit);
+   if(S.gcEdit)toast('Докоснете ред, за да го промените');break;
+  case'gc-save':{if(!LOADED)break;const t=PROG.join('\n');
+   let f=FILES.mem.find(x=>x.name===LOADED.name);
+   if(f&&f!==LOADED){f.text=t;f.size=new Blob([t]).size;f.date=fdate(new Date());delete f.c}
+   else if(!f){addFile('mem',LOADED.name,t);f=FILES.mem[FILES.mem.length-1]}
+   else{f.size=new Blob([t]).size;f.date=fdate(new Date())}
+   if(f!==LOADED){f.c=LOADED.c;LOADED=f}
+   S.gcDirty=false;$('#btnGcSave').hidden=true;toast('Записана в паметта: '+f.name);break}
   case'tk-clr':S.td.txt='';renderTd();break;
   case'tk-lang':S.td.bg=!S.td.bg;renderTd();break;
   case'tk-sh':S.td.shift=!S.td.shift;renderTd();break;
@@ -2918,7 +2951,7 @@ panel.addEventListener('click',e=>{
   case'td-cancel':$('#txtDlg').hidden=true;break;
   case'td-ok':{const d=S.td;
    if(d.k==='host'&&!/^[A-Za-z0-9-]{1,32}$/.test(d.txt)){toast('Името може да съдържа само латински букви, цифри и тире');break}
-   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&d.k!=='toolName'&&d.k!=='aU'&&!d.txt.trim()){toast('Полето не може да е празно');break}
+   if(d.k!=='shPass'&&d.k!=='shUser'&&d.k!=='ioName'&&d.k!=='toolName'&&d.k!=='aU'&&d.k!=='gcLine'&&!d.txt.trim()){toast('Полето не може да е празно');break}
    if(d.set)d.set(d.txt.trim());else S.draft[d.a][d.k]=d.txt;$('#txtDlg').hidden=true;renderSet();break}
   case'net-test':{const N=S.cfg.net;
    if(JSON.stringify(N)!==JSON.stringify(S.draft.net)){toast('Първо запишете промените');break}
@@ -3111,13 +3144,13 @@ panel.addEventListener('click',e=>{
     if(v==='out1'||v==='out0'){S.nd={a:'logic',k:'lgOut',txt:'',get:()=>r.arg+1,set:x=>{r.arg=Math.round(x)-1},after:renderSet};$('#numDlg').hidden=false;renderNd()}
     else if(v==='macro'){S.nd={a:'logic',k:'lgMac',txt:'',get:()=>r.arg||100,set:x=>{r.arg=Math.round(x)},after:renderSet};$('#numDlg').hidden=false;renderNd()}
     renderSet();break}
-   if(S.pick.aio){const d=S.pick.aio,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][S.pick.i],old=FN(Fl,o.f);
-    if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;
+   if(S.pick.aio){const d=S.pick.aio,Fl=d==='in'?AIN_F:AOUT_F,o=S.draft.aio[d][S.pick.i];
+    o.f=v;   /* името остава каквото го е написал потребителят */
     const pre={airP:['bar',0,10,'420'],oilP:['bar',0,25,'420'],temp:['°C',0,100,'010'],load:['%',0,100,'010'],flow:['л/мин',0,10,'420'],spindle:['об/мин',0,24000,'010']}[v];
     if(pre){o.u=pre[0];o.lo=pre[1];o.hi=pre[2];o.sig=pre[3]}
     $('#pickDlg').hidden=true;renderSet();break}
-   const{dir,i}=S.pick,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i],old=FN(Fl,o.f);
-   if(!o.n||o.n===old)o.n=v==='none'?'':FN(Fl,v);o.f=v;$('#pickDlg').hidden=true;renderSet();break}
+   const{dir,i}=S.pick,Fl=dir==='in'?IN_F:OUT_F,o=S.draft.io[dir][i];
+   o.f=v;$('#pickDlg').hidden=true;renderSet();break}
   case'pk-cancel':$('#pickDlg').hidden=true;break;
   case'io-inv':{const o=S.draft.io[S.ioTab][+v];o.inv=o.inv?0:1;renderSet();break}
   case'io-flt':{const o=S.draft.io.in[+v],F=[1,3,5,10,20,50];o.flt=F[(F.indexOf(o.flt)+1)%F.length];renderSet();break}
@@ -3154,7 +3187,7 @@ panel.addEventListener('click',e=>{
   case'f-fromline':{const f=curFile();if(!f){toast('Изберете файл');break}
    if(!f.c)f.c=compile(f.text);PDEF.__line.max=f.c.lines.length;S.nd={a:'__',k:'__line',txt:'',file:f};$('#numDlg').hidden=false;renderNd();break}
   case'gline':{if(S.state!=='idle'){toast('Ред за старт се избира, когато машината е спряна');break}
-   const i=+v;S.startLine=S.startLine===i?null:i;lastWin='';
+   const i=+v;if(S.gcEdit){S.td={a:'gc',k:'gcLine',txt:PROG[i],shift:true,line:i,get:()=>S.td.ins?'':PROG[S.td.line]??'',set:t=>PROG_EDIT(L=>{if(S.td.ins)L.splice(S.td.line,0,t);else L[S.td.line]=t})};$('#txtDlg').hidden=false;renderTd();break}S.startLine=S.startLine===i?null:i;lastWin='';
    if(S.startLine!=null)toast('Ред '+(i+1)+' е избран за старт. Натиснете ЦИКЪЛ СТАРТ.');break}
   case'sl-clr':S.startLine=null;lastWin='';break;
   case'corner':S.corner=v;renderCycs();break;

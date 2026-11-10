@@ -5,6 +5,7 @@
 #define CNC_PROGRAM_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef struct { float x, y, z; } p3_t;
 
@@ -51,5 +52,10 @@ char *program_read_file(const char *path, long *size);   /* целия файл 
 const char *program_demo_text(int i, const char **name);   /* вградените примери; NULL след последния */
 int program_load_file(const char *path);
 void program_load_demo(void);
+
+/* редакция на заредената програма (екранът „Работа“) */
+enum { PE_REPLACE, PE_DELETE, PE_INSERT };
+int program_edit(int line, int mode, const char *txt);   /* PE_INSERT: новият ред става ред line */
+char *program_join(const program_t *p, size_t *len);      /* редовете с \n (malloc) */
 
 #endif

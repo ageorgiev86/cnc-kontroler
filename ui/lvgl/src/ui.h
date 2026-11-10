@@ -54,6 +54,9 @@ typedef struct {
 typedef struct {
     lv_obj_t *card, *name, *pos, *list, *row[GC_MAX_ROWS], *num[GC_MAX_ROWS], *code[GC_MAX_ROWS];
     int nrows, row_h, first, cur, scroll;
+    lv_obj_t *edit, *save;
+    bool editing, dirty;     /* режим „Редактирай“; програмата е променена и не е записана */
+    int32_t drag;            /* колко е плъзнато от натискането (за да не се брои за докосване на ред) */
 } gcode_t;
 
 /* оверрайди, напредък и бутоните на цикъла */
@@ -68,6 +71,7 @@ void traj_update(traj_t *t, uint32_t now);
 void traj_legend(traj_t *t);
 void traj_reload(traj_t *t);
 void gcode_reload(gcode_t *g);
+void gcode_test(gcode_t *g, int line, int act);
 void ui_program_changed(void);
 void ui_run_from_line(void);     /* „Изпълни от ред“: избор на ред, старт с ЦИКЪЛ СТАРТ */   /* след зареждане на нова програма */
 void gcode_create(gcode_t *g, lv_obj_t *parent);
@@ -113,6 +117,7 @@ void files_show(void);
 void files_test(int src, int sel);
 void files_load(void);
 void files_hide(void);
+int files_save_loaded(void);   /* заредената програма в папката с програми; 0 = записана */
 void hmap_open(void);
 void hmap_label(char *b, size_t n);
 void hmap_result(lv_obj_t *parent);
@@ -122,9 +127,11 @@ void hmap_tick(void);   /* тестови действия на отделнит
 typedef void (*dlg_num_cb)(double v, void *ud);
 typedef int (*dlg_text_cb)(const char *txt, void *ud);   /* 0 = прието */
 typedef void (*dlg_pick_cb)(int idx, void *ud);
+typedef void (*dlg_line_cb)(int act, const char *txt, void *ud);   /* 0 = изтрий реда, 1 = нов ред след */
 void dlg_setpos(int ax);
 void dlg_num(const char *title, const char *unit, const char *hint, double cur, double min, double max, int dec, dlg_num_cb cb, void *ud);
 void dlg_text(const char *title, const char *cur, int maxlen, dlg_text_cb cb, void *ud);
+void dlg_text_line(const char *title, const char *cur, const char *hint, dlg_text_cb cb, dlg_line_cb lcb, void *ud);   /* ред от G-code */
 void dlg_pick(const char *title, const char *const *opts, int n, int cur, dlg_pick_cb cb, void *ud);
 void dlg_confirm(const char *title, const char *text, const char *ok, dlg_pick_cb cb, void *ud);
 void dlg_close(void);
