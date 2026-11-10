@@ -121,7 +121,12 @@ typedef struct {
 
     /* модално състояние */
     int motion;            /* 0, 10, 20, 30 (G0 … G3) */
-    int cycle;             /* 0 = няма; 730, 810 … (стъпка 2) */
+    int cycle;             /* 0 = няма; 730, 810, 820, 830, 850, 860, 870, 880, 890 (G73, G81 …) */
+    /* модалните стойности на цикъла, както са в програмата (мм; в G91: R от началното ниво, Z от R) */
+    double cyc_z, cyc_r, cyc_q, cyc_p;     /* дълбочина, равнина R, кълване, пауза (s) */
+    double cyc_i, cyc_j, cyc_k;            /* Haas G83/G73: първо кълване, намаление, минимум */
+    bool cyc_has_z, cyc_has_r, cyc_has_q, cyc_has_ijk, cyc_incr;
+    double cyc_init;                       /* началното ниво (машинно Z) при влизане в цикъла */
     int plane;             /* 17, 18, 19 */
     bool inch, incr, arc_abs, retract_r;   /* G20, G91, G90.1, G99 */
     int wcs;               /* 1 … 105 */

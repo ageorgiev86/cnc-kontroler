@@ -48,7 +48,7 @@ static int group_of(int g)
     case 200: case 210: return GR_UNITS;
     case 400: return GR_CUTTER;
     case 430: case 490: return GR_TLO;
-    case 800: return GR_CYCLE;
+    case 730: case 800: case 810: case 820: case 830: case 850: case 860: case 870: case 880: case 890: return GR_CYCLE;
     case 980: case 990: return GR_RETURN;
     case 540: case 541: case 550: case 560: case 570: case 580: case 590: case 1540: return GR_WCS;
     case 1100: case 1110: case 1120: case 1130: case 1140: case 1150: case 1160: case 1170: case 1180: case 1190:
@@ -63,8 +63,6 @@ static int group_of(int g)
 static const char *later_g(int g)
 {
     switch (g) {
-    case 730: case 810: case 820: case 830: case 850: case 860: case 870: case 880: case 890:
-        return "идва в стъпка 2 (цикли)";
     case 410: case 411: case 420: case 421:
         return "идва в стъпка 2а (компенсация на радиуса)";
     case 50: case 51: case 52: case 120: case 130: case 150: case 160:
@@ -328,6 +326,113 @@ static int do_g28(gc_interp_t *in, const gc_block_t *b, int g, int line, gc_err_
     return 0;
 }
 
+/* ---------- цикли за пробиване (G73, G81–G89) ---------- */
+#define PECK_CLEAR 0.25   /* мм: G83 слиза бързо до толкова над предишната дълбочина; G73 се връща толкова нагоре */
+
+static void zmove(gc_interp_t *in, double zm, bool rapid, int line)
+{
+    double t[GC_NAX];
+    memcpy(t, in->pos, sizeof t);
+    t[GC_Z] = zm;
+    move_to(in, t, rapid, line);
+}
+
+static void dwell(gc_interp_t *in, double s, int line) { if (s > 0) emit_simple(in, GC_DWELL, 0, s, line); }
+
+/* кълване: следващата дълбочина по Q или по Haas I/J/K */
+static double next_peck(const gc_interp_t *in, double *cur_peck)
+{
+    double p = *cur_peck;
+    if (in->cyc_has_ijk) {
+        double n = p - in->cyc_j;
+        *cur_peck = n > in->cyc_k ? n : (in->cyc_k > 0 ? in->cyc_k : p);
+    }
+    return p;
+}
+
+static int do_cycle(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
+{
+    int g = in->cycle;
+    char gb[16];
+    if (in->plane != 17) return fail(e, -1, "Циклите за пробиване са само в равнина G17");
+    if (in->feed <= 0) return fail(e, -1, "Липсва подаване F за цикъла");
+    if (!in->cyc_has_z) return fail(e, -1, "Цикълът G%s няма дълбочина Z", gname(g, gb));
+    if (!in->cyc_has_r) return fail(e, -1, "Цикълът G%s няма равнина R", gname(g, gb));
+    if ((g == 730 || g == 830) && !in->cyc_has_q && !in->cyc_has_ijk)
+        return fail(e, -1, "G%s изисква кълване Q (или I, J, K на Haas)", gname(g, gb));
+    int reps = 1;
+    if (GC_HAS(b, 'L')) {
+        double l = GC_VAL(b, 'L');
+        if (l < 0 || l > 9999 || fabs(l - lround(l)) > 1e-9) return fail(e, b->col['L' - 'A'], "Невалиден брой повторения L%g", l);
+        reps = (int)lround(l);   /* L0: само задава цикъла (Haas) */
+    }
+    double off = offset(in, GC_Z);
+    double init_p = in->cyc_init - off;
+    double r_p = in->cyc_incr ? init_p + in->cyc_r : in->cyc_r;
+    double z_p = in->cyc_incr ? r_p + in->cyc_z : in->cyc_z;
+    if (z_p > r_p + 1e-9) return fail(e, -1, "Дълбочината Z%.3f е над равнината R%.3f", z_p, r_p);
+    double r_m = r_p + off, z_m = z_p + off;
+    double top_m = in->retract_r ? r_m : (in->cyc_init > r_m ? in->cyc_init : r_m);   /* G99: R, G98: началното ниво */
+
+    for (int n = 0; n < reps; n++) {
+        /* позициониране: първо нагоре до R, ако сме под нея, после XY бързо, после до R */
+        double t[GC_NAX];
+        axis_target(in, b, t);
+        t[GC_Z] = in->pos[GC_Z];
+        if (in->pos[GC_Z] < r_m) { zmove(in, r_m, true, line); t[GC_Z] = r_m; }
+        move_to(in, t, true, line);
+        if (in->pos[GC_Z] > r_m) zmove(in, r_m, true, line);
+
+        switch (g) {
+        case 830: case 730: {   /* G83 кълване с пълно връщане до R; G73 с чупене на стружката */
+            double peck = in->cyc_has_ijk ? in->cyc_i : in->cyc_q, cur = r_m, acc = 0;
+            bool full = g == 830 || (!in->cyc_has_ijk && in->cyc_k > 0);   /* G73 Q K: до R след всеки K */
+            while (cur > z_m + 1e-9) {
+                double step = next_peck(in, &peck), nxt = cur - step;
+                if (nxt < z_m) nxt = z_m;
+                if (g == 830 && cur < r_m - 1e-9) zmove(in, cur + PECK_CLEAR < r_m ? cur + PECK_CLEAR : r_m, true, line);
+                zmove(in, nxt, false, line);
+                acc += cur - nxt;
+                cur = nxt;
+                if (cur <= z_m + 1e-9) break;
+                if (g == 830) zmove(in, r_m, true, line);
+                else if (full && acc >= in->cyc_k - 1e-9) { zmove(in, r_m, true, line); zmove(in, cur + PECK_CLEAR, true, line); acc = 0; }
+                else zmove(in, cur + PECK_CLEAR, true, line);
+            }
+            dwell(in, in->cyc_p, line);
+            zmove(in, top_m, true, line);
+            break;
+        }
+        case 810:
+            zmove(in, z_m, false, line);
+            zmove(in, top_m, true, line);
+            break;
+        case 820:
+            zmove(in, z_m, false, line);
+            dwell(in, in->cyc_p, line);
+            zmove(in, top_m, true, line);
+            break;
+        case 850: case 890:   /* разстъргване: навън с подаване до R */
+            zmove(in, z_m, false, line);
+            if (g == 890) dwell(in, in->cyc_p, line);
+            zmove(in, r_m, false, line);
+            if (top_m > r_m) zmove(in, top_m, true, line);
+            break;
+        case 860: case 870: case 880:   /* спиране на шпиндела на дъното; G87/G88 на Haas: пауза за ръчно излизане */
+            zmove(in, z_m, false, line);
+            if (g == 880) dwell(in, in->cyc_p, line);
+            emit_simple(in, GC_SPINDLE, 0, 0, line);
+            if (g != 860) emit_simple(in, GC_PAUSE, 0, 0, line);
+            zmove(in, top_m, true, line);
+            if (in->sp_dir) emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
+            break;
+        default:
+            return fail(e, -1, "Цикълът G%s не се поддържа", gname(g, gb));
+        }
+    }
+    return 0;
+}
+
 /* ---------- един ред ---------- */
 static bool has_m(const gc_block_t *b, int m)
 {
@@ -534,7 +639,40 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     if (grp[GR_DIST] >= 0) in->incr = grp[GR_DIST] == 910;
     if (grp[GR_ARCDIST] >= 0) in->arc_abs = grp[GR_ARCDIST] == 901;
     if (grp[GR_RETURN] >= 0) in->retract_r = grp[GR_RETURN] == 990;
-    if (grp[GR_CYCLE] == 800) in->cycle = 0;
+    if (grp[GR_CYCLE] == 800) {   /* G80: край на цикъла; Z, R, Q, P, I, J, K се изчистват (Fanuc) */
+        in->cycle = 0;
+        in->cyc_has_z = in->cyc_has_r = in->cyc_has_q = in->cyc_has_ijk = false;
+        in->cyc_p = in->cyc_i = in->cyc_j = in->cyc_k = 0;
+    } else if (grp[GR_CYCLE] > 0) {
+        int g = grp[GR_CYCLE];
+        if (!haas && (g == 870 || g == 880))
+            return fail(e, -1, "G%s е цикъл на Haas (в Mach3 G87 е обратно разстъргване и не се поддържа)", gname(g, gb));
+        if (!in->cycle) in->cyc_init = in->pos[GC_Z];   /* началното ниво: Z при влизане в цикъла */
+        in->cycle = g;
+        in->cyc_incr = in->incr;
+    }
+    if (in->cycle) {   /* модалните стойности на цикъла (Z тук е дълбочина, не движение) */
+        double u = unit(in, GC_Z);
+        if (GC_HAS(b, 'Z')) { in->cyc_z = GC_VAL(b, 'Z') * u; in->cyc_has_z = true; in->cyc_incr = in->incr; }
+        if (GC_HAS(b, 'R')) { in->cyc_r = GC_VAL(b, 'R') * u; in->cyc_has_r = true; in->cyc_incr = in->incr; }
+        if (GC_HAS(b, 'Q')) {
+            double q = GC_VAL(b, 'Q') * u;
+            if (q <= 0) return fail(e, b->col['Q' - 'A'], "Кълването Q трябва да е положително");
+            in->cyc_q = q; in->cyc_has_q = true;
+            if (!GC_HAS(b, 'I')) in->cyc_has_ijk = false;   /* Q в реда: кълване по Q */
+        }
+        if (GC_HAS(b, 'I') || GC_HAS(b, 'J') || GC_HAS(b, 'K')) {
+            if (GC_HAS(b, 'I')) in->cyc_i = fabs(GC_VAL(b, 'I')) * u;
+            if (GC_HAS(b, 'J')) in->cyc_j = fabs(GC_VAL(b, 'J')) * u;
+            if (GC_HAS(b, 'K')) in->cyc_k = fabs(GC_VAL(b, 'K')) * u;
+            if (GC_HAS(b, 'I')) in->cyc_has_ijk = in->cyc_i > 0;   /* I в реда: кълване по I, J, K */
+        }
+        if (GC_HAS(b, 'P') && non_modal < 0) {   /* пауза: Haas с точка = s, без = ms; Mach3 = ms (постпроцесорът × 1000) */
+            double pv = GC_VAL(b, 'P');
+            if (pv < 0) return fail(e, b->col['P' - 'A'], "Отрицателна пауза P");
+            in->cyc_p = (haas && (b->dot >> ('P' - 'A') & 1u)) ? pv : pv / 1000.0;
+        }
+    }
 
     /* --- 6. не-модални: G10, G28, G30, G92 --- */
     bool axes_used = false;
@@ -581,7 +719,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     /* --- 7. движение --- */
     if (grp[GR_MOTION] >= 0) {
         in->motion = grp[GR_MOTION];
-        in->cycle = 0;
+        if (grp[GR_CYCLE] < 0) in->cycle = 0;   /* G0–G3 отменят цикъла (Fanuc) */
     }
     if (g53) {
         int mo = in->motion;
@@ -592,6 +730,8 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         for (int a = 0; a < GC_NAX; a++)
             if (GC_HAS(b, AXL[a])) tgt[a] = GC_VAL(b, AXL[a]) * unit(in, a);
         move_to(in, tgt, mo == 0, line);
+    } else if (in->cycle && !axes_used && (has_axes(b) || GC_HAS(b, 'R') || grp[GR_CYCLE] > 0)) {
+        if (do_cycle(in, b, line, e)) return -1;
     } else if (has_axes(b) && !axes_used) {
         double tgt[GC_NAX];
         switch (in->motion) {
