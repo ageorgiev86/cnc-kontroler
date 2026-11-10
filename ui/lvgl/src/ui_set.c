@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "io.h"
+void program_reparse(void);   /* program.h (там P засенчва местните P) */
 #include "ui.h"
 #include "ui_style.h"
 
@@ -701,7 +702,9 @@ static void on_save(lv_event_t *e)
             }
         }
     bool disp_ch = cfg_changed("disp.dRes") || cfg_changed("disp.dRot");
+    bool prog_ch = cfg_changed("mach.gDial") || cfg_changed("mach.miAx");
     cfg_commit();
+    if (prog_ch) { program_reparse(); ui_program_changed(); }   /* програмата се чете наново с новия диалект */
     machine_apply_cfg();
     char t[160];
     if (type_ch) snprintf(t, sizeof t, "Машината е „%s“. Натиснете HOME.", opt_label(P_MACH[0].opts, cfg_str("mach.type")));

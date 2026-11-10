@@ -68,6 +68,12 @@ void ui_program_changed(void)
     M.op = 0; M.op_s = 0; M.line = -1; M.prog_done = false; M.done_t = 0; M.run_time = 0; M.t_total = 0;
     traj_reload(&traj);
     gcode_reload(&gc);
+    if (P.err_line >= 0) {   /* първата грешка на интерпретатора */
+        char t[260];
+        snprintf(t, sizeof t, "Ред %d: %s", P.err_line + 1, P.err);
+        machine_toast(t, lv_tick_get(), 8000);
+        M.msg_kind = MSG_BAD;
+    }
 }
 
 void ui_traj_slot(int scr, int col, int cspan, int row, int rspan)
@@ -209,6 +215,13 @@ void ui_create(lv_display_t *disp)
     ui_style_init(w, h);
     machine_init();
     if (!P.nop) program_load_demo();
+    else program_reparse();   /* заредена от командния ред преди настройките: с диалекта и нулите */
+    if (P.err_line >= 0) {
+        char t[260];
+        snprintf(t, sizeof t, "Ред %d: %s", P.err_line + 1, P.err);
+        machine_toast(t, lv_tick_get(), 8000);
+        M.msg_kind = MSG_BAD;
+    }
 
     lv_obj_t *scr = lv_screen_active();
     lv_obj_remove_style_all(scr);
@@ -401,6 +414,7 @@ void ui_test(const char *act)
     else if (!strncmp(act, "gcfn:", 5)) gcode_test(&gc, 0, atoi(arg));       /* 0 изтрий реда, 1 нов ред след */
     else if (!strncmp(act, "gcsave", 6)) gcode_test(&gc, 0, 2);
     else if (!strncmp(act, "load", 4)) files_load();
+    else if (!strncmp(act, "reparse", 7)) { program_reparse(); ui_program_changed(); }
     else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
     else if (!strncmp(act, "file:", 5)) files_test(arg[0] - '0', atoi(arg + 2));
     else if (!strncmp(act, "part:", 5)) machine_wcs_toggle(atoi(arg), now);

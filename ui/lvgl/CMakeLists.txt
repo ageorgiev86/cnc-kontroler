@@ -34,6 +34,9 @@ if(NOT CNC_UI_BUILD_SIM AND NOT CNC_UI_BUILD_DEVICE)
   message(FATAL_ERROR "Няма какво да се строи: нужни са libsdl2-dev (симулатор) или libdrm-dev + libinput-dev (платка).")
 endif()
 
+# Ядрото (core/): интерпретатор и планер на G-code, без LVGL
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../core ${CMAKE_CURRENT_BINARY_DIR}/core EXCLUDE_FROM_ALL)
+
 # Изходните файлове на LVGL (без ThorVG, който е изключен в lv_conf.h)
 file(GLOB_RECURSE LVGL_SOURCES CONFIGURE_DEPENDS ${LVGL_DIR}/src/*.c)
 file(GLOB FONT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fonts/gen/*.c)
@@ -82,7 +85,7 @@ function(cnc_ui_target name sim main_src)
   add_executable(${name} ${main_src} ${APP_SOURCES} ${FONT_SOURCES})
   target_include_directories(${name} PRIVATE src)
   target_compile_options(${name} PRIVATE ${APP_WARNINGS})
-  target_link_libraries(${name} PRIVATE ${name}_lvgl m)
+  target_link_libraries(${name} PRIVATE ${name}_lvgl cnc-core m)
 endfunction()
 
 if(CNC_UI_BUILD_SIM)

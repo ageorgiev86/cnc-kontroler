@@ -40,6 +40,8 @@ typedef struct {
     int tools[PROG_MAX_TOOLS];
     int ntools;
     float t_total;     /* номинално време, s */
+    int err_line;      /* първата грешка на интерпретатора (ред от 0) или -1 */
+    char err[200];
     int cap_pt, cap_op, cap_line;
 } program_t;
 
@@ -51,6 +53,7 @@ void program_free_into(program_t *p);
 char *program_read_file(const char *path, long *size);   /* целия файл (malloc) или NULL */
 const char *program_demo_text(int i, const char **name);   /* вградените примери; NULL след последния */
 int program_load_file(const char *path);
+void program_reparse(void);   /* наново през ядрото (сменен диалект, оси, нули) */
 void program_load_demo(void);
 
 /* редакция на заредената програма (екранът „Работа“) */

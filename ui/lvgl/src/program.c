@@ -1,5 +1,9 @@
 #include "program.h"
 
+#include "cnc/gcode.h"
+#include "config.h"
+#include "machine.h"
+
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
@@ -13,6 +17,7 @@ static program_t *G = &P;   /* програмата, в която се чете
 #define TOOL_TIME 8.0f       /* s за смяна на инструмент */
 #define SPINDLE_TIME 2.0f
 #define ARC_STEP_DEG 4.0f
+#define DIAL_HAAS() (!strcmp(cfg_str("mach.gDial"), "haas"))
 
 /* растящи масиви */
 #define GROW(arr, n, cap)                                              \
@@ -87,29 +92,7 @@ static void bound(p3_t p)
     if (p.z > G->z1) G->z1 = p.z;
 }
 
-/* Чете думите на един ред; връща брой. Коментари (...) и ; се пропускат. */
-typedef struct { char l; double v; } word_t;
-
-static int words(const char *s, word_t *w, int max)
-{
-    int n = 0;
-    while (*s && n < max) {
-        if (*s == '(') { while (*s && *s != ')') s++; if (*s) s++; continue; }
-        if (*s == ';') break;
-        if (isalpha((unsigned char)*s)) {
-            char l = (char)toupper((unsigned char)*s++);
-            while (*s == ' ') s++;
-            char *e;
-            double v = strtod(s, &e);
-            if (e != s) { w[n].l = l; w[n].v = v; n++; s = e; continue; }
-            continue;
-        }
-        s++;
-    }
-    return n;
-}
-
-/* права линия като отделен ход (циклите G81–G83) */
+/* права линия като отделен ход */
 static void line_op(int li, p3_t a, p3_t b, bool rapid, float feed, int tool, float *t)
 {
     float len = hypotf(hypotf(b.x - a.x, b.y - a.y), b.z - a.z);
@@ -120,7 +103,7 @@ static void line_op(int li, p3_t a, p3_t b, bool rapid, float feed, int tool, fl
     o->tool = tool;
     o->p0 = add_pt(a, 0);
     add_pt(b, len);
-    if (!rapid) { bound(a); bound(b); } else bound(b);
+    if (!rapid) { bound(a); bound(b); }   /* бързите ходове (и G53 до горе) не разширяват границите */
     o->np = 2;
     o->len = len;
     o->t0 = *t;
@@ -128,140 +111,153 @@ static void line_op(int li, p3_t a, p3_t b, bool rapid, float feed, int tool, fl
     o->t1 = *t;
 }
 
+/* ---------- командите на ядрото (core/: интерпретаторът) → ходове за изгледа ---------- */
+static struct {
+    double pos[GC_NAX];    /* машинни координати (както идват от ядрото) */
+    int tool, wcs;         /* wcs: действащата нула (1 = G54 … 6 = G59; другите без отместване) */
+    float t;
+} st;
+
+/* машинна → работна точка за изгледа (по нулата, избрана в програмата) */
+static p3_t p3(const double *a)
+{
+    const double *o = st.wcs >= 1 && st.wcs <= 6 ? M.wcs_off[st.wcs] : NULL;
+    return (p3_t){(float)(a[0] - (o ? o[0] : 0)), (float)(a[1] - (o ? o[1] : 0)), (float)(a[2] - (o ? o[2] : 0))};
+}
+
+static void arc_op(const gc_cmd_t *c)
+{
+    int a0 = GC_X, a1 = GC_Y, lin = GC_Z;
+    if (c->plane == GC_PLANE_ZX) { a0 = GC_Z; a1 = GC_X; lin = GC_Y; }
+    if (c->plane == GC_PLANE_YZ) { a0 = GC_Y; a1 = GC_Z; lin = GC_X; }
+    double r = hypot(st.pos[a0] - c->ctr[a0], st.pos[a1] - c->ctr[a1]);
+    double r1 = hypot(c->tgt[a0] - c->ctr[a0], c->tgt[a1] - c->ctr[a1]);
+    double t0 = atan2(st.pos[a1] - c->ctr[a1], st.pos[a0] - c->ctr[a0]);
+    double t1 = atan2(c->tgt[a1] - c->ctr[a1], c->tgt[a0] - c->ctr[a0]);
+    double sw = c->cw ? t0 - t1 : t1 - t0;
+    while (sw <= 1e-9) sw += 2 * M_PI;
+    sw += 2 * M_PI * c->turns;
+    if (c->cw) sw = -sw;
+    int steps = (int)ceil(fabs(sw) * 180 / M_PI / ARC_STEP_DEG);
+    if (steps < 2) steps = 2;
+    op_t *o = add_op(OP_MOVE, c->line);
+    o->feed = (float)c->feed;
+    o->tool = st.tool;
+    o->p0 = add_pt(p3(st.pos), 0);
+    bound(p3(st.pos));
+    float len = 0;
+    p3_t prev = p3(st.pos);
+    for (int k = 1; k <= steps; k++) {
+        double f = (double)k / steps, g = t0 + sw * f, rr = r + (r1 - r) * f, q[GC_NAX];
+        memcpy(q, st.pos, sizeof q);
+        q[a0] = c->ctr[a0] + rr * cos(g);
+        q[a1] = c->ctr[a1] + rr * sin(g);
+        q[lin] = st.pos[lin] + (c->tgt[lin] - st.pos[lin]) * f;
+        if (k == steps) memcpy(q, c->tgt, sizeof q);
+        p3_t pq = p3(q);
+        len += hypotf(hypotf(pq.x - prev.x, pq.y - prev.y), pq.z - prev.z);
+        add_pt(pq, len);
+        bound(pq);
+        prev = pq;
+    }
+    o->np = G->npt - o->p0;
+    o->len = len;
+    o->t0 = st.t;
+    st.t += len / ((c->feed > 1 ? (float)c->feed : 1) / 60.0f);
+    o->t1 = st.t;
+}
+
+static void on_cmd(void *ctx, const gc_cmd_t *c)
+{
+    (void)ctx;
+    op_t *o;
+    switch (c->kind) {
+    case GC_RAPID: case GC_FEED:
+        line_op(c->line, p3(st.pos), p3(c->tgt), c->kind == GC_RAPID, (float)c->feed, st.tool, &st.t);
+        memcpy(st.pos, c->tgt, sizeof st.pos);
+        break;
+    case GC_ARC:
+        arc_op(c);
+        memcpy(st.pos, c->tgt, sizeof st.pos);
+        break;
+    case GC_TOOL_CHANGE:
+        o = add_op(OP_TOOL, c->line);
+        o->tool = st.tool = c->ival;
+        note_tool(c->ival);
+        o->t0 = st.t; st.t += TOOL_TIME; o->t1 = st.t;
+        break;
+    case GC_SPINDLE:
+        o = add_op(OP_SPINDLE, c->line);
+        o->s = c->ival ? (c->val > 0 ? (int)c->val : 10000) : 0;
+        o->t0 = st.t;
+        if (c->ival) st.t += SPINDLE_TIME;
+        o->t1 = st.t;
+        break;
+    case GC_COOLANT:
+        o = add_op(OP_COOL, c->line);
+        o->on = c->ival != 0;
+        o->t0 = o->t1 = st.t;
+        break;
+    case GC_DWELL:
+        st.t += (float)c->val;
+        break;
+    case GC_WCS_SELECT:
+        st.wcs = c->ival;
+        break;
+    default:
+        break;
+    }
+}
+
+/* осите от настройката „Оси“ на фрезата */
+static unsigned axes_mask(unsigned *rot)
+{
+    const char *a = cfg_str("mach.miAx");
+    unsigned m = 7;
+    if (!strcmp(a, "4a")) m |= 1u << GC_A;
+    else if (!strcmp(a, "5ac")) m |= 1u << GC_A | 1u << GC_C;
+    else if (!strcmp(a, "5bc")) m |= 1u << GC_B | 1u << GC_C;
+    else if (!strcmp(a, "5ab")) m |= 1u << GC_A | 1u << GC_B;
+    else if (!strcmp(a, "6")) m |= 7u << GC_A;
+    *rot = m & (7u << GC_A);
+    return m;
+}
+
 static void parse(void)
 {
-    p3_t pos = {0, 0, 25};
-    int mode = 0, tool = 0;
-    float feed = 1000;
-    bool inc = false;
-    double cz = 0, cr = 2;      /* цикли G81–G83: дълбочина и равнина R */
-    bool g98 = true;
+    memset(&st, 0, sizeof st);
+    st.wcs = M.wcs >= 1 && M.wcs <= 6 ? M.wcs : 1;
+    for (int a = 0; a < 3; a++) st.pos[a] = M.wcs_off[st.wcs][a];   /* началото: над нулата на Z 25 */
+    st.pos[GC_Z] += 25;
     G->x0 = G->y0 = G->z0 = 1e9f;
     G->x1 = G->y1 = G->z1 = -1e9f;
-    float t = 0;
+    G->err_line = -1;
+    G->err[0] = 0;
 
-    for (int li = 0; li < G->nlines; li++) {
-        word_t w[32];
-        int n = words(G->line[li], w, 32);
-        if (!n) continue;
-        bool has_xyz = false, end = false;
-        p3_t tgt = pos;
-        double I = 0, J = 0, R = 0;
-        bool has_r = false;
-        int T = -1, S = -1;
-        /* първо G думите: режимът важи за целия ред */
-        for (int k = 0; k < n; k++) {
-            if (w[k].l != 'G') continue;
-            int iv = (int)lround(w[k].v);
-            if (iv >= 0 && iv <= 3) mode = iv;
-            else if (iv == 90) inc = false;
-            else if (iv == 91) inc = true;
-            else if (iv >= 81 && iv <= 83) mode = 81;
-            else if (iv == 80) mode = 0;
-            else if (iv == 98) g98 = true;
-            else if (iv == 99) g98 = false;
-        }
-        for (int k = 0; k < n; k++) {
-            int iv = (int)lround(w[k].v);
-            if (mode == 81 && (w[k].l == 'Z' || w[k].l == 'R')) {
-                if (w[k].l == 'Z') cz = w[k].v; else cr = w[k].v;
-                continue;
-            }
-            switch (w[k].l) {
-            case 'G': break;
-            case 'X': tgt.x = (float)(inc ? pos.x + w[k].v : w[k].v); has_xyz = true; break;
-            case 'Y': tgt.y = (float)(inc ? pos.y + w[k].v : w[k].v); has_xyz = true; break;
-            case 'Z': tgt.z = (float)(inc ? pos.z + w[k].v : w[k].v); has_xyz = true; break;
-            case 'I': I = w[k].v; break;
-            case 'J': J = w[k].v; break;
-            case 'R': R = w[k].v; has_r = true; break;
-            case 'F': feed = (float)w[k].v; break;
-            case 'T': T = iv; break;
-            case 'S': S = iv; break;
-            case 'M':
-                if (iv == 6 && T >= 0) {
-                    op_t *o = add_op(OP_TOOL, li);
-                    o->tool = tool = T;
-                    note_tool(T);
-                    o->t0 = t; t += TOOL_TIME; o->t1 = t;
-                } else if (iv == 3 || iv == 4) {
-                    op_t *o = add_op(OP_SPINDLE, li);
-                    o->s = S > 0 ? S : 10000;
-                    o->t0 = t; t += SPINDLE_TIME; o->t1 = t;
-                } else if (iv == 5) {
-                    op_t *o = add_op(OP_SPINDLE, li);
-                    o->t0 = o->t1 = t;
-                } else if (iv == 8 || iv == 9) {
-                    op_t *o = add_op(OP_COOL, li);
-                    o->on = iv == 8;
-                    o->t0 = o->t1 = t;
-                } else if (iv == 30 || iv == 2) {
-                    end = true;
-                }
-                break;
-            default: break;
-            }
-        }
-        if (has_xyz && mode == 81) {   /* пробиване: бързо до XY и R, подаване до Z, бързо обратно */
-            p3_t a = pos, b = {tgt.x, tgt.y, pos.z}, c = {tgt.x, tgt.y, (float)cr}, d = {tgt.x, tgt.y, (float)cz};
-            line_op(li, a, b, true, feed, tool, &t);
-            line_op(li, b, c, true, feed, tool, &t);
-            line_op(li, c, d, false, feed, tool, &t);
-            p3_t e = g98 ? b : c;
-            line_op(li, d, e, true, feed, tool, &t);
-            pos = e;
-        } else if (has_xyz) {
-            op_t *o = add_op(OP_MOVE, li);
-            o->rapid = mode == 0;
-            o->feed = feed;
-            o->tool = tool;
-            o->p0 = add_pt(pos, 0);
-            float len = 0;
-            if (mode == 2 || mode == 3) {
-                bool cw = mode == 2;
-                double cx, cy;
-                if (has_r) {   /* дъга с радиус */
-                    double dx = tgt.x - pos.x, dy = tgt.y - pos.y, d = hypot(dx, dy);
-                    double h = sqrt(fmax(0, R * R - d * d / 4)), sg = (cw ? -1 : 1) * (R > 0 ? 1 : -1);
-                    cx = (pos.x + tgt.x) / 2 - sg * h * dy / (d > 0 ? d : 1);
-                    cy = (pos.y + tgt.y) / 2 + sg * h * dx / (d > 0 ? d : 1);
-                } else {
-                    cx = pos.x + I;
-                    cy = pos.y + J;
-                }
-                double r = hypot(pos.x - cx, pos.y - cy);
-                double a0 = atan2(pos.y - cy, pos.x - cx), a1 = atan2(tgt.y - cy, tgt.x - cx), sw = a1 - a0;
-                if (cw) { if (sw >= -1e-9) sw -= 2 * M_PI; }
-                else { if (sw <= 1e-9) sw += 2 * M_PI; }
-                int steps = (int)ceil(fabs(sw) * 180 / M_PI / ARC_STEP_DEG);
-                if (steps < 2) steps = 2;
-                p3_t prev = pos;
-                for (int k = 1; k <= steps; k++) {
-                    double f = (double)k / steps, g = a0 + sw * f;
-                    p3_t q = {(float)(cx + r * cos(g)), (float)(cy + r * sin(g)), (float)(pos.z + (tgt.z - pos.z) * f)};
-                    if (k == steps) { q.x = tgt.x; q.y = tgt.y; }
-                    len += hypotf(hypotf(q.x - prev.x, q.y - prev.y), q.z - prev.z);
-                    add_pt(q, len);
-                    bound(q);
-                    prev = q;
-                }
-            } else {
-                len = hypotf(hypotf(tgt.x - pos.x, tgt.y - pos.y), tgt.z - pos.z);
-                add_pt(tgt, len);
-                if (!o->rapid) { bound(pos); bound(tgt); }
-                else bound(tgt);
-            }
-            o->np = G->npt - o->p0;
-            o->len = len;
-            o->t0 = t;
-            t += len / ((o->rapid ? RAPID_FEED : (feed > 1 ? feed : 1)) / 60.0f);
-            o->t1 = t;
-            pos = tgt;
-        }
-        if (end) break;
+    /* прегледът е в работни координати: нулите и дължините са 0, диаметрите от таблицата (за G41/G42) */
+    gc_tables_t *tab = calloc(1, sizeof *tab);
+    if (!tab) abort();
+    gc_tables_init(tab);
+    for (int t = 0; t <= TOOL_MAX && t < GC_TOOL_N; t++) tab->tool[t].dia = TT[t].dia;
+    for (int w = 1; w <= 6; w++)
+        for (int a = 0; a < 3; a++) tab->wcs[w][a] = M.wcs_off[w][a];
+    gc_config_t cfg = {DIAL_HAAS() ? GC_DIALECT_HAAS : GC_DIALECT_MACH3, 0, 0, false, on_cmd, NULL};
+    cfg.axes = axes_mask(&cfg.rotary);
+    gc_interp_t *in = malloc(sizeof *in);
+    if (!in) abort();
+    gc_interp_init(in, &cfg, tab, st.pos);
+    in->wcs = st.wcs;   /* без G54 … G59 в програмата: активната нула */
+    char *text = program_join(G, NULL);
+    gc_err_t e;
+    if (gc_run_text(in, text, &e)) {
+        G->err_line = e.line;
+        snprintf(G->err, sizeof G->err, "%s", e.msg);
     }
-    add_op(OP_END, G->nlines ? G->nlines - 1 : 0)->t0 = t;
-    G->t_total = t;
+    free(text);
+    free(in);
+    free(tab);
+    add_op(OP_END, G->nlines ? G->nlines - 1 : 0)->t0 = st.t;
+    G->t_total = st.t;
     if (G->x0 > G->x1) { G->x0 = -10; G->x1 = 10; G->y0 = -10; G->y1 = 10; G->z0 = G->z1 = 0; }
 }
 
@@ -294,6 +290,15 @@ int program_parse_into(program_t *dst, const char *name, const char *text)
 }
 
 int program_load_text(const char *name, const char *text) { return program_parse_into(&P, name, text); }
+
+void program_reparse(void)
+{
+    if (!P.nlines) return;
+    char *t = program_join(&P, NULL), name[sizeof P.name];
+    snprintf(name, sizeof name, "%s", P.name);
+    program_load_text(name, t);
+    free(t);
+}
 
 char *program_join(const program_t *p, size_t *len)
 {

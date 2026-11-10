@@ -10,6 +10,7 @@ static const char *const O_net_mode[] = {"dhcp", "Автоматично (DHCP)"
 static const char *const O_net_shType[] = {"smb", "SMB (Windows)", "nfs", "NFS (Linux)", NULL};
 static const char *const O_mach_type[] = {"mill", "Фреза / рутер", "laser", "Лазер", "plasma", "Плазма", "lathe", "Струг", NULL};
 static const char *const O_mach_miAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", "6", "XYZ + A B C", NULL};
+static const char *const O_mach_gDial[] = {"mach3", "Mach3", "haas", "Haas", NULL};
 static const char *const O_mach_lzAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", NULL};
 static const char *const O_mach_plAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", NULL};
 static const char *const O_mach_plIhs[] = {"ohm", "Омичен контакт", "float", "Плаващ датчик", NULL};
@@ -148,6 +149,8 @@ const pdef_t P_MACH[] = {
     {NULL, "Лазер", NULL, PT_HDR, 0, 0, 0, NULL, NULL, 0, NULL, NULL, NULL, sh10, NULL, {NULL}},
     {NULL, "Фреза / рутер", NULL, PT_HDR, 0, 0, 0, NULL, NULL, 0, NULL, NULL, NULL, sh11, NULL, {NULL}},
     {"miAx", "Оси", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_mach_miAx, "Кои оси са активни. Въртящите оси се показват на основния екран, в ръчното движение и в диагностиката само когато са активни. Всяка ос може да се включи и поотделно от „Оси и мотори“.", NULL, sh11, "3", {NULL}},
+    {"gDial", "Диалект на G-code", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_mach_gDial, "Как се четат кодовете, които двата вида постпроцесори пишат различно: G4 P (Mach3: секунди; Haas: ms без точка), P в циклите, G10 L20, G51, G70–G72. Mach3: ArtCAM, FlatCAM и SolidCAM с постпроцесор за Mach3. Haas: постпроцесорите за VF3 / VF3SS.", NULL, sh11, "mach3", {NULL}},
+    {"gTol", "Допуск на ъглите (G64)", "мм", PT_NUM, 3, 0.001, 1, NULL, NULL, 0, NULL, "Колко може фрезата да се отклони от върха на ъгъла, за да не спира в него. По-голям допуск: по-бързо, по-заоблени ъгли. G64 P в програмата го сменя за нея; G61 спира във всеки ъгъл.", NULL, sh11, "0.02", {NULL}},
     {"lzAx", "Оси", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_mach_lzAx, "XYZ + A е за рязане на тръби и профили с въртящ патронник. Вариантите с 5 оси са за накланяща се глава (обемни детайли, скосени ръбове).", NULL, sh10, "3", {NULL}},
     {"lzMax", "Макс. мощност", "%", PT_NUM, 0, 1, 100, NULL, NULL, 0, NULL, "Горна граница на мощността, независимо от S в програмата (S1000 = 100 %).", NULL, sh10, "100", {NULL}},
     {"lzPwm", "PWM честота", "Hz", PT_NUM, 0, 100, 50000, NULL, NULL, 0, NULL, "Честотата на сигнала към захранването на лазера. Взима се от документацията на захранването: CO2 обикновено 1–20 kHz, диодни лазери 1–5 kHz.", NULL, sh10, "1000", {NULL}},
