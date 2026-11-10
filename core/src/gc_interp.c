@@ -261,7 +261,11 @@ static bool has_axes(const gc_block_t *b)
 }
 
 /* ---------- инициализация ---------- */
-void gc_tables_init(gc_tables_t *t) { memset(t, 0, sizeof *t); }
+void gc_tables_init(gc_tables_t *t)
+{
+    memset(t, 0, sizeof *t);
+    for (int k = 0; k < 500; k++) t->pvar[k] = NAN;
+}
 
 static void reset_modal(gc_interp_t *in)
 {
@@ -300,6 +304,7 @@ void gc_interp_init(gc_interp_t *in, const gc_config_t *cfg, gc_tables_t *tab, c
     in->tool_next = -1;
     if (start) memcpy(in->pos, start, sizeof in->pos);
     memcpy(in->comp_out, in->pos, sizeof in->comp_out);
+    for (int k = 0; k < 500; k++) in->var[k] = NAN;
 }
 
 /* ---------- дъга ---------- */
@@ -729,17 +734,54 @@ static bool has_m(const gc_block_t *b, int m)
     return false;
 }
 
+/* #n: #1 … #499 в интерпретатора, #500 … #999 в таблиците; системни само за четене */
+static double rd_var(void *ctx, int n)
+{
+    const gc_interp_t *in = ctx;
+    if (n >= 1 && n < 500) return in->var[n];
+    if (n >= 500 && n < 1000) return in->tab->pvar[n - 500];
+    if (n >= 5021 && n < 5021 + GC_NAX) return in->pos[n - 5021];          /* машинната позиция */
+    if (n >= 5041 && n < 5041 + GC_NAX) return gc_prog_pos(in, n - 5041);   /* програмната позиция */
+    if (n == 4109) return in->feed;
+    if (n == 4119) return in->s;
+    if (n == 4120) return in->tool;
+    return NAN;
+}
+
 int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
 {
     gc_block_t blk, *b = &blk;
+    gc_macro_t mac;
     in->flow = GC_FLOW_NONE;
     e->line = line;
     e->col = -1;
     e->msg[0] = 0;
-    if (gc_parse_line(text, b, e)) return -1;
+    if (gc_parse_line_v(text, b, e, rd_var, in, &mac)) return -1;
     if (b->block_delete && in->cfg.block_delete) return 0;
     if (b->empty || b->percent) return 0;
     if (in->ended) return 0;
+    switch (mac.kind) {   /* Macro B: изпълнителят (gc_job.c) прави скоковете */
+    case GC_MAC_ASSIGN:
+        if (!mac.cond) return 0;
+        if (mac.var >= 1 && mac.var < 500) in->var[mac.var] = mac.val;
+        else if (mac.var >= 500 && mac.var < 1000) in->tab->pvar[mac.var - 500] = mac.val;
+        else return fail(e, -1, "Променливата #%d не може да се променя", mac.var);
+        return 0;
+    case GC_MAC_WHILE:
+        in->flow = GC_FLOW_WHILE;
+        in->flow_p = mac.id;
+        in->flow_cond = mac.cond;
+        return 0;
+    case GC_MAC_END:
+        in->flow = GC_FLOW_END;
+        in->flow_p = mac.id;
+        return 0;
+    case GC_MAC_GOTO:
+        if (mac.cond) { in->flow = GC_FLOW_GOTO; in->flow_p = mac.id; }
+        return 0;
+    default:
+        break;
+    }
     bool haas = in->cfg.dialect == GC_DIALECT_HAAS;
     char gb[16];
 

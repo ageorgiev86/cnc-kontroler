@@ -44,7 +44,22 @@ typedef struct {
 #define GC_HAS(b, ch) (((b)->has >> ((ch) - 'A')) & 1u)
 #define GC_VAL(b, ch) ((b)->v[(ch) - 'A'])
 
-int gc_parse_line(const char *s, gc_block_t *b, gc_err_t *e);   /* 0 = ok */
+int gc_parse_line(const char *s, gc_block_t *b, gc_err_t *e);   /* 0 = ok; без # и [ ] */
+
+/* Малка част от Macro B (стъпка 2б): # променливи, изрази [ ], #n = …, IF … GOTO / THEN, WHILE … DO / END */
+typedef enum { GC_MAC_NONE, GC_MAC_ASSIGN, GC_MAC_WHILE, GC_MAC_END, GC_MAC_GOTO } gc_mac_kind_t;
+typedef struct {
+    gc_mac_kind_t kind;
+    int id;                /* DO / END номер, GOTO ред N */
+    bool cond;             /* условието на WHILE / IF (без IF: true) */
+    int var;               /* ASSIGN: номерът на променливата */
+    double val;            /* ASSIGN: стойността (NAN = празна, #0) */
+} gc_macro_t;
+typedef double (*gc_var_fn)(void *ctx, int n);   /* стойността на #n (NAN = празна) */
+/* същото, но с променливите (rd) и макро командата на реда (mac) */
+int gc_parse_line_v(const char *s, gc_block_t *b, gc_err_t *e, gc_var_fn rd, void *ctx, gc_macro_t *mac);
+/* само по текста, без изчисляване: GC_MAC_WHILE (id = DO), GC_MAC_END (id) или GC_MAC_NONE */
+gc_mac_kind_t gc_macro_scan(const char *s, int *id);
 
 /* ---------- таблици: нули и инструменти ---------- */
 #define GC_WCS_N 106       /* 0 не се ползва; 1–6 = G54–G59; 7–105 = G154 P1–P99 (Haas: G110–G129 = P1–P20) */
@@ -59,6 +74,7 @@ typedef struct {
     double wcs[GC_WCS_N][GC_NAX];   /* машинни координати на нулата */
     gc_tool_t tool[GC_TOOL_N];
     double g28[GC_NAX], g30[GC_NAX];   /* машинни позиции за G28 / G30 */
+    double pvar[500];      /* #500 … #999: пазят се между програмите (NAN = празна) */
 } gc_tables_t;
 
 /* ---------- команди към планера ---------- */
@@ -104,7 +120,7 @@ typedef void (*gc_emit_fn)(void *ctx, const gc_cmd_t *c);
 
 /* ---------- интерпретатор ---------- */
 typedef enum { GC_DIALECT_MACH3, GC_DIALECT_HAAS } gc_dialect_t;
-enum { GC_FLOW_NONE, GC_FLOW_CALL, GC_FLOW_CALL_N, GC_FLOW_RET };
+enum { GC_FLOW_NONE, GC_FLOW_CALL, GC_FLOW_CALL_N, GC_FLOW_RET, GC_FLOW_GOTO, GC_FLOW_WHILE, GC_FLOW_END };
 #define GC_SUB_DEPTH 16    /* вложени подпрограми */
 #define GC_COMP_Q 256      /* команди без XY движение, докато чака сегмент при G41/G42 */
 
@@ -149,6 +165,7 @@ typedef struct {
     double rot_c[2], rot_a;
     bool inv_time;         /* G93: F е 1 / минути за всеки ред */
     double inv_f;
+    double var[500];       /* #1 … #499 (#0 и NAN = празна); #500 … #999 са в таблиците */
     double feed;           /* мм/мин, 0 = не е зададено */
     double s;
     int sp_dir;
@@ -176,7 +193,8 @@ typedef struct {
 
     /* поток за изпълнителя (gc_run_text): M98 / M97 / M99 в последния ред */
     int flow;              /* GC_FLOW_* */
-    int flow_p, flow_l;    /* номер на подпрограмата (или N за M97) и брой повторения */
+    int flow_p, flow_l;    /* номер на подпрограмата (или N за M97, N за GOTO, номер на DO/END) и брой повторения */
+    bool flow_cond;        /* WHILE: условието */
 } gc_interp_t;
 
 void gc_tables_init(gc_tables_t *t);

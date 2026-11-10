@@ -18,6 +18,7 @@ typedef struct {
     int pc, depth;
     frame_t st[GC_SUB_DEPTH];
     bool code, pct, done;
+    long jumps;            /* скокове назад (GOTO, END, M99 с L) срещу безкраен цикъл */
 } run_t;
 
 static int seterr(gc_err_t *e, int line, const char *fmt, ...)
@@ -29,6 +30,16 @@ static int seterr(gc_err_t *e, int line, const char *fmt, ...)
     vsnprintf(e->msg, sizeof e->msg, fmt, ap);
     va_end(ap);
     return -1;
+}
+
+#define MAX_JUMPS 2000000L
+
+static int jump(run_t *R, int tgt, gc_err_t *e)
+{
+    if (tgt <= R->pc && ++R->jumps > MAX_JUMPS)
+        return seterr(e, R->pc, "Повече от %ld повторения: безкраен цикъл (WHILE, GOTO, M99)?", MAX_JUMPS);
+    R->pc = tgt;
+    return 0;
 }
 
 /* номерът в началото на реда след буквата (O123, N45) или -1 */
@@ -88,9 +99,40 @@ static int step(gc_interp_t *in, run_t *R, gc_err_t *e)
         R->pc = start;
         return 0;
     }
+    if (f == GC_FLOW_GOTO) {   /* редът N: напред, после от началото */
+        int tgt = -1;
+        for (int k = 1; k <= R->n && tgt < 0; k++) {
+            int i = (R->pc + k) % R->n;
+            if (lead_num(R->ln[i], 'N') == in->flow_p) tgt = i;
+        }
+        if (tgt < 0) return seterr(e, R->pc, "GOTO %d: редът N%d не е намерен", in->flow_p, in->flow_p);
+        return jump(R, tgt, e);
+    }
+    if (f == GC_FLOW_WHILE) {
+        int depth = 0, id;
+        for (int i = R->pc + 1; i < R->n; i++) {   /* съответният END (изпълнено: влиза, иначе след END) */
+            id = -1;
+            gc_mac_kind_t k = gc_macro_scan(R->ln[i], &id);
+            if (id != in->flow_p) continue;
+            if (k == GC_MAC_WHILE) depth++;
+            else if (k == GC_MAC_END && depth-- == 0) { R->pc = in->flow_cond ? R->pc + 1 : i + 1; return 0; }
+        }
+        return seterr(e, R->pc, "WHILE … DO%d без END%d", in->flow_p, in->flow_p);
+    }
+    if (f == GC_FLOW_END) {   /* обратно към съответния WHILE (условието се проверява пак) */
+        int depth = 0, id;
+        for (int i = R->pc - 1; i >= 0; i--) {
+            id = -1;
+            gc_mac_kind_t k = gc_macro_scan(R->ln[i], &id);
+            if (id != in->flow_p) continue;
+            if (k == GC_MAC_END) depth++;
+            else if (k == GC_MAC_WHILE && depth-- == 0) return jump(R, i, e);
+        }
+        return seterr(e, R->pc, "END%d без WHILE … DO%d", in->flow_p, in->flow_p);
+    }
     if (f == GC_FLOW_RET) {
         if (!R->depth) return seterr(e, R->pc, "M99 без извикване на подпрограма (M98)");
-        if (--R->st[R->depth - 1].count > 0) R->pc = R->st[R->depth - 1].start;
+        if (--R->st[R->depth - 1].count > 0) return jump(R, R->st[R->depth - 1].start, e);
         else R->pc = R->st[--R->depth].ret;
         return 0;
     }
