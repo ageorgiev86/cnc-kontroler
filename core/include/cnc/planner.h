@@ -5,6 +5,7 @@
 #define CNC_PLANNER_H
 
 #include "cnc/gcode.h"
+#include "cnc/hmap.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,7 +45,11 @@ void pl_input_end(pl_t *p);                     /* няма да има още �
 int pl_tick(pl_t *p, pl_sample_t *s);           /* един такт; PL_* */
 void pl_continue(pl_t *p);                      /* след PL_WAIT */
 void pl_hold(pl_t *p, bool on);                 /* пауза на подаването: плавно спиране и чакане */
-void pl_override(pl_t *p, double feed, double rapid);   /* 1,0 = 100 % */
+void pl_override(pl_t *p, double feed, double rapid);   /* 1,0 = 100 %; подаване 0 … 2, бърз ход 0 … 1; M49 изключва подаването */
+void pl_single(pl_t *p, bool on);               /* единичен блок: спира в края на всеки ред (PL_WAIT) */
+/* картата на височините за следващите приети команди (NULL = без); картата трябва да живее, докато се ползва.
+ * G1 и дъгите се делят до резолюция / 4 и Z им се коригира; бързите ходове не се коригират */
+void pl_set_hmap(pl_t *p, const hm_map_t *m);
 double pl_ahead(const pl_t *p);                 /* мм път в буфера пред сегашната точка */
 
 #ifdef __cplusplus

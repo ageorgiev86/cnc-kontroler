@@ -20,6 +20,7 @@ add_library(cnc-core STATIC
   src/gc_comp.c
   src/gc_job.c
   src/planner.c
+  src/hmap.c
 )
 target_include_directories(cnc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(cnc-core PRIVATE ${CORE_WARNINGS})

@@ -44,6 +44,11 @@ typedef struct {
     bool circle;
     double hold_at, release_at, ovr_at, ovr;  /* s */
     long stop_ticks;                          /* такта с v = 0 в движение (без събития) */
+    const hm_map_t *hm;                       /* карта на височините */
+    double zbase, hm_err;                     /* програмираната Z (постоянна) и най-голямата грешка спрямо картата */
+    bool single;                              /* единичен блок */
+    double single_at;                         /* от този момент (s) */
+    double ovr0;                              /* оверрайд от началото (0 = 100 %) */
 } res_t;
 
 /* подава командите постепенно (по stream наведнъж, 0 = всички) и върти до края */
@@ -52,6 +57,9 @@ static res_t run(const gc_cmd_t *cmds, int n, int stream, res_t r)
     pl_config_t c = cfg();
     double start[GC_NAX] = {0};
     pl_t *p = pl_create(&c, start);
+    if (r.hm) pl_set_hmap(p, r.hm);
+    if (r.ovr0 > 0) pl_override(p, r.ovr0, 1);
+    r.hm_err = 0;
     int i = 0;
     double prev[GC_NAX] = {0}, pa = 0;
     r.vmax_path = r.amax_path = r.jmax_path = r.vaxis_max = 0;
@@ -66,6 +74,7 @@ static res_t run(const gc_cmd_t *cmds, int n, int stream, res_t r)
         if (r.hold_at > 0 && now >= r.hold_at && now < r.release_at) pl_hold(p, true);
         if (r.hold_at > 0 && now >= r.release_at) pl_hold(p, false);
         if (r.ovr_at > 0 && now >= r.ovr_at) pl_override(p, r.ovr, 1);
+        if (r.single && now >= r.single_at) pl_single(p, true);
         pl_sample_t s;
         int rc = pl_tick(p, &s);
         if (rc == PL_DONE) break;
@@ -90,6 +99,10 @@ static res_t run(const gc_cmd_t *cmds, int n, int stream, res_t r)
             if (d < r.rmin) r.rmin = d;
             if (d > r.rmax) r.rmax = d;
         }
+        if (r.hm && hypot(s.pos[0], s.pos[1]) > 0.01) {
+            double e = fabs(s.pos[2] - (r.zbase + hm_corr(r.hm, s.pos[0], s.pos[1])));
+            if (e > r.hm_err) r.hm_err = e;
+        }
         if (t > 300 && pl_ahead(p) > 5 && s.v < r.min_v_mid) r.min_v_mid = s.v;   /* без началото и края */
         if (t > 20000000) { printf("FAIL: безкраен цикъл\n"); fails++; break; }
     }
@@ -107,7 +120,8 @@ static void limits_k(const res_t *r, const char *name, double vlim, double k)
     CHECK(r->vaxis_max <= c.vmax[0] * 1.001 + 1e-6, "%s: скорост по ос %.3f > %.0f", name, r->vaxis_max, c.vmax[0]);
     CHECK(r->vmax_path <= vlim * 1.001 + 1e-6, "%s: скорост по пътя %.3f > %.3f", name, r->vmax_path, vlim);
     CHECK(r->amax_path <= k * c.amax[0] * 1.001 + 1e-6, "%s: ускорение %.1f > %.0f", name, r->amax_path, k * c.amax[0]);
-    CHECK(r->jmax_path <= k * c.jmax[0] * 1.001 + 1e-3, "%s: jerk %.0f > %.0f", name, r->jmax_path, k * c.jmax[0]);
+    /* спирането пада между две части на такта (1/10): в последния такт ускорението се сменя с до J·dt·1,1 */
+    CHECK(r->jmax_path <= k * c.jmax[0] * 1.1 + 1e-3, "%s: jerk %.0f > %.0f", name, r->jmax_path, k * c.jmax[0] * 1.1);
 }
 
 static void limits(const res_t *r, const char *name, double vlim) { limits_k(r, name, vlim, 1); }
@@ -223,6 +237,51 @@ int main(void)
     CHECK(r.vax[0] <= 100.1 && r.vax[1] <= 100.1 && r.vax[2] <= 40.04, "бавна Z: скорост по осите %.2f %.2f %.2f", r.vax[0], r.vax[1], r.vax[2]);
     end_at(&r, "бавна Z", 0, 0, 15);
     zslow = false;
+
+    /* 12. карта на височините: огъната повърхност, линия по диагонал и дъга на Z = -1 */
+    static float hz[11 * 6];
+    for (int ix = 0; ix < 11; ix++)
+        for (int jy = 0; jy < 6; jy++) hz[ix * 6 + jy] = (float)(0.05 * sin(ix * 0.9) + 0.03 * cos(jy * 1.3) - 0.2);
+    hm_map_t hm = {0, 0, 100, 50, 10, 11, 6, hz, -0.2};
+    CHECK(hm_check(&hm) == 0, "картата не минава проверката");
+    CHECK(fabs(hm_corr(&hm, 30, 20) - (0.05 * sin(2.7) + 0.03 * cos(2.6))) < 1e-6, "корекция в точка от мрежата");
+    CHECK(hm_corr(&hm, 120, 20) == 0 && hm_corr(&hm, -1, 20) == 0, "извън областта корекцията е 0");
+    gc_cmd_t arc2 = mv(GC_ARC, 90, 25, -1, 2000);
+    arc2.ctr[0] = 70; arc2.ctr[1] = 25; arc2.plane = GC_PLANE_XY; arc2.cw = true;
+    gc_cmd_t hl[] = {mv(GC_FEED, 0, 0, -1, 2000), mv(GC_FEED, 100, 50, -1, 2000), mv(GC_FEED, 50, 25, -1, 2000), arc2};
+    res_t rm = z;
+    rm.hm = &hm; rm.zbase = -1;
+    r = run(hl, 4, 0, rm);
+    limits_k(&r, "карта", 100, M_SQRT2);
+    printf("карта на височините: най-голямата разлика от билинейната корекция %.5f мм\n", r.hm_err);
+    CHECK(r.hm_err < 0.005, "карта: Z се отклонява от картата с %.5f", r.hm_err);
+    end_at(&r, "карта", 90, 25, -1 + hm_corr(&hm, 90, 25));
+
+    /* 13. M49: оверрайдът не важи за подаването след него */
+    gc_cmd_t m49 = {0};
+    m49.kind = GC_OVR_ENABLE; m49.ival = 0;
+    gc_cmd_t lo[] = {m49, mv(GC_FEED, 100, 0, 0, 3000)};
+    res_t r40 = z;
+    r40.ovr0 = 0.4;
+    r = run(lo, 2, 0, r40);
+    CHECK(r.vmax_path > 49.9, "M49: скоростта е %.2f вместо 50", r.vmax_path);
+    r = run(l1, 1, 0, r40);
+    CHECK(r.vmax_path < 20.01 && r.vmax_path > 19.9, "оверрайд 40 %%: скоростта е %.2f вместо 20", r.vmax_path);
+
+    /* 14. единичен блок: от началото спира след всеки ред; включен в движение — плавно */
+    res_t rs = z;
+    rs.single = true;
+    gc_cmd_t sqn[4];
+    for (int k = 0; k < 4; k++) { sqn[k] = sq[k]; sqn[k].line = k + 1; }
+    r = run(sqn, 4, 0, rs);
+    limits(&r, "единичен блок", 100);
+    end_at(&r, "единичен блок", 0, 0, 0);
+    CHECK(r.waits == 3, "единичен блок: %ld спирания вместо 3", r.waits);
+    for (int k = 0; k < 2000; k++) poly[k].line = k;
+    rs.single_at = 0.5;
+    r = run(poly, 2000, 0, rs);
+    limits_k(&r, "единичен блок в движение", 50, M_SQRT2);
+    CHECK(r.waits > 1000, "единичен блок в движение: %ld спирания", r.waits);
 
     printf("%d проверки, %d неуспешни\n", total, fails);
     return fails ? 1 : 0;
