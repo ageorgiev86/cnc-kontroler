@@ -1,5 +1,7 @@
 /* gcsim: G-code → команди на интерпретатора (засега), по-късно и сегменти на планера.
- *   gcsim [--haas] [--axes XYZA] [--block-delete] [--summary] [--tool N:диаметър]… файл.nc
+ *   gcsim [--haas] [--axes XYZA] [--block-delete] [--summary] [--tool N:диаметър]…
+ *         [--parts 1,2,3] [--from ред[:детайл]] [--safe-z Z] файл.nc
+ * --parts: нулите на детайлите (1 = G54); --from: „Изпълни от ред“ (редът и детайлът от 1).
  * Изходът е по един ред на команда (или обобщение с --summary); грешката е на stderr с ред и колона. */
 #include "cnc/gcode.h"
 #include "gc_test_opts.h"
@@ -73,7 +75,7 @@ static void on_cmd(void *ctx, const gc_cmd_t *c)
 static void print_summary(const sim_t *s, int nlines)
 {
     static const char *const KN[] = {"RAPID", "FEED", "ARC", "DWELL", "SPINDLE", "COOLANT", "TOOL_PREP", "TOOL_CHANGE",
-                                     "TLO", "ORIENT", "OVERRIDE", "PATH", "WCS", "SET_WCS", "SET_TOOL", "HOME", "PAUSE", "END"};
+                                     "TLO", "ORIENT", "OVERRIDE", "PATH", "WCS", "SET_WCS", "SET_TOOL", "HOME", "PAUSE", "PART", "END"};
     printf("редове: %d\n", nlines);
     printf("команди:");
     for (int k = 0; k <= GC_END; k++)
@@ -97,12 +99,17 @@ int main(int argc, char **argv)
     for (int a = 0; a < 3; a++) { sim.lo[a] = 1e30; sim.hi[a] = -1e30; }
     gc_config_t cfg = {GC_DIALECT_MACH3, 0x7, 0, false, on_cmd, &sim};
     const char *path = NULL;
+    int parts[8];
+    gc_job_t job = {parts, 0, -1, 0, 0, 5};
     gc_tables_t *tab = calloc(1, sizeof *tab);
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--haas")) cfg.dialect = GC_DIALECT_HAAS;
         else if (!strcmp(argv[i], "--block-delete")) cfg.block_delete = true;
         else if (!strcmp(argv[i], "--summary")) sim.summary = true;
         else if (!strcmp(argv[i], "--axes") && i + 1 < argc) cfg.axes = gc_axes_mask(argv[++i], &cfg.rotary);
+        else if (!strcmp(argv[i], "--parts") && i + 1 < argc) job.nparts = gc_parse_parts(argv[++i], parts, 8);
+        else if (!strcmp(argv[i], "--from") && i + 1 < argc) gc_parse_from(argv[++i], &job.start_line, &job.start_part);
+        else if (!strcmp(argv[i], "--safe-z") && i + 1 < argc) job.safe_z = atof(argv[++i]);
         else if (!strcmp(argv[i], "--tool") && i + 1 < argc) {   /* --tool 3:3.17 = T3 с диаметър 3,17 мм */
             int t; double d;
             if (sscanf(argv[++i], "%d:%lf", &t, &d) != 2 || t < 0 || t >= GC_TOOL_N) { fprintf(stderr, "--tool N:диаметър\n"); return 2; }
@@ -111,14 +118,14 @@ int main(int argc, char **argv)
         else if (argv[i][0] != '-') path = argv[i];
         else { fprintf(stderr, "непозната опция %s\n", argv[i]); return 2; }
     }
-    if (!path) { fprintf(stderr, "употреба: gcsim [--haas] [--axes XYZA] [--block-delete] [--summary] [--tool N:диаметър] файл.nc\n"); return 2; }
+    if (!path) { fprintf(stderr, "употреба: gcsim [--haas] [--axes XYZA] [--block-delete] [--summary] [--tool N:диаметър] [--parts 1,2,3] [--from ред[:детайл]] [--safe-z Z] файл.nc\n"); return 2; }
     char *text = gc_read_file(path);
     if (!text) { perror(path); return 2; }
     sim.axes = cfg.axes;
     gc_interp_t in;
     gc_err_t e;
     gc_interp_init(&in, &cfg, tab, NULL);
-    int r = gc_run_text(&in, text, &e);
+    int r = gc_run_job(&in, text, &job, &e);
     if (sim.summary) {
         int nl = 0;
         for (const char *p = text; *p; p++) nl += *p == '\n';

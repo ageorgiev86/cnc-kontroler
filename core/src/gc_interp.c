@@ -101,8 +101,10 @@ double gc_prog_pos(const gc_interp_t *in, int ax) { return in->pos[ax] - offset(
 void gc_out(gc_interp_t *in, const gc_cmd_t *c)
 {
     if (c->kind == GC_RAPID || c->kind == GC_FEED || c->kind == GC_ARC) memcpy(in->comp_out, c->tgt, sizeof in->comp_out);
-    if (in->cfg.emit) in->cfg.emit(in->cfg.ctx, c);
+    if (in->cfg.emit && !in->silent) in->cfg.emit(in->cfg.ctx, c);
 }
+
+void gc_emit_simple(gc_interp_t *in, gc_kind_t k, int ival, double val, int line);
 
 /* всяка команда минава оттук; при G41/G42 през компенсацията (gc_comp.c) */
 static void emit(gc_interp_t *in, gc_cmd_t *c, int line)
@@ -115,7 +117,7 @@ static void emit(gc_interp_t *in, gc_cmd_t *c, int line)
     gc_out(in, c);
 }
 
-static void emit_simple(gc_interp_t *in, gc_kind_t k, int ival, double val, int line)
+void gc_emit_simple(gc_interp_t *in, gc_kind_t k, int ival, double val, int line)
 {
     gc_cmd_t c;
     memset(&c, 0, sizeof c);
@@ -170,7 +172,8 @@ static void reset_modal(gc_interp_t *in)
     in->incr = false;
     in->arc_abs = false;
     in->retract_r = false;
-    in->wcs = 1;
+    in->wcs = in->wcs_map ? in->wcs_map : 1;
+    in->wcs_prog = 1;
     memset(in->g92, 0, sizeof in->g92);
     in->sp_dir = 0;
     in->cool = 0;
@@ -295,7 +298,7 @@ static int do_g10(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
             if (direct) *o = in->incr ? *o + v : v;   /* G91: добавя (така пишат и постпроцесорите на SolidCAM) */
             else *o = in->pos[a] - in->g92[a] - (a == GC_Z && in->tlo_on ? in->tlo : 0) - v;
         }
-        emit_simple(in, GC_SET_WCS, w, 0, line);
+        gc_emit_simple(in, GC_SET_WCS, w, 0, line);
         return 0;
     }
 
@@ -315,7 +318,7 @@ static int do_g10(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
         double *f = L == 10 ? &tt->len : L == 11 ? &tt->wear : L == 12 ? &tt->dia : &tt->wear_dia;
         *f = in->incr ? *f + v : v;
     }
-    emit_simple(in, GC_SET_TOOL, t, 0, line);
+    gc_emit_simple(in, GC_SET_TOOL, t, 0, line);
     return 0;
 }
 
@@ -350,7 +353,7 @@ static void zmove(gc_interp_t *in, double zm, bool rapid, int line)
     move_to(in, t, rapid, line);
 }
 
-static void dwell(gc_interp_t *in, double s, int line) { if (s > 0) emit_simple(in, GC_DWELL, 0, s, line); }
+static void dwell(gc_interp_t *in, double s, int line) { if (s > 0) gc_emit_simple(in, GC_DWELL, 0, s, line); }
 
 /* кълване: следващата дълбочина по Q или по Haas I/J/K */
 static double next_peck(const gc_interp_t *in, double *cur_peck)
@@ -435,10 +438,10 @@ static int do_cycle(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
         case 860: case 870: case 880:   /* спиране на шпиндела на дъното; G87/G88 на Haas: пауза за ръчно излизане */
             zmove(in, z_m, false, line);
             if (g == 880) dwell(in, in->cyc_p, line);
-            emit_simple(in, GC_SPINDLE, 0, 0, line);
-            if (g != 860) emit_simple(in, GC_PAUSE, 0, 0, line);
+            gc_emit_simple(in, GC_SPINDLE, 0, 0, line);
+            if (g != 860) gc_emit_simple(in, GC_PAUSE, 0, 0, line);
             zmove(in, top_m, true, line);
-            if (in->sp_dir) emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
+            if (in->sp_dir) gc_emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
             break;
         default:
             return fail(e, -1, "Цикълът G%s не се поддържа", gname(g, gb));
@@ -540,32 +543,32 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         double s = GC_VAL(b, 'S');
         if (s < 0) return fail(e, b->col['S' - 'A'], "Отрицателни обороти S");
         in->s = s;
-        if (in->sp_dir && !has_m(b, 3) && !has_m(b, 4) && !has_m(b, 5)) emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
+        if (in->sp_dir && !has_m(b, 3) && !has_m(b, 4) && !has_m(b, 5)) gc_emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
     }
     if (GC_HAS(b, 'T')) {
         double t = GC_VAL(b, 'T');
         int ti = (int)lround(t);
         if (fabs(t - ti) > 1e-9 || ti < 0 || ti >= GC_TOOL_N) return fail(e, b->col['T' - 'A'], "Невалиден инструмент T%g", t);
         in->tool_next = ti;
-        emit_simple(in, GC_TOOL_PREP, ti, 0, line);
+        gc_emit_simple(in, GC_TOOL_PREP, ti, 0, line);
     }
 
     /* --- 3. M6, шпиндел, охлаждане, оверрайди --- */
     if (has_m(b, 6)) {
         if (in->tool_next < 0) return fail(e, -1, "M6 без избран инструмент T");
         in->tool = in->tool_next;
-        emit_simple(in, GC_TOOL_CHANGE, in->tool, 0, line);
+        gc_emit_simple(in, GC_TOOL_CHANGE, in->tool, 0, line);
     }
     if (has_m(b, 3) || has_m(b, 4)) {
         in->sp_dir = has_m(b, 3) ? 1 : -1;
-        emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
+        gc_emit_simple(in, GC_SPINDLE, in->sp_dir, in->s, line);
     } else if (has_m(b, 5)) {
         in->sp_dir = 0;
-        emit_simple(in, GC_SPINDLE, 0, 0, line);
+        gc_emit_simple(in, GC_SPINDLE, 0, 0, line);
     }
     if (has_m(b, 19)) {
         double ang = GC_HAS(b, 'R') ? GC_VAL(b, 'R') : (GC_HAS(b, 'P') && non_modal != 40 ? GC_VAL(b, 'P') : 0);
-        emit_simple(in, GC_ORIENT, 0, ang, line);
+        gc_emit_simple(in, GC_ORIENT, 0, ang, line);
     }
     int cool = in->cool;
     if (has_m(b, 9)) cool = 0;
@@ -577,11 +580,11 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     if (has_m(b, 83)) cool |= GC_COOL_AIR;
     if (cool != in->cool || has_m(b, 9)) {
         in->cool = cool;
-        emit_simple(in, GC_COOLANT, cool, 0, line);
+        gc_emit_simple(in, GC_COOLANT, cool, 0, line);
     }
     if (has_m(b, 48) || has_m(b, 49)) {
         in->ovr_en = has_m(b, 48);
-        emit_simple(in, GC_OVR_ENABLE, in->ovr_en, 0, line);
+        gc_emit_simple(in, GC_OVR_ENABLE, in->ovr_en, 0, line);
     }
 
     /* --- 4. пауза G4 --- */
@@ -596,7 +599,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
             return fail(e, -1, "G4 изисква P (време)");
         }
         if (t < 0) return fail(e, -1, "Отрицателно време на паузата G4");
-        emit_simple(in, GC_DWELL, 0, t, line);
+        gc_emit_simple(in, GC_DWELL, 0, t, line);
     }
 
     /* --- 5. модални: равнина, корекции, нули, режим на пътя, разстояния --- */
@@ -617,7 +620,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         gc_comp_start(in, grp[GR_CUTTER] == 410 ? 1 : -1, r);
     }
     if (grp[GR_TLO] == 490) {
-        if (in->tlo_on) { in->tlo_on = false; in->tlo = 0; in->tlo_h = 0; emit_simple(in, GC_TLO, 0, 0, line); }
+        if (in->tlo_on) { in->tlo_on = false; in->tlo = 0; in->tlo_h = 0; gc_emit_simple(in, GC_TLO, 0, 0, line); }
     } else if (grp[GR_TLO] == 430) {
         int h = in->tool;
         if (GC_HAS(b, 'H')) {
@@ -628,7 +631,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         in->tlo_on = true;
         in->tlo_h = h;
         in->tlo = in->tab->tool[h].len + in->tab->tool[h].wear;
-        emit_simple(in, GC_TLO, h, in->tlo, line);
+        gc_emit_simple(in, GC_TLO, h, in->tlo, line);
     }
     if (grp[GR_WCS] >= 0) {
         int g = grp[GR_WCS], w;
@@ -646,7 +649,11 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         } else {
             w = (g - 540) / 10 + 1;
         }
-        if (w != in->wcs) { in->wcs = w; emit_simple(in, GC_WCS_SELECT, w, 0, line); }
+        if (in->wcs_multi && w != 1)
+            return fail(e, -1, "G%s в програмата: при няколко детайла тя трябва да е само с G54", gname(g, gb));
+        in->wcs_prog = w;
+        if (w == 1 && in->wcs_map) w = in->wcs_map;   /* няколко детайла: G54 → нулата на детайла */
+        if (w != in->wcs) { in->wcs = w; gc_emit_simple(in, GC_WCS_SELECT, w, 0, line); }
     }
     if (grp[GR_PATH] >= 0) {
         int g = grp[GR_PATH];
@@ -663,7 +670,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         if (tol < 0) return fail(e, -1, "Отрицателен допуск на пътя");
         in->path_mode = mode;
         in->path_tol = tol;
-        emit_simple(in, GC_PATH_MODE, mode, tol, line);
+        gc_emit_simple(in, GC_PATH_MODE, mode, tol, line);
     }
     if (grp[GR_DIST] >= 0) in->incr = grp[GR_DIST] == 910;
     if (grp[GR_ARCDIST] >= 0) in->arc_abs = grp[GR_ARCDIST] == 901;
@@ -720,7 +727,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
             for (int a = 0; a < GC_NAX; a++)
                 if (GC_HAS(b, AXL[a])) mask |= 1u << a;
             if (!mask) mask = in->cfg.axes;
-            emit_simple(in, GC_HOME, (int)mask, 0, line);
+            gc_emit_simple(in, GC_HOME, (int)mask, 0, line);
         } else {
             memcpy(non_modal == 281 ? in->tab->g28 : in->tab->g30, in->pos, sizeof in->pos);
         }
@@ -800,99 +807,12 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     if (in->comp_err[0]) { e->line = in->comp_err_line; return fail(e, -1, "%s", in->comp_err); }
 
     /* --- 9. спиране и край --- */
-    if (has_m(b, 0) || has_m(b, 1)) emit_simple(in, GC_PAUSE, has_m(b, 1), 0, line);
+    if (has_m(b, 0) || has_m(b, 1)) gc_emit_simple(in, GC_PAUSE, has_m(b, 1), 0, line);
     if (has_m(b, 2) || has_m(b, 30)) {
         reset_modal(in);
         in->ended = true;
-        emit_simple(in, GC_END, 0, 0, line);
+        gc_emit_simple(in, GC_END, 0, 0, line);
         if (in->comp_err[0]) { e->line = in->comp_err_line; return fail(e, -1, "%s", in->comp_err); }
     }
     return 0;
-}
-
-/* номерът в началото на реда след буквата (O123, N45) или -1 */
-static long lead_num(const char *s, char letter)
-{
-    while (*s == ' ' || *s == '\t') s++;
-    if ((*s & ~0x20) != letter) return -1;
-    s++;
-    if (*s < '0' || *s > '9') return -1;
-    long v = 0;
-    while (*s >= '0' && *s <= '9' && v < 100000000) v = v * 10 + (*s++ - '0');
-    return v;
-}
-
-int gc_run_text(gc_interp_t *in, const char *text, gc_err_t *e)
-{
-    /* начала на редовете */
-    int n = 1;
-    for (const char *p = text; *p; p++)
-        if (*p == '\n') n++;
-    const char **ln = malloc(sizeof *ln * (size_t)n);
-    if (!ln) { e->line = 0; e->col = -1; snprintf(e->msg, sizeof e->msg, "Няма памет"); return -1; }
-    n = 0;
-    ln[n++] = text;
-    for (const char *p = text; *p; p++)
-        if (*p == '\n' && p[1]) ln[n++] = p + 1;
-
-    struct { int ret, start, count; } st[GC_SUB_DEPTH];
-    int depth = 0, rc = 0, pc = 0;
-    bool code = false, pct = false;
-    while (pc < n) {
-        gc_block_t b;
-        if (gc_parse_line(ln[pc], &b, e) == 0 && b.percent) {
-            if (code || pct) break;   /* вторият % е краят на програмата */
-            pct = true;
-            pc++;
-            continue;
-        }
-        if (gc_interp_line(in, ln[pc], pc, e)) { rc = -1; goto out; }
-        if (!b.empty) code = true;
-        if (in->ended) goto out;
-        int f = in->flow;
-        if (f == GC_FLOW_CALL || f == GC_FLOW_CALL_N) {
-            int tgt = -1;
-            for (int i = 0; i < n && tgt < 0; i++)
-                if (lead_num(ln[i], f == GC_FLOW_CALL ? 'O' : 'N') == in->flow_p) tgt = i;
-            e->line = pc; e->col = -1;
-            if (tgt < 0) {
-                snprintf(e->msg, sizeof e->msg, f == GC_FLOW_CALL ? "Подпрограмата O%d не е намерена" : "Редът N%d не е намерен (M97)", in->flow_p);
-                rc = -1; goto out;
-            }
-            if (depth >= GC_SUB_DEPTH) {
-                snprintf(e->msg, sizeof e->msg, "Повече от %d вложени подпрограми", GC_SUB_DEPTH);
-                rc = -1; goto out;
-            }
-            if (in->flow_l == 0) { pc++; continue; }
-            int start = f == GC_FLOW_CALL ? tgt + 1 : tgt;
-            st[depth].ret = pc + 1;
-            st[depth].start = start;
-            st[depth].count = in->flow_l;
-            depth++;
-            pc = start;
-            continue;
-        }
-        if (f == GC_FLOW_RET) {
-            if (!depth) {
-                e->line = pc; e->col = -1;
-                snprintf(e->msg, sizeof e->msg, "M99 без извикване на подпрограма (M98)");
-                rc = -1; goto out;
-            }
-            if (--st[depth - 1].count > 0) pc = st[depth - 1].start;
-            else pc = st[--depth].ret;
-            continue;
-        }
-        pc++;
-    }
-    if (depth) {
-        e->line = n - 1; e->col = -1;
-        snprintf(e->msg, sizeof e->msg, "Подпрограмата не завършва с M99");
-        rc = -1; goto out;
-    }
-    in->ended = true;
-    emit_simple(in, GC_END, 0, 0, pc < n ? pc : n - 1);
-    if (in->comp_err[0]) { e->line = in->comp_err_line; e->col = -1; snprintf(e->msg, sizeof e->msg, "%s", in->comp_err); rc = -1; }
-out:
-    free(ln);
-    return rc;
 }

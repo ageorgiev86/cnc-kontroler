@@ -58,6 +58,7 @@ int gc_cmd_format(const gc_cmd_t *c, unsigned axes, char *out, size_t n)
     case GC_SET_TOOL: PUT("SET_TOOL T%d", c->ival); break;
     case GC_HOME: PUT("HOME mask=%d", c->ival); break;
     case GC_PAUSE: PUT("PAUSE %s", c->ival ? "M1" : "M0"); break;
+    case GC_PART: PUT("PART %d WCS %d", c->ival + 1, (int)c->val); break;
     case GC_END: PUT("END"); break;
     }
 #undef PUT

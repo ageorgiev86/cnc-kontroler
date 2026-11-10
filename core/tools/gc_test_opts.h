@@ -25,6 +25,29 @@ static inline unsigned gc_axes_mask(const char *s, unsigned *rotary)
     return m;
 }
 
+/* „1,2,3“ → нулите на детайлите (1 = G54); връща броя */
+static inline int gc_parse_parts(const char *s, int *parts, int max)
+{
+    int n = 0;
+    while (*s && n < max) {
+        char *e;
+        long v = strtol(s, &e, 10);
+        if (e == s) break;
+        parts[n++] = (int)v;
+        s = *e == ',' ? e + 1 : e;
+    }
+    return n;
+}
+
+/* „ред[:детайл]“ (и двете от 1) → start_line, start_part (от 0) */
+static inline void gc_parse_from(const char *s, int *line, int *part)
+{
+    *line = atoi(s) - 1;
+    const char *c = s;
+    while (*c && *c != ':') c++;
+    *part = *c == ':' ? atoi(c + 1) - 1 : 0;
+}
+
 /* целия файл в памет (malloc, завършва с 0) или NULL */
 static inline char *gc_read_file(const char *path)
 {

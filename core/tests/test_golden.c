@@ -33,6 +33,9 @@ static void on_cmd(void *ctx, const gc_cmd_t *c)
     put(s, b);
 }
 
+static int parts[8];
+static gc_job_t job;
+
 static void opts(const char *text, gc_config_t *cfg)
 {
     const char *p = strstr(text, "; test:");
@@ -48,6 +51,9 @@ static void opts(const char *text, gc_config_t *cfg)
         else if (!strcmp(t, "mach3")) cfg->dialect = GC_DIALECT_MACH3;
         else if (!strcmp(t, "block-delete")) cfg->block_delete = true;
         else if (!strncmp(t, "axes=", 5)) cfg->axes = gc_axes_mask(t + 5, &cfg->rotary);
+        else if (!strncmp(t, "parts=", 6)) job.nparts = gc_parse_parts(t + 6, parts, 8);
+        else if (!strncmp(t, "from=", 5)) gc_parse_from(t + 5, &job.start_line, &job.start_part);
+        else if (!strncmp(t, "safez=", 6)) job.safe_z = atof(t + 6);
     }
 }
 
@@ -60,6 +66,8 @@ static int run_one(const char *dir, const char *name)
     if (!text) { printf("FAIL %s: не се чете\n", name); return 1; }
     sbuf_t s = {0};
     gc_config_t cfg = {GC_DIALECT_MACH3, 0x7, 0, false, on_cmd, &s};
+    gc_job_t j0 = {parts, 0, -1, 0, 0, 5};
+    job = j0;
     opts(text, &cfg);
     s.axes = cfg.axes;
     put(&s, "");
@@ -69,7 +77,7 @@ static int run_one(const char *dir, const char *name)
     gc_interp_t in;
     gc_err_t e;
     gc_interp_init(&in, &cfg, tab, NULL);
-    if (gc_run_text(&in, text, &e)) {
+    if (gc_run_job(&in, text, &job, &e)) {
         char b[300];
         if (e.col >= 0) snprintf(b, sizeof b, "ERR %d:%d %s", e.line + 1, e.col + 1, e.msg);
         else snprintf(b, sizeof b, "ERR %d %s", e.line + 1, e.msg);

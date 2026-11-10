@@ -18,6 +18,7 @@ add_library(cnc-core STATIC
   src/gc_interp.c
   src/gc_dump.c
   src/gc_comp.c
+  src/gc_job.c
 )
 target_include_directories(cnc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(cnc-core PRIVATE ${CORE_WARNINGS})

@@ -1,0 +1,9 @@
+; test: mach3 axes=XYZ from=6 safez=0
+G10 L1 P1 R1
+G21 G90 F100
+G0 X-5 Y0 Z0
+G41 D1 G1 X0
+Y10
+X10
+G40 G1 X20
+M30

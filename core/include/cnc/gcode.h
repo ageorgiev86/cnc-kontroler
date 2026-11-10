@@ -80,6 +80,7 @@ typedef enum {
     GC_SET_TOOL,           /* ival = T (таблицата е сменена) */
     GC_HOME,               /* ival = маска на осите (Mach3 G28.1) */
     GC_PAUSE,              /* ival = 0 (M0) / 1 (M1, по избор) */
+    GC_PART,               /* начало на детайл: ival = поредният (от 0), val = нулата (1 = G54 …) */
     GC_END,                /* M2 / M30 / край на файла */
 } gc_kind_t;
 
@@ -130,7 +131,11 @@ typedef struct {
     double cyc_init;                       /* началното ниво (машинно Z) при влизане в цикъла */
     int plane;             /* 17, 18, 19 */
     bool inch, incr, arc_abs, retract_r;   /* G20, G91, G90.1, G99 */
-    int wcs;               /* 1 … 105 */
+    int wcs;               /* 1 … 105: действащата нула */
+    int wcs_prog;          /* нулата, избрана в програмата (G54 = 1) */
+    int wcs_map;           /* няколко детайла: програмната G54 → тази нула (0 = без) */
+    bool wcs_multi;        /* няколко детайла: програмата може да ползва само G54 */
+    bool silent;           /* „Изпълни от ред“: интерпретира, без да изпраща (gc_job.c) */
     bool tlo_on;
     int tlo_h;
     double tlo;
@@ -172,6 +177,23 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e);
 /* Изпълнява цял текст (редовете от 0) с подпрограмите O / M98 P L / M97 P / M99 (до GC_SUB_DEPTH нива);
  * спира на M2/M30, на втори '%' или в края (тогава вади GC_END). */
 int gc_run_text(gc_interp_t *in, const char *text, gc_err_t *e);
+
+/* Няколко детайла и „Изпълни от ред“ (gc_job.c, docs/interpretator-planer.md):
+ *  - parts: нулите на детайлите (1 = G54, 2 = G55 …); програмната G54 се пренасочва към нулата на
+ *    текущия детайл. Програмата се дели на блокове при M6: смяната е веднъж, после блокът минава
+ *    по всички детайли (без M6: цялата програма по всеки детайл). В началото на детайла: GC_PART.
+ *  - start_line (от 0) и start_part: всичко преди тях се интерпретира без изход, после безопасен
+ *    подход (Z на safe_z, инструмент, шпиндел, охлаждане, XY, бързо до approach мм над началото,
+ *    с подаване до него) и оттам нататък нормално. Редът може да е и в подпрограма. */
+typedef struct {
+    const int *parts;
+    int nparts;            /* 0 или 1: един детайл */
+    int start_line;        /* < 0: от началото */
+    int start_part;        /* индекс в parts */
+    double safe_z;         /* машинно Z за подхода */
+    double approach;       /* мм над началото, от които се слиза с подаване */
+} gc_job_t;
+int gc_run_job(gc_interp_t *in, const char *text, const gc_job_t *job, gc_err_t *e);
 
 /* Програмна позиция по оста (в мм или °, без инчове) */
 double gc_prog_pos(const gc_interp_t *in, int ax);

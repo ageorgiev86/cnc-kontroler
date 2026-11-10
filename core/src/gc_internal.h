@@ -6,6 +6,8 @@
 
 /* окончателният изход към планера; пази и последната изпратена позиция (in->comp_out) */
 void gc_out(gc_interp_t *in, const gc_cmd_t *c);
+/* проста команда през компенсацията и изхода (както вътре в интерпретатора) */
+void gc_emit_simple(gc_interp_t *in, gc_kind_t k, int ival, double val, int line);
 
 /* компенсация на радиуса (gc_comp.c) */
 void gc_comp_start(gc_interp_t *in, int side, double r);   /* side: +1 G41, -1 G42 */
