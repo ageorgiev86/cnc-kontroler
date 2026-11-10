@@ -17,6 +17,7 @@ add_library(cnc-core STATIC
   src/gc_parse.c
   src/gc_interp.c
   src/gc_dump.c
+  src/gc_comp.c
 )
 target_include_directories(cnc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(cnc-core PRIVATE ${CORE_WARNINGS})
@@ -51,3 +52,7 @@ foreach(p ${CNC_PROGRAMS})
   get_filename_component(n ${p} NAME_WE)
   add_test(NAME prog_${n} COMMAND ${CMAKE_COMMAND} -DGCSIM=$<TARGET_FILE:gcsim> -DIN=${p} -DEXP=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/${n}.expect -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compare_summary.cmake)
 endforeach()
+# BAIL-3 с истинския диаметър на T3 (Ø3,17, от коментара в програмата): проверява G41 в реална програма
+add_test(NAME prog_solidcam_bail3_t3 COMMAND ${CMAKE_COMMAND} -DGCSIM=$<TARGET_FILE:gcsim> "-DARGS=--tool 3:3.17"
+  -DIN=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/solidcam_bail3.tap
+  -DEXP=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/solidcam_bail3_t3.expect -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compare_summary.cmake)

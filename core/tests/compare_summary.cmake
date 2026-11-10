@@ -1,6 +1,7 @@
 # Сравнява обобщението на gcsim (--summary) с очакваното (.expect).
 # CNC_UPDATE=1 в средата презаписва .expect (после се проверява на ръка).
-execute_process(COMMAND ${GCSIM} --summary ${IN} OUTPUT_VARIABLE out RESULT_VARIABLE rc)
+separate_arguments(extra UNIX_COMMAND "${ARGS}")
+execute_process(COMMAND ${GCSIM} --summary ${extra} ${IN} OUTPUT_VARIABLE out RESULT_VARIABLE rc)
 if(DEFINED ENV{CNC_UPDATE})
   file(WRITE ${EXP} "${out}")
   message(STATUS "UPDATE ${EXP}")

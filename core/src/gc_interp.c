@@ -1,5 +1,6 @@
 /* Интерпретатор: блок → прости команди с машинни координати (стъпка 1, docs/interpretator-planer.md). */
 #include "cnc/gcode.h"
+#include "gc_internal.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -46,7 +47,7 @@ static int group_of(int g)
     case 901: case 911: return GR_ARCDIST;
     case 940: return GR_FEEDMODE;
     case 200: case 210: return GR_UNITS;
-    case 400: return GR_CUTTER;
+    case 400: case 410: case 420: return GR_CUTTER;
     case 430: case 490: return GR_TLO;
     case 730: case 800: case 810: case 820: case 830: case 850: case 860: case 870: case 880: case 890: return GR_CYCLE;
     case 980: case 990: return GR_RETURN;
@@ -63,8 +64,8 @@ static int group_of(int g)
 static const char *later_g(int g)
 {
     switch (g) {
-    case 410: case 411: case 420: case 421:
-        return "идва в стъпка 2а (компенсация на радиуса)";
+    case 411: case 421:
+        return "идва по-късно (G41.1/G42.1 с радиус в реда); ползвайте G41/G42 D";
     case 50: case 51: case 52: case 120: case 130: case 150: case 160:
     case 431: case 500: case 501: case 510: case 511: case 520: case 680: case 690: case 700: case 710: case 720: case 930: case 1500:
         return "идва в стъпка 5";
@@ -97,10 +98,21 @@ static double offset(const gc_interp_t *in, int ax)
 
 double gc_prog_pos(const gc_interp_t *in, int ax) { return in->pos[ax] - offset(in, ax); }
 
+void gc_out(gc_interp_t *in, const gc_cmd_t *c)
+{
+    if (c->kind == GC_RAPID || c->kind == GC_FEED || c->kind == GC_ARC) memcpy(in->comp_out, c->tgt, sizeof in->comp_out);
+    if (in->cfg.emit) in->cfg.emit(in->cfg.ctx, c);
+}
+
+/* всяка команда минава оттук; при G41/G42 през компенсацията (gc_comp.c) */
 static void emit(gc_interp_t *in, gc_cmd_t *c, int line)
 {
     c->line = line;
-    if (in->cfg.emit) in->cfg.emit(in->cfg.ctx, c);
+    if (in->comp_side) {
+        if (c->kind == GC_END) gc_comp_finish(in);
+        else { gc_comp_push(in, c); return; }
+    }
+    gc_out(in, c);
 }
 
 static void emit_simple(gc_interp_t *in, gc_kind_t k, int ival, double val, int line)
@@ -180,6 +192,7 @@ void gc_interp_init(gc_interp_t *in, const gc_config_t *cfg, gc_tables_t *tab, c
     in->tool = 0;
     in->tool_next = -1;
     if (start) memcpy(in->pos, start, sizeof in->pos);
+    memcpy(in->comp_out, in->pos, sizeof in->comp_out);
 }
 
 /* ---------- дъга ---------- */
@@ -355,6 +368,7 @@ static int do_cycle(gc_interp_t *in, const gc_block_t *b, int line, gc_err_t *e)
     int g = in->cycle;
     char gb[16];
     if (in->plane != 17) return fail(e, -1, "Циклите за пробиване са само в равнина G17");
+    if (in->comp_side) return fail(e, -1, "Цикъл при включена компенсация G41/G42: първо G40");
     if (in->feed <= 0) return fail(e, -1, "Липсва подаване F за цикъла");
     if (!in->cyc_has_z) return fail(e, -1, "Цикълът G%s няма дълбочина Z", gname(g, gb));
     if (!in->cyc_has_r) return fail(e, -1, "Цикълът G%s няма равнина R", gname(g, gb));
@@ -587,6 +601,21 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
 
     /* --- 5. модални: равнина, корекции, нули, режим на пътя, разстояния --- */
     if (grp[GR_PLANE] >= 0) in->plane = grp[GR_PLANE] / 10;
+    if (grp[GR_CUTTER] == 400) {
+        if (in->comp_side) gc_comp_finish(in);
+    } else if (grp[GR_CUTTER] == 410 || grp[GR_CUTTER] == 420) {
+        if (in->plane != 17) return fail(e, -1, "Компенсацията G41/G42 е само в равнина G17");
+        int d = in->tool;
+        if (GC_HAS(b, 'D')) {
+            double dv = GC_VAL(b, 'D');
+            d = (int)lround(dv);
+            if (fabs(dv - d) > 1e-9 || d < 0 || d >= GC_TOOL_N) return fail(e, b->col['D' - 'A'], "Невалиден номер D%g", dv);
+        }
+        double r = (in->tab->tool[d].dia + in->tab->tool[d].wear_dia) / 2;
+        if (r < 0) return fail(e, -1, "Диаметърът на инструмента D%d е отрицателен", d);
+        if (in->comp_side) gc_comp_finish(in);
+        gc_comp_start(in, grp[GR_CUTTER] == 410 ? 1 : -1, r);
+    }
     if (grp[GR_TLO] == 490) {
         if (in->tlo_on) { in->tlo_on = false; in->tlo = 0; in->tlo_h = 0; emit_simple(in, GC_TLO, 0, 0, line); }
     } else if (grp[GR_TLO] == 430) {
@@ -724,6 +753,7 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
     if (g53) {
         int mo = in->motion;
         if (mo != 0 && mo != 10) return fail(e, -1, "G53 изисква G0 или G1");
+        if (in->comp_side) return fail(e, -1, "G53 при включена компенсация G41/G42: първо G40");
         if (mo == 10 && in->feed <= 0) return fail(e, -1, "Липсва подаване F");
         double tgt[GC_NAX];
         memcpy(tgt, in->pos, sizeof tgt);
@@ -767,12 +797,15 @@ int gc_interp_line(gc_interp_t *in, const char *text, int line, gc_err_t *e)
         in->flow = GC_FLOW_RET;
     }
 
+    if (in->comp_err[0]) { e->line = in->comp_err_line; return fail(e, -1, "%s", in->comp_err); }
+
     /* --- 9. спиране и край --- */
     if (has_m(b, 0) || has_m(b, 1)) emit_simple(in, GC_PAUSE, has_m(b, 1), 0, line);
     if (has_m(b, 2) || has_m(b, 30)) {
         reset_modal(in);
         in->ended = true;
         emit_simple(in, GC_END, 0, 0, line);
+        if (in->comp_err[0]) { e->line = in->comp_err_line; return fail(e, -1, "%s", in->comp_err); }
     }
     return 0;
 }
@@ -858,6 +891,7 @@ int gc_run_text(gc_interp_t *in, const char *text, gc_err_t *e)
     }
     in->ended = true;
     emit_simple(in, GC_END, 0, 0, pc < n ? pc : n - 1);
+    if (in->comp_err[0]) { e->line = in->comp_err_line; e->col = -1; snprintf(e->msg, sizeof e->msg, "%s", in->comp_err); rc = -1; }
 out:
     free(ln);
     return rc;

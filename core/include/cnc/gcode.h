@@ -105,6 +105,7 @@ typedef void (*gc_emit_fn)(void *ctx, const gc_cmd_t *c);
 typedef enum { GC_DIALECT_MACH3, GC_DIALECT_HAAS } gc_dialect_t;
 enum { GC_FLOW_NONE, GC_FLOW_CALL, GC_FLOW_CALL_N, GC_FLOW_RET };
 #define GC_SUB_DEPTH 16    /* вложени подпрограми */
+#define GC_COMP_Q 256      /* команди без XY движение, докато чака сегмент при G41/G42 */
 
 typedef struct {
     gc_dialect_t dialect;
@@ -145,6 +146,19 @@ typedef struct {
 
     double pos[GC_NAX];    /* машинна позиция (краят на последното движение) */
     bool ended;
+
+    /* компенсация на радиуса G41/G42 (gc_comp.c): чакащият сегмент и командите след него */
+    int comp_side;         /* 0, +1 = G41 (отляво), -1 = G42 (отдясно) */
+    double comp_r;         /* радиус, мм */
+    bool comp_entry;       /* следващото XY движение е влизането */
+    bool comp_have;        /* има чакащ сегмент */
+    gc_cmd_t comp_seg;     /* чакащият сегмент (програмирани координати) */
+    double comp_s[GC_NAX]; /* програмираното му начало */
+    double comp_out[GC_NAX];   /* последната изпратена позиция (център на фрезата) */
+    gc_cmd_t comp_q[GC_COMP_Q];
+    int comp_nq;
+    int comp_err_line;
+    char comp_err[200];
 
     /* поток за изпълнителя (gc_run_text): M98 / M97 / M99 в последния ред */
     int flow;              /* GC_FLOW_* */
