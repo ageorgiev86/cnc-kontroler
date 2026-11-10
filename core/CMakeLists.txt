@@ -19,6 +19,7 @@ add_library(cnc-core STATIC
   src/gc_dump.c
   src/gc_comp.c
   src/gc_job.c
+  src/planner.c
 )
 target_include_directories(cnc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(cnc-core PRIVATE ${CORE_WARNINGS})
@@ -57,3 +58,10 @@ endforeach()
 add_test(NAME prog_solidcam_bail3_t3 COMMAND ${CMAKE_COMMAND} -DGCSIM=$<TARGET_FILE:gcsim> "-DARGS=--tool 3:3.17"
   -DIN=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/solidcam_bail3.tap
   -DEXP=${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/solidcam_bail3_t3.expect -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compare_summary.cmake)
+
+add_executable(test_planner tests/test_planner.c)
+target_compile_options(test_planner PRIVATE ${CORE_WARNINGS})
+target_link_libraries(test_planner PRIVATE cnc-core)
+add_test(NAME planner COMMAND test_planner)
+# реална програма през планера: лимитите на осите по позициите и краят
+add_test(NAME plan_flatcam_outline COMMAND gcsim --plan ${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/flatcam_junction_outline.tap)
