@@ -1,0 +1,5 @@
+2: RAPID X0 Y0 Z5
+3: RAPID X0 Y0 Z1
+3: FEED X0 Y0 Z-2 F100
+3: RAPID X0 Y0 Z5
+ERR 4 G70 (дупки по окръжност и права) е код на Haas

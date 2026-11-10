@@ -140,6 +140,15 @@ typedef struct {
     int tlo_h;
     double tlo;
     double g92[GC_NAX];
+    double g52[GC_NAX];    /* G52: локално отместване (програмни единици → мм) */
+    /* преобразувания на XYZ (стъпка 5): огледало → мащаб → завъртане в XY, после нулата */
+    bool mir[3];           /* G51.1: огледало по оста около mir_c */
+    double mir_c[3];
+    double scl[3], scl_c[3];   /* G51: мащаб по оста около scl_c (1 = без) */
+    bool rot_on;           /* G68: завъртане в XY около rot_c на rot_a (rad) */
+    double rot_c[2], rot_a;
+    bool inv_time;         /* G93: F е 1 / минути за всеки ред */
+    double inv_f;
     double feed;           /* мм/мин, 0 = не е зададено */
     double s;
     int sp_dir;

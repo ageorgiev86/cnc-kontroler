@@ -1,0 +1,5 @@
+; test: axes=XYZ
+G21 G90 G0 X0 Y0 Z5
+G81 X0 Y0 Z-2 R1 F100
+G70 I20 L4
+M30
