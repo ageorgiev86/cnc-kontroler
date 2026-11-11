@@ -7,9 +7,10 @@
 #include <string.h>
 
 #include "ui.h"
+#include "update.h"
 #include "ui_style.h"
 
-typedef enum { D_NONE, D_SETPOS, D_NUM, D_TEXT, D_PICK } dkind_t;
+typedef enum { D_NONE, D_SETPOS, D_NUM, D_TEXT, D_PICK, D_UPD } dkind_t;
 
 static struct {
     dkind_t kind;
@@ -548,4 +549,94 @@ bool dlg_key(uint32_t key)
     }
     if (D.kind == D_PICK && key == LV_KEY_ENTER && confirm_cb) { on_conf_ok(NULL); return true; }
     return true;   /* докато има диалог, клавишите не стигат до екрана */
+}
+
+/* ---------- обновяване: един процент, една лента, „Инсталирай“ светва след изтеглянето ---------- */
+static lv_obj_t *up_pc, *up_bar, *up_txt, *up_ver, *up_cancel, *up_inst;
+static int up_key = -1;
+
+static void on_up_cancel(lv_event_t *e)
+{
+    if (UPD.ph == UP_INST || UPD.ph == UP_RESTART) return;
+    update_cancel();
+    dlg_close();
+}
+static void on_up_inst(lv_event_t *e) { update_install(); dlg_tick(); }
+
+void dlg_update(void)
+{
+    lv_obj_t *d = dlg_box(26);
+    D.kind = D_UPD;
+    ui_set_text(D.title, "Обновяване");
+    up_pc = ui_label(d, F.num_lg, C_FG, "");
+    lv_obj_set_width(up_pc, LV_PCT(100));
+    lv_obj_set_style_text_align(up_pc, LV_TEXT_ALIGN_CENTER, 0);
+    up_bar = lv_bar_create(d);
+    lv_obj_remove_style_all(up_bar);
+    lv_obj_set_size(up_bar, LV_PCT(100), EM(1.1f));
+    lv_obj_set_style_bg_color(up_bar, C_SURF3, 0);
+    lv_obj_set_style_bg_opa(up_bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(up_bar, EM(0.45f), 0);
+    lv_obj_set_style_bg_color(up_bar, C_INFO, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(up_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(up_bar, EM(0.45f), LV_PART_INDICATOR);
+    lv_bar_set_range(up_bar, 0, 100);
+    up_txt = ui_label(d, F.txt_sm, C_DIM, "");
+    lv_obj_set_width(up_txt, LV_PCT(100));
+    lv_obj_set_style_text_align(up_txt, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(up_txt, LV_LABEL_LONG_MODE_WRAP);
+    up_ver = ui_label(d, F.ui_md, C_HI, "");
+    lv_obj_set_width(up_ver, LV_PCT(100));
+    lv_obj_set_style_text_align(up_ver, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_t *r = ui_box(d);
+    lv_obj_set_width(r, LV_PCT(100));
+    ui_flex(r, LV_FLEX_FLOW_ROW, 0.35f);
+    up_cancel = ui_btn(r, "ОТКАЗ", BTN_NORMAL, false);
+    lv_obj_set_flex_grow(up_cancel, 10);
+    lv_obj_add_event_cb(up_cancel, on_up_cancel, LV_EVENT_CLICKED, NULL);
+    up_inst = ui_btn(r, "ИНСТАЛИРАЙ", BTN_GO, false);
+    lv_obj_set_flex_grow(up_inst, 16);
+    lv_obj_add_event_cb(up_inst, on_up_inst, LV_EVENT_CLICKED, NULL);
+    up_key = -1;
+    dlg_tick();
+}
+
+void dlg_tick(void)
+{
+    if (D.kind != D_UPD) return;
+    up_phase_t ph = UPD.ph;
+    if (ph == UP_IDLE) { dlg_close(); return; }
+    bool busy = update_machine_busy();
+    int key = ph * 1000 + UPD.pc * 2 + busy;
+    if (key == up_key) return;
+    up_key = key;
+    bool bar = ph == UP_DL || ph == UP_READY || ph == UP_INST || ph == UP_RESTART;
+    char t[200];
+    snprintf(t, sizeof t, "%d %%", ph == UP_RESTART ? 100 : UPD.pc);
+    ui_set_text(up_pc, t);
+    lv_obj_set_hidden(up_pc, !bar);
+    lv_obj_set_hidden(up_bar, !(bar || ph == UP_CHECK));
+    lv_bar_set_value(up_bar, ph == UP_CHECK ? 0 : ph == UP_RESTART ? 100 : UPD.pc, LV_ANIM_OFF);
+    bool green = ph == UP_READY || ph == UP_INST || ph == UP_RESTART;
+    lv_obj_set_style_bg_color(up_bar, green ? C_OK : C_INFO, LV_PART_INDICATOR);
+    const char *txt = ph == UP_CHECK ? "Проверка…" : ph == UP_DL ? "Изтегляне…" : ph == UP_INST ? "Инсталиране…" : ph == UP_RESTART ? "Рестартиране…"
+        : ph == UP_NONE ? "Системата е обновена." : ph == UP_READY ? (busy ? "Изтеглено. Спрете машината, за да инсталирате." : "Изтеглено.") : "";
+    if (ph == UP_ERR) {
+        /* „не е настроено“ се казва; техническите подробности не */
+        snprintf(t, sizeof t, "%s", strstr(UPD.err, "настроено") ? "Обновяването не е настроено на тази машина." : "Обновяването не е успешно. Опитайте отново.");
+        txt = t;
+    }
+    ui_set_text(up_txt, txt);
+    char v[60] = "";
+    if (green) snprintf(v, sizeof v, "Версия %s", UPD.avail);
+    else if (ph == UP_NONE) snprintf(v, sizeof v, "Версия %s", UPD.cur);
+    ui_set_text(up_ver, v);
+    lv_obj_set_hidden(up_ver, !v[0]);
+    lv_obj_set_hidden(up_cancel, ph == UP_INST || ph == UP_RESTART);
+    lv_obj_set_hidden(up_inst, ph == UP_NONE || (ph == UP_ERR && strstr(UPD.err, "настроено")));
+    ui_set_text(ui_btn_label(up_cancel), ph == UP_NONE || ph == UP_ERR ? "ЗАТВОРИ" : "ОТКАЗ");
+    ui_set_text(ui_btn_label(up_inst), ph == UP_ERR ? "ОПИТАЙ ОТНОВО" : ph == UP_READY && busy ? "СПРЕТЕ МАШИНАТА" : "ИНСТАЛИРАЙ");
+    bool on = ph == UP_ERR || (ph == UP_READY && !busy);
+    ui_btn_set_kind(up_inst, on ? BTN_GO : BTN_NORMAL);
+    lv_obj_set_style_opa(up_inst, on ? LV_OPA_COVER : 97, 0);
 }

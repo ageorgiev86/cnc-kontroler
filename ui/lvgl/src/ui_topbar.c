@@ -6,9 +6,11 @@
 
 #include "ui.h"
 #include "ui_style.h"
+#include "update.h"
 
 static void on_reset(lv_event_t *e) { machine_reset(lv_tick_get()); }
 static void on_estop(lv_event_t *e) { machine_estop(); }
+static void on_upd(lv_event_t *e) { update_open(); }
 
 /* .chip — рамка с текст; връща контейнера */
 static lv_obj_t *chip(lv_obj_t *parent)
@@ -85,6 +87,14 @@ void topbar_create(topbar_t *tb, lv_obj_t *parent)
     tb->tool = chip_text(l, "");
     lv_label_set_long_mode(tb->tool, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_style_max_width(tb->tool, EM(15), 0);
+
+    /* .chip.upd: оранжев (червен при важна версия), отваря прозореца „Обновяване“ без PIN */
+    lv_obj_t *u = tb->upd = chip(l);
+    tb->upd_lbl = lv_label_create(u);
+    lv_obj_set_style_text_font(u, F.ui_md, 0);
+    lv_obj_set_clickable(u, true);
+    lv_obj_add_event_cb(u, on_upd, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_hidden(u, true);
 
     lv_obj_t *m = chip(l);
     lv_obj_t *led = tb->mcu_led = ui_box(m);
@@ -172,6 +182,19 @@ void topbar_update(topbar_t *tb, uint32_t now)
     if (strcmp(buf, tool_was)) {
         ui_set_text(tb->tool, buf);
         snprintf(tool_was, sizeof tool_was, "%s", buf);
+        fit(tb);
+    }
+
+    /* знакът за обновяване; при промяна лентата се подрежда наново */
+    static int upd_was = -1;
+    int uv = UPD.avail[0] ? 1 + UPD.crit : 0;
+    if (uv != upd_was) {
+        upd_was = uv;
+        lv_obj_set_hidden(tb->upd, !uv);
+        lv_color_t c = uv == 2 ? C_BAD : C_WARN;
+        lv_obj_set_style_border_color(tb->upd, c, 0);
+        lv_obj_set_style_text_color(tb->upd, c, 0);
+        ui_set_text(tb->upd_lbl, uv == 2 ? "ВАЖНО ОБНОВЯВАНЕ" : "ОБНОВЯВАНЕ");
         fit(tb);
     }
 

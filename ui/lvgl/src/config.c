@@ -92,6 +92,7 @@ void cfg_init(void)
     add_sec("prb", P_PRB, P_PRB_N);
     add_sec("disp", P_DISP, P_DISP_N);
     add_sec("lube", P_LUBE, P_LUBE_N);
+    add_sec("upd", P_UPD, P_UPD_N);
     /* достъп: PIN-овете на нивата и автоматичен изход (макетът: 1111 и 2222) */
     add("acc.pin1", "1111");
     add("acc.pin2", "2222");

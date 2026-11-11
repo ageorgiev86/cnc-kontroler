@@ -67,9 +67,14 @@ set(APP_SOURCES
   src/ui_files.c
   src/config_defs.c
   src/net_apply.c
+  src/update.c
 )
 
 # Предупрежденията са грешки само за нашия код; LVGL се компилира с настройките си
+# версията (ui/lvgl/VERSION); истинската идва от cnc-update (тагът или VERSION-хеш)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION CNC_VERSION LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION)
+
 set(APP_WARNINGS -Wall -Wextra -Wshadow -Wno-unused-parameter)
 
 # Прави библиотека LVGL и програма за една от целите
@@ -85,6 +90,7 @@ function(cnc_ui_target name sim main_src)
   add_executable(${name} ${main_src} ${APP_SOURCES} ${FONT_SOURCES})
   target_include_directories(${name} PRIVATE src)
   target_compile_options(${name} PRIVATE ${APP_WARNINGS})
+  target_compile_definitions(${name} PRIVATE CNC_VERSION="${CNC_VERSION}")
   target_link_libraries(${name} PRIVATE ${name}_lvgl cnc-core m)
 endfunction()
 

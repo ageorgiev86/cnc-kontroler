@@ -13,12 +13,13 @@
 void program_reparse(void);   /* program.h (там P засенчва местните P) */
 #include "ui.h"
 #include "ui_style.h"
+#include "update.h"
 
-enum { S_MACH, S_IO, S_LUBE, S_AX, S_HOME, S_ENC, S_SP, S_MAG, S_PRB, S_TS, S_MCU, S_NET, S_DISP, S_LOGIC, S_ACC, S_N };
-static const char *const SEC_K[S_N] = {"mach", "io", "lube", "ax", "home", "enc", "sp", "mag", "prb", "ts", "mcu", "net", "disp", "logic", "acc"};
+enum { S_MACH, S_IO, S_LUBE, S_AX, S_HOME, S_ENC, S_SP, S_MAG, S_PRB, S_TS, S_MCU, S_NET, S_DISP, S_UPD, S_LOGIC, S_ACC, S_N };
+static const char *const SEC_K[S_N] = {"mach", "io", "lube", "ax", "home", "enc", "sp", "mag", "prb", "ts", "mcu", "net", "disp", "upd", "logic", "acc"};
 static const char *const SEC_N[S_N] = {"Машина", "Входове/изходи", "Смазване", "Оси и мотори", "Реферирване", "Енкодери", "Шпиндел", "Магазин",
-                                       "3D пробник", "Toolsetter", "Връзка с MCU", "Мрежа", "Дисплей", "Макроси и логика", "Достъп"};
-static const int SEC_LVL[S_N] = {2, 2, 1, 2, 2, 2, 2, 2, 1, 1, 2, 1, 1, 2, 2};
+                                       "3D пробник", "Toolsetter", "Връзка с MCU", "Мрежа", "Дисплей", "Обновяване", "Макроси и логика", "Достъп"};
+static const int SEC_LVL[S_N] = {2, 2, 1, 2, 2, 2, 2, 2, 1, 1, 2, 1, 1, 1, 2, 2};
 static const char *const LVN[3] = {"Оператор", "Настройчик", "Производител"};
 
 static lv_obj_t *root, *login, *main_grid, *nav, *nav_btn[S_N], *sec_title, *dirty_l, *who, *body, *help, *foot, *note;
@@ -43,6 +44,7 @@ static const pdef_t *sec_form(int s, int *n)
     case S_TS: *n = P_TS_N; return P_TS;
     case S_NET: *n = P_NET_N; return P_NET;
     case S_DISP: *n = P_DISP_N; return P_DISP;
+    case S_UPD: *n = P_UPD_N; return P_UPD;
     case S_AX: *n = P_AX_N; return P_AX;
     case S_HOME: *n = P_HOME_N; return P_HOME;
     case S_ENC: *n = P_ENC_N; return P_ENC;
@@ -456,6 +458,19 @@ static void build_logic(void)
 }
 
 /* ---------- връзка с MCU и достъп ---------- */
+static void kv_list(const char *const kv[][2], int n);
+/* „Обновяване“: версиите и кога е проверено */
+static void upd_info(void)
+{
+    char a[100], b[60];
+    snprintf(a, sizeof a, "%s", UPD.avail[0] ? "има нова версия" : "обновена");
+    if (UPD.avail[0]) snprintf(a, sizeof a, "има нова версия %.30s%s", UPD.avail, UPD.crit ? " (важна)" : "");
+    snprintf(b, sizeof b, "%s", UPD.checked[0] ? UPD.checked : "—");
+    const char *kv[4][2] = {{"Инсталирана версия", UPD.cur[0] ? UPD.cur : "?"}, {"Предишна версия", UPD.prev[0] ? UPD.prev : "—"},
+                            {"Последна проверка", b}, {"Състояние", a}};
+    kv_list((const char *const (*)[2])kv, 4);
+}
+
 static void kv_list(const char *const kv[][2], int n)
 {
     for (int i = 0; i < n; i++) {
@@ -550,6 +565,14 @@ static void on_teach(lv_event_t *e)
     machine_toast("Взета е текущата позиция. Натиснете „Запиши“.", now, 3500);
     dirty();
 }
+static void on_rollback_ok(int i, void *ud) { update_rollback(); }
+static void on_rollback(lv_event_t *e)
+{
+    if (!UPD.prev[0]) { machine_toast("Няма предишна версия", lv_tick_get(), 3000); return; }
+    char t[300];
+    snprintf(t, sizeof t, "Ще се върне версия %.30s, а %.30s остава като предишна. Интерфейсът се рестартира.", UPD.prev, UPD.cur);
+    dlg_confirm("Върни предишната версия", t, "ВЪРНИ", on_rollback_ok, NULL);
+}
 static void on_cal(lv_event_t *e) { ui_go(SCR_PROBE); machine_probe_cycle("cal", 0, lv_tick_get()); }
 
 static void teach_row(void)
@@ -565,6 +588,10 @@ static void teach_row(void)
         if (mon && DS_IS("mag.mtype", "linear")) T("ГНЕЗДО 1 = ТЕКУЩАТА X Y", 2);
         if (mon && !DS_IS("mag.mtype", "linear")) T("ПОЗИЦИЯ ЗА СМЯНА = ТЕКУЩАТА X Y", 6);
         if (mon) T("Z ЗА СМЯНА = ТЕКУЩАТА Z", 1);
+    } else if (sec == S_UPD) {
+        char t[80];
+        snprintf(t, sizeof t, "ВЪРНИ ПРЕДИШНАТА ВЕРСИЯ (%.30s)", UPD.prev[0] ? UPD.prev : "—");
+        lv_obj_add_event_cb(ui_btn(r, t, BTN_NORMAL, false), on_rollback, LV_EVENT_CLICKED, NULL);
     } else if (sec == S_TS) {
         T("ВЗЕМИ ТЕКУЩАТА X Y", 3);
         T("Z ЗА НАЧАЛО = ТЕКУЩАТА Z", 4);
@@ -585,6 +612,7 @@ static const char *sec_help(void)
     case S_LUBE: return "Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).";
     case S_PRB: return "Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена и натиснете „Калибрирай“.";
     case S_MAG: return "Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.";
+    case S_UPD: return "Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.";
     case S_DISP: return "Режимът на екрана и завъртането. Прилага се при следващото пускане на интерфейса (собственият DRM драйвер е следваща стъпка).";
     case S_MCU: return "Само за преглед: параметрите на връзката се задават във фърмуера на STM32.";
     case S_LOGIC: return "Макросите M100–M199 и правилата се изпълняват от интерпретатора и PLC слоя, които идват след стабилната основа (docs/makrosi-logika.md). Тук е прегледът им.";
@@ -601,7 +629,7 @@ static void build(void)
     int n;
     const pdef_t *P = sec_form(sec, &n);
     if (sec_axis(sec)) build_axis();
-    else if (P) { build_form(); teach_row(); }
+    else if (P) { if (sec == S_UPD) upd_info(); build_form(); teach_row(); }
     else if (sec == S_IO) build_io();
     else if (sec == S_LOGIC) build_logic();
     else if (sec == S_ACC) build_acc();

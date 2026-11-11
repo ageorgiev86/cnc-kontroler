@@ -19,6 +19,7 @@ typedef struct {
     lv_obj_t *bar, *left, *right;
     lv_obj_t *reset, *pill, *pill_lbl, *mode, *mach, *gmodes_wcs, *tool, *mcu_led, *mcu;
     lv_obj_t *msg, *clock, *estop;
+    lv_obj_t *upd, *upd_lbl;   /* „ОБНОВЯВАНЕ“: има нова версия */
 } topbar_t;
 
 typedef struct {
@@ -134,6 +135,8 @@ void dlg_text(const char *title, const char *cur, int maxlen, dlg_text_cb cb, vo
 void dlg_text_line(const char *title, const char *cur, const char *hint, dlg_text_cb cb, dlg_line_cb lcb, void *ud);   /* ред от G-code */
 void dlg_pick(const char *title, const char *const *opts, int n, int cur, dlg_pick_cb cb, void *ud);
 void dlg_confirm(const char *title, const char *text, const char *ok, dlg_pick_cb cb, void *ud);
+void dlg_update(void);         /* прозорецът „Обновяване“ (update.c) */
+void dlg_tick(void);           /* опреснява отворения прозорец „Обновяване“ */
 void dlg_close(void);
 bool dlg_open(void);
 bool dlg_key(uint32_t key);     /* физическа клавиатура; true = обработено */

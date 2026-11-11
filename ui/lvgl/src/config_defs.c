@@ -26,6 +26,7 @@ static const char *const O_prb_prMount[] = {"spindle", "В шпиндела (T10
 static const char *const O_disp_dRot[] = {"0", "0°", "90", "90°", "180", "180°", "270", "270°", NULL};
 static const char *const O_lube_luMode[] = {"time", "Време в движение", "dist", "Изминат път", NULL};
 static const char *const O_lube_luLow[] = {"warn", "Предупреждение", "end", "Стоп след програмата", "alarm", "Аларма веднага", NULL};
+static const char *const O_upd_upCh[] = {"stable", "Стабилни", "test", "Тестови", NULL};
 
 static bool sh0(void) { return DN("mag.mOn"); }
 static bool sh1(void) { return DN("mag.mOn") && (DS_IS("mag.mtype", "carousel")); }
@@ -241,4 +242,10 @@ const pdef_t P_LUBE[] = {
     {"luLow", "При ниско ниво на маслото", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_lube_luLow, "По входа с функция „Ниво масло“. „Стоп след програмата“ оставя текущата програма да завърши, но не позволява нова, докато не се долее.", NULL, sh21, "warn", {NULL}},
 };
 const int P_LUBE_N = sizeof P_LUBE / sizeof P_LUBE[0];
+
+const pdef_t P_UPD[] = {
+    {"upCh", "Версии", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_upd_upCh, "„Стабилни“ са проверените версии за работа. „Тестови“ са за пробване на нови възможности, преди да станат стабилни. Обновяването е с едно натискане и не иска PIN.", NULL, NULL, "stable", {NULL}},
+    {"upAuto", "Проверявай автоматично", NULL, PT_BOOL, 0, 0, 0, "Да", "Не", 0, NULL, "При пускане и на всеки 6 часа машината проверява дали има нова версия. Ако има, в горната лента светва „Обновяване“. Без интернет не показва грешка.", NULL, NULL, "1", {NULL}},
+};
+const int P_UPD_N = sizeof P_UPD / sizeof P_UPD[0];
 

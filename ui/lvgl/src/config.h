@@ -24,8 +24,8 @@ typedef struct {
     const char *adef[6];          /* за параметрите на осите: по ос */
 } pdef_t;
 
-extern const pdef_t P_AX[], P_HOME[], P_ENC[], P_MAG[], P_TS[], P_NET[], P_MACH[], P_SP[], P_PRB[], P_DISP[], P_LUBE[];
-extern const int P_AX_N, P_HOME_N, P_ENC_N, P_MAG_N, P_TS_N, P_NET_N, P_MACH_N, P_SP_N, P_PRB_N, P_DISP_N, P_LUBE_N;
+extern const pdef_t P_AX[], P_HOME[], P_ENC[], P_MAG[], P_TS[], P_NET[], P_MACH[], P_SP[], P_PRB[], P_DISP[], P_LUBE[], P_UPD[];
+extern const int P_AX_N, P_HOME_N, P_ENC_N, P_MAG_N, P_TS_N, P_NET_N, P_MACH_N, P_SP_N, P_PRB_N, P_DISP_N, P_LUBE_N, P_UPD_N;
 
 void cfg_init(void);
 void cfg_add(const char *key, const char *val);   /* нов параметър (ако го няма) */

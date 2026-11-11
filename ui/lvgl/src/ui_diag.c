@@ -9,6 +9,7 @@
 #include "io.h"
 #include "ui.h"
 #include "ui_style.h"
+#include "update.h"
 
 #define ENC_ROWS (AX_N + 1)
 static lv_obj_t *enc_row[ENC_ROWS][7], *enc_st[ENC_ROWS], *enc_line[ENC_ROWS];
@@ -282,6 +283,28 @@ static lv_obj_t *link_row(lv_obj_t *scr)
     return r;
 }
 
+/* „Софтуер“: версия и „Обновяване“ (без PIN) */
+static lv_obj_t *sw_ver, *sw_st;
+static void on_sw_upd(lv_event_t *e) { update_open(); }
+static lv_obj_t *sw_card(lv_obj_t *scr)
+{
+    lv_obj_t *c = ui_card(scr, "СОФТУЕР", NULL);
+    lv_obj_t *b = ui_box(c);
+    lv_obj_set_width(b, LV_PCT(100));
+    lv_obj_set_style_pad_hor(b, EM(0.75f), 0);
+    lv_obj_set_style_pad_ver(b, EM(0.6f), 0);
+    ui_flex(b, LV_FLEX_FLOW_ROW, 1.0f);
+    lv_obj_set_flex_align(b, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    ui_lab(b, "ВЕРСИЯ");
+    sw_ver = ui_label(b, F.num_pg, C_FG, "");
+    sw_st = ui_label(b, F.txt, C_DIM, "");
+    lv_obj_set_flex_grow(sw_st, 1);
+    lv_obj_set_width(sw_st, 1);
+    lv_label_set_long_mode(sw_st, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_add_event_cb(ui_btn(b, "ОБНОВЯВАНЕ", BTN_GO, false), on_sw_upd, LV_EVENT_CLICKED, NULL);
+    return c;
+}
+
 static lv_obj_t *diag_scr;
 /* тест: превърта екрана до y (px); -1 = до края */
 void diag_test_scroll(int y)
@@ -299,11 +322,11 @@ void diag_create(lv_obj_t *scr)
     static int32_t cols[3], rows[7];
     if (g_portrait) {
         cols[0] = LV_GRID_FR(1); cols[1] = LV_GRID_TEMPLATE_LAST;
-        for (int i = 0; i < 5; i++) rows[i] = LV_GRID_CONTENT;
-        rows[5] = LV_GRID_TEMPLATE_LAST;
+        for (int i = 0; i < 6; i++) rows[i] = LV_GRID_CONTENT;
+        rows[6] = LV_GRID_TEMPLATE_LAST;
     } else {
         cols[0] = LV_GRID_FR(52); cols[1] = LV_GRID_FR(48); cols[2] = LV_GRID_TEMPLATE_LAST;
-        rows[0] = LV_GRID_CONTENT; rows[1] = LV_GRID_CONTENT; rows[2] = LV_GRID_TEMPLATE_LAST;
+        rows[0] = LV_GRID_CONTENT; rows[1] = LV_GRID_CONTENT; rows[2] = LV_GRID_CONTENT; rows[3] = LV_GRID_TEMPLATE_LAST;
     }
     ui_grid(scr, cols, rows, 0.6f);
     /* хоризонтално: левите карти са в една колона. Карта през няколко реда не става: LVGL смята
@@ -314,11 +337,11 @@ void diag_create(lv_obj_t *scr)
         ui_flex(left, LV_FLEX_FLOW_COLUMN, 0.6f);
         lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     }
-    lv_obj_t *e = enc_card(left), *s = sys_card(left), *a = aio_card(left), *g = gio_card(scr), *l = link_row(scr);
+    lv_obj_t *e = enc_card(left), *s = sys_card(left), *a = aio_card(left), *g = gio_card(scr), *w = sw_card(scr), *l = link_row(scr);
 #define TOP(o, c, cs, r, rs) lv_obj_set_grid_cell(o, LV_GRID_ALIGN_STRETCH, c, cs, LV_GRID_ALIGN_START, r, rs)
-    if (g_portrait) { TOP(e, 0, 1, 0, 1); TOP(s, 0, 1, 1, 1); TOP(a, 0, 1, 2, 1); TOP(g, 0, 1, 3, 1); TOP(l, 0, 1, 4, 1); }
+    if (g_portrait) { TOP(e, 0, 1, 0, 1); TOP(s, 0, 1, 1, 1); TOP(a, 0, 1, 2, 1); TOP(g, 0, 1, 3, 1); TOP(w, 0, 1, 4, 1); TOP(l, 0, 1, 5, 1); }
     else {
-        TOP(left, 0, 1, 0, 1); TOP(g, 1, 1, 0, 1); TOP(l, 0, 2, 1, 1);
+        TOP(left, 0, 1, 0, 1); TOP(g, 1, 1, 0, 1); TOP(w, 0, 2, 1, 1); TOP(l, 0, 2, 2, 1);
         lv_obj_set_width(e, LV_PCT(100)); lv_obj_set_width(s, LV_PCT(100)); lv_obj_set_width(a, LV_PCT(100));
     }
 #undef TOP
@@ -328,6 +351,12 @@ static void f3(char *b, size_t n, double v) { snprintf(b, n, "%.3f", fabs(v) < 0
 
 void diag_update(uint32_t now)
 {
+    ui_set_text(sw_ver, UPD.cur[0] ? UPD.cur : "?");
+    char sws[80];
+    if (UPD.avail[0]) snprintf(sws, sizeof sws, "Има нова версия %.30s%s", UPD.avail, UPD.crit ? " (важна)" : "");
+    else snprintf(sws, sizeof sws, "%s", UPD.checked[0] ? "Системата е обновена" : "");
+    ui_set_text(sw_st, sws);
+    lv_obj_set_style_text_color(sw_st, UPD.avail[0] ? (UPD.crit ? C_BAD : C_WARN) : C_DIM, 0);
     char b[200], k[32];
     for (int r = 0; r < ENC_ROWS; r++) {
         bool ax = r < AX_N;

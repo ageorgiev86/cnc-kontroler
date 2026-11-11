@@ -16,6 +16,7 @@
 #include "config.h"
 #include "program.h"
 #include "ui_style.h"
+#include "update.h"
 
 static topbar_t tb;
 static dro_t dro;
@@ -24,7 +25,7 @@ static gcode_t gc;
 static ctrl_t ctrl;
 
 int g_screen = SCR_RUN;
-static lv_obj_t *scr_box[SCR_N], *nav_btn[7];
+static lv_obj_t *scr_box[SCR_N], *nav_btn[7], *nav_dot;
 static struct { bool has; int col, cspan, row, rspan; } tslot[SCR_N];
 static const int NAV_SCR[7] = {SCR_RUN, SCR_JOG, SCR_MDI, SCR_TOOLS, SCR_PROBE, SCR_DIAG, SCR_SET};
 
@@ -110,6 +111,10 @@ static void update_cb(lv_timer_t *t)
     machine_tick(now, last ? now - last : 0);
     last = now;
     topbar_update(&tb, now);
+    update_tick(now);
+    dlg_tick();
+    lv_obj_set_hidden(nav_dot, !UPD.avail[0]);
+    lv_obj_set_style_bg_color(nav_dot, UPD.crit ? C_BAD : C_WARN, 0);
     switch (g_screen) {
     case SCR_RUN:
         dro_update(&dro, now);
@@ -174,6 +179,15 @@ static void navbar_create(lv_obj_t *parent)
         lv_obj_add_event_cb(b, on_nav, LV_EVENT_CLICKED, (void *)(intptr_t)NAV_SCR[i]);
         lv_obj_set_grid_cell(b, LV_GRID_ALIGN_STRETCH, i, 1, LV_GRID_ALIGN_CENTER, 0, 1);
     }
+    /* точката на „Диагностика“: там е „Софтуер“ → „Обновяване“ */
+    lv_obj_t *d = nav_dot = ui_box(nav_btn[5]);
+    lv_obj_set_floating(d, true);
+    lv_obj_set_size(d, EM(0.55f), EM(0.55f));
+    lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(d, C_WARN, 0);
+    lv_obj_align(d, LV_ALIGN_TOP_RIGHT, EM(0.1f), -EM(0.2f));
+    lv_obj_set_hidden(d, true);
 }
 
 /* екранът „Работа“ (.screens + .run): две колони (63/37, в портрет 57/43), четири реда */
@@ -233,6 +247,7 @@ void ui_create(lv_display_t *disp)
     ui_flex(scr, LV_FLEX_FLOW_COLUMN, 0);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
+    update_init();
     topbar_create(&tb, scr);
 
     lv_obj_t *screens = ui_box(scr);
@@ -413,6 +428,9 @@ void ui_test(const char *act)
     else if (!strncmp(act, "gcline:", 7)) gcode_test(&gc, atoi(arg), -1);   /* редакция на ред N (от 1) */
     else if (!strncmp(act, "gcfn:", 5)) gcode_test(&gc, 0, atoi(arg));       /* 0 изтрий реда, 1 нов ред след */
     else if (!strncmp(act, "gcsave", 6)) gcode_test(&gc, 0, 2);
+    else if (!strncmp(act, "upd:open", 8)) update_open();
+    else if (!strncmp(act, "upd:inst", 8)) update_install();
+    else if (!strncmp(act, "upd:back", 8)) update_rollback();
     else if (!strncmp(act, "load", 4)) files_load();
     else if (!strncmp(act, "reparse", 7)) { program_reparse(); ui_program_changed(); }
     else if (!strncmp(act, "keys:", 5)) for (const char *k = arg; *k; k++) ui_key(*k == '|' ? LV_KEY_ENTER : (uint32_t)*k);
