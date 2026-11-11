@@ -379,6 +379,23 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 .offn1{font:700 1em var(--f-ui);color:var(--faint);padding-left:.4em}.offchk.lock{opacity:.6;cursor:default}
 .offchk{width:2em!important;font:700 1.1em var(--f-ui)}.offbase{font:600 .75em var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 .offdim{font:400 .85em var(--f-num);color:var(--faint)}.offn{font:500 .8em/1.35 var(--f-txt);color:var(--dim)}.offn .w{color:var(--warn)}
+.chip.upd{cursor:pointer;color:var(--warn);border-color:var(--warn);font-weight:700}
+.chip.upd.crit{color:var(--bad);border-color:var(--bad);box-shadow:0 0 .5em rgba(255,80,80,.35)}
+.navbar .btn.dot{position:relative}
+.navbar .btn.dot::after{content:'';position:absolute;top:.5em;right:.7em;width:.55em;height:.55em;border-radius:50%;background:var(--warn)}
+.navbar .btn.dot.crit::after{background:var(--bad)}
+.updlg{width:26em}
+.upd-pc{font:600 2.6em/1.1 var(--f-num);text-align:center;color:var(--fg);padding:.2em 0}
+.upd-bar{height:1.1em;background:var(--surf3);border-radius:.45em;overflow:hidden;position:relative}
+.upd-bar i{position:absolute;inset:0 auto 0 0;background:var(--info);border-radius:.45em}
+.upd-bar.ok i{background:var(--ok)}
+.upd-ver{text-align:center;font:600 1.05em var(--f-ui);letter-spacing:.05em;color:var(--hi);min-height:1.3em}
+.diag .swcard{grid-column:1/-1}
+.sw{display:flex;flex-direction:row!important;align-items:center;gap:1em;flex-wrap:wrap}
+.sw .v{font:600 .8em var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.sw .v b{font:500 1.5em var(--f-num);color:var(--fg);letter-spacing:0;margin-left:.3em;text-transform:none}
+.sw .st{flex:1;font:500 .9em var(--f-txt);color:var(--dim)}
+.sw .st.new{color:var(--warn)}.sw .st.crit{color:var(--bad)}
 .chip.wcsc{cursor:pointer}.chip.wcsc #sbPart{color:var(--hi)}
 .lgtabs{margin-bottom:.6em}.lgtabs .btn{flex:0 1 auto}
 .lgm{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:.6em;min-height:0}
@@ -577,6 +594,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <span class="chip" id="sbMach">Фреза / рутер</span>
           <span class="chip wcsc" data-act="go" data-v="probe" title="Офсети: нулеви точки и детайли"><b id="sbWcsN">G54</b> G17 G21 G90<span id="sbPart"></span></span>
           <span class="chip" id="sbTool">T5</span>
+          <span class="chip upd" id="sbUpd" data-act="upd-open" title="Има нова версия: натиснете, за да обновите" hidden>ОБНОВЯВАНЕ</span>
           <span class="chip mcu"><i class="led on" id="sbLinkLed"></i>MCU 1 kHz</span>
         </div>
         <div class="sb-msg" id="sbMsg"></div>
@@ -807,6 +825,10 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
             <div class="gioh"><span>Изходи · двойно натискане = ръчно</span><span id="goutCnt"></span></div>
             <div class="giog" id="goutBox"></div>
           </div>
+          <div class="card swcard">
+            <div class="card-h"><span>Софтуер</span><span class="r"><button class="btn sm" data-act="upd-sim" data-v="n" type="button">Симулирай нова версия</button><button class="btn sm" data-act="upd-sim" data-v="c" type="button">Симулирай важна</button><button class="btn sm" data-act="upd-sim" data-v="e" type="button">Симулирай прекъсване</button></span></div>
+            <div class="card-b sw"><span class="v">Версия<b id="swVer">0.5</b></span><span class="st" id="swSt">Системата е обновена</span><button class="btn go" data-act="upd-open" type="button">Обновяване</button></div>
+          </div>
           <div class="link">
             <div class="card"><div class="card-b"><span>SPI връзка</span><b>16 MHz</b></div></div>
             <div class="card"><div class="card-b"><span>Цикъл</span><b id="lkCyc">1.000 kHz</b></div></div>
@@ -970,6 +992,19 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
           <div class="grid3" style="grid-template-columns:1fr 1fr">
             <button class="btn" data-act="res-back" type="button">Върни</button>
             <button class="btn go" data-act="res-keep" type="button">Запази</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal" id="updDlg" hidden>
+        <div class="dlg updlg" role="dialog" aria-label="Обновяване">
+          <div class="dlg-h"><b>Обновяване</b></div>
+          <div class="upd-pc" id="updPc">0 %</div>
+          <div class="upd-bar" id="updBarW"><i id="updBar" style="width:0"></i></div>
+          <div class="dlg-note" id="updTxt" style="text-align:center;min-height:0"></div>
+          <div class="upd-ver" id="updVer"></div>
+          <div class="grid3" style="grid-template-columns:1fr 1.6fr">
+            <button class="btn" data-act="upd-cancel" id="updCancel" type="button">Отказ</button>
+            <button class="btn go dis" data-act="upd-install" id="updInst" type="button">Инсталирай</button>
           </div>
         </div>
       </div>
@@ -2290,7 +2325,12 @@ const P_LUBE=[
 ];
 P_LUBE.forEach(p=>{if(p.k)PDEF[p.k]=p});
 P_DISP.forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
+const P_UPD=[
+ {k:'upCh',n:'Версии',t:'enum',opts:[['stable','Стабилни'],['test','Тестови']],h:'„Стабилни“ са проверените версии за работа. „Тестови“ са за пробване на нови възможности, преди да станат стабилни. Обновяването е с едно натискане и не иска PIN.'},
+ {k:'upAuto',n:'Проверявай автоматично',t:'bool',on:'Да',off:'Не',h:'При пускане и на всеки 6 часа машината проверява дали има нова версия. Ако има, в горната лента светва „Обновяване“. Без интернет не показва грешка.'},
+];
+P_UPD.forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={upd:P_UPD,disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
 (()=>{const c='работни координати';[
  ['hmX0','Мин X',c,3,'Левият край на областта.'],['hmX1','Макс X',c,3,'Десният край. „По програмата“ взима областта от заредената програма.'],
  ['hmY0','Мин Y',c,3,'Предният край.'],['hmY1','Макс Y',c,3,'Задният край.'],
@@ -2356,6 +2396,7 @@ S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1
 S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mXOn:0,mX:0,mYOn:0,mY:0,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
 S.cfg.disp={dRes:'auto',dRot:'0'};
+S.cfg.upd={upCh:'stable',upAuto:1};
 /* Макроси и логика (docs/makrosi-logika.md). В макета: макросите се изпълняват (G/M редовете), правилата само се настройват. */
 S.cfg.logic={
  macros:[
@@ -2383,9 +2424,9 @@ function homeOps(axes){
  });
  return ops;
 }
-const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1,logic:2};
+const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1,upd:1,logic:2};
 const LVN=['Оператор','Настройчик','Производител'];
-const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['logic','Макроси и логика'],['acc','Достъп']];
+const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['upd','Обновяване'],['logic','Макроси и логика'],['acc','Достъп']];
 const STATIC={
  mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
 };
@@ -2503,16 +2544,16 @@ function renderSet(){
  }else if(form){
   const D=S.draft[sec],C=S.cfg[sec];
   const rows=FORMS[sec].filter(p=>!(p.only&&!p.only.includes(S.draft.mag.mtype))&&!(p.show&&!p.show(D)));
-  body.innerHTML=(sec==='net'?netStatus():sec==='disp'?dispStatus():'')+`<table class="pf"><tbody>`+rows.map(p=>{
+  body.innerHTML=(sec==='net'?netStatus():sec==='disp'?dispStatus():sec==='upd'?updSetStatus():'')+`<table class="pf"><tbody>`+rows.map(p=>{
    if(p.t==='hdr')return`<tr><td class="grp" colspan="2">${p.n}</td></tr>`;
    const v=D[p.k],chg=v!==C[p.k]?' chg':'';
    const cell=p.t==='enum'?`<div class="seg">${p.opts.map(([o,l])=>`<button class="btn sm${v===o?' on':''}${v===o&&chg?' chg':''}" data-act="pe" data-a="${sec}" data-k="${p.k}" data-v="${o}" type="button">${l}</button>`).join('')}</div>`
     :`<button class="btn${chg}" data-act="pt" data-a="${sec}" data-k="${p.k}" type="button">${fmtP(p,v)}</button>`;
    return`<tr><th data-act="phelp" data-v="${p.k}" class="${S.setHelp===p.k?'h':''}">${p.n}${p.u?`<small>${p.u}</small>`:''}</th><td>${cell}</td></tr>`}).join('')+'</tbody></table>'+
-   (sec==='mach'||sec==='sp'||sec==='disp'?'':sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
+   (sec==='mach'||sec==='sp'||sec==='disp'?'':sec==='upd'?`<div class="teach"><button class="btn" data-act="upd-back" type="button">Върни предишната версия (${S.upd.prev||'—'})</button></div>`:sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn&&S.draft.mag.mtype!=='linear'?'<button class="btn" data-act="teach" data-v="magxy" type="button">Позиция за смяна = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
-  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='upd'?'Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
@@ -2533,6 +2574,10 @@ function resKeep(ok){
  if(!ok&&S.resOld){S.cfg.disp=clone(S.resOld);S.draft.disp=clone(S.resOld);fit();toast('Върнат е предишният режим на екрана')}
  else toast('Режимът на екрана е запазен: '+resOf(S.cfg.disp).join('×'));
  S.resOld=null;renderSet();
+}
+function updSetStatus(){
+ const U=S.upd;
+ return`<div class="netst"><div><span>Инсталирана версия</span><b>${U.cur}</b></div><div><span>Предишна версия</span><b>${U.prev||'—'}</b></div><div><span>Последна проверка</span><b>${U.checked?fdate(U.checked):'—'}</b></div><div><span>Състояние</span><b class="${U.avail?'':'ok'}">${U.avail?'има нова версия '+U.avail+(U.crit?' (важна)':''):'обновена'}</b></div></div>`;
 }
 function netStatus(){
  const N=S.cfg.net,ip=N.mode==='dhcp'?'192.168.1.37 (DHCP)':N.ip+' (статичен)';
@@ -2576,7 +2621,7 @@ function genLathe(){
  L.push('G0 X100.000 Z100.000','T0202','G96 S220 M3','G0 X30.000 Z2.000','(ДОВЪРШВАНЕ)','G1 Z-50.000 F0.08','G1 X40.000','G0 X100.000 Z100.000','M5','M30');return L.join('\n');
 }
 const SAMPLE={mill:['demo_dzhob.nc',()=>buildProgram().join('\n')],laser:['lazer_tabela_100x60.nc',genLaser],plasma:['plazma_flanets_d150.nc',genPlasma],lathe:['strug_val_d40.nc',genLathe]};
-function renderNav(){const L=NAVS[MT()],n=$('#nav');n.style.gridTemplateColumns=`repeat(${L.length},minmax(0,1fr))`;n.innerHTML=L.map(v=>`<button class="btn${v===S.screen?' on':''}" data-act="go" data-v="${v}" type="button">${NAVN[v]}</button>`).join('')}
+function renderNav(){const L=NAVS[MT()],n=$('#nav');n.style.gridTemplateColumns=`repeat(${L.length},minmax(0,1fr))`;n.innerHTML=L.map(v=>`<button class="btn${v===S.screen?' on':''}${v==='diag'&&S.upd&&S.upd.avail?' dot'+(S.upd.crit?' crit':''):''}" data-act="go" data-v="${v}" type="button">${NAVN[v]}</button>`).join('')}
 function renderViewSeg(){$('#viewSeg').innerHTML=VSEG[MT()].map(([v,l])=>`<button class="btn sm${S.view.name===v?' on':''}" data-act="view" data-v="${v}" type="button">${l}</button>`).join('')+'<button class="btn sm" data-act="view" data-v="fit" type="button">Побери</button>'}
 function applyType(change){
  const t=MT();
@@ -3192,6 +3237,20 @@ panel.addEventListener('click',e=>{
    const i=+v;if(S.gcEdit){S.td={a:'gc',k:'gcLine',txt:PROG[i],shift:true,line:i,get:()=>S.td.ins?'':PROG[S.td.line]??'',set:t=>PROG_EDIT(L=>{if(S.td.ins)L.splice(S.td.line,0,t);else L[S.td.line]=t})};$('#txtDlg').hidden=false;renderTd();break}S.startLine=S.startLine===i?null:i;lastWin='';
    if(S.startLine!=null)toast('Ред '+(i+1)+' е избран за старт. Натиснете ЦИКЪЛ СТАРТ.');break}
   case'sl-clr':S.startLine=null;lastWin='';break;
+  case'upd-open':{const U=S.upd;$('#updDlg').hidden=false;
+   if(U.ph==='ready'||U.ph==='dl')break;
+   U.p=0;U.t=0;U.ph=U.avail?'dl':'check';updRender();break}
+  case'upd-cancel':{const U=S.upd;if(U.ph==='inst'||U.ph==='restart')break;
+   if(U.ph==='dl'||U.ph==='check'||U.ph==='ready'){U.ph='idle';U.p=0}   /* изтегленото се изтрива */
+   if(U.ph==='none'||U.ph==='err')U.ph='idle';$('#updDlg').hidden=true;break}
+  case'upd-install':{const U=S.upd;
+   if(U.ph==='err'){U.p=0;U.t=0;U.ph='dl';U.fail=false;updRender();break}
+   if(U.ph!=='ready'||S.state!=='idle'||S.queue.length)break;U.ph='inst';U.p=0;updRender();break}
+  case'upd-sim':{const U=S.upd;if(v==='e'){U.fail=true;toast('Следващото изтегляне ще прекъсне на средата');break}
+   updFound(U.cur==='0.5'?'0.6':(+(U.cur)+0.1).toFixed(1),v==='c');break}
+  case'upd-back':{const U=S.upd;if(!U.prev){toast('Няма предишна версия');break}
+   if(S.state!=='idle'){toast('Спрете машината');break}
+   const c=U.cur;U.cur=U.prev;U.prev=c;U.avail=c;U.crit=false;updUi();renderSet();toast('Върната е версия '+U.cur+'. Интерфейсът се рестартира.');break}
   case'corner':S.corner=v;renderCycs();break;
   case'test':S.flash[v]=performance.now();S.cnt[v]++;S.lastEv={inp:v,lm:{...S.mach}};break;
   case'sim-alarm':if(S.state==='estop')break;if(!S.cfg.Y.encOn){toast('Ос Y е без енкодер: няма следяща грешка');break}halt();S.enabled=false;S.ready=false;S.state='alarm';S.alarmY=true;S.ferr.Y=52.4;S.alarm='Следящата грешка по Y е 52.4 µm при лимит 50 µm. Движението е спряно.';break;
@@ -3231,12 +3290,51 @@ new ResizeObserver(fit).observe(vp);window.addEventListener('resize',fit);
 document.addEventListener('input',e=>{if(e.target.id!=='lgCode')return;const mc=S.draft.logic.macros.find(x=>x.m===S.lgSel);if(!mc)return;mc.code=e.target.value;
  const er=macCheck(mc),c=$('#lgChk');c.className='lgchk '+(er.length?'bad':'ok');c.innerHTML=er.length?er.join('<br>'):'Проверката е минала: синтаксисът и номерата на входовете и изходите са наред.';
  set($('#setDirty'),'незаписани промени');set($('#setNote'),'Промените важат след „Запиши“.')});
+/* ---------- Обновяване ----------
+ * Машината пита своя сървър за обновления (не GitHub) за номера на последната версия: при пускане и на 6 часа.
+ * Архивът е подписан; машината инсталира само подписан от производителя. Без PIN, само при спряна машина.
+ * В LVGL: dlg с lv_bar и надпис с процентите; изтеглянето и инсталирането са в отделна нишка (cnc-update). */
+S.upd={cur:'0.5',prev:'0.4',avail:null,crit:false,ph:'idle',p:0,t:0,checked:null,fail:false,toastPend:false};
+function updFound(ver,crit){const U=S.upd;U.avail=ver;U.crit=!!crit;U.checked=new Date();U.toastPend=true;updUi();if(S.screen==='set')renderSet()}
+function updUi(){
+ const U=S.upd,c=$('#sbUpd');c.hidden=!U.avail;c.classList.toggle('crit',U.crit);set(c,U.crit?'ВАЖНО ОБНОВЯВАНЕ':'ОБНОВЯВАНЕ');
+ set($('#swVer'),U.cur);const st=$('#swSt');st.className='st'+(U.avail?U.crit?' crit':' new':'');
+ set(st,U.avail?'Има нова версия'+(U.crit?' (важна)':''):'Системата е обновена');renderNav();
+}
+function updRender(){
+ const U=S.upd,run=S.state!=='idle'||S.queue.length>0;
+ const T={check:'Проверка…',dl:'Изтегляне…',ready:run?'Изтеглено. Спрете машината, за да инсталирате.':'Изтеглено.',inst:'Инсталиране…',restart:'Рестартиране…',none:'Системата е обновена.',err:'Обновяването не е успешно. Опитайте отново.'};
+ const bar=U.ph==='dl'||U.ph==='ready'||U.ph==='inst'||U.ph==='restart';
+ $('#updPc').hidden=!bar;$('#updBarW').hidden=!(bar||U.ph==='check');
+ set($('#updPc'),Math.floor(U.ph==='restart'?100:U.p)+' %');$('#updBar').style.width=(U.ph==='check'?0:U.ph==='restart'?100:U.p)+'%';
+ $('#updBarW').classList.toggle('ok',U.ph==='ready'||U.ph==='inst'||U.ph==='restart');
+ set($('#updTxt'),T[U.ph]||'');set($('#updVer'),U.ph==='ready'||U.ph==='inst'||U.ph==='restart'?'Версия '+U.avail:U.ph==='none'?'Версия '+U.cur:'');
+ const ib=$('#updInst'),cb=$('#updCancel');
+ ib.hidden=U.ph==='none';cb.hidden=U.ph==='inst'||U.ph==='restart';
+ set(ib,U.ph==='err'?'Опитай отново':U.ph==='ready'&&run?'Спрете машината':'Инсталирай');
+ ib.classList.toggle('dis',!(U.ph==='err'||(U.ph==='ready'&&!run)));
+ set(cb,U.ph==='none'||U.ph==='err'?'Затвори':'Отказ');
+ $('#updDlg .grid3').style.gridTemplateColumns=ib.hidden||cb.hidden?'1fr':'1fr 1.6fr';
+}
+function updTick(dt){
+ const U=S.upd;
+ if(U.toastPend&&S.state==='idle'&&!S.queue.length){U.toastPend=false;toast((U.crit?'Важно обновление: версия ':'Има нова версия ')+U.avail+'. Натиснете „Обновяване“ горе.',6000)}
+ if(U.ph==='idle')return;U.t+=dt;
+ if(U.ph==='check'&&U.t>.9){U.checked=new Date();U.ph=U.avail?'dl':'none';U.t=0}
+ else if(U.ph==='dl'){U.p=Math.min(100,U.p+dt*(20+10*Math.sin(U.t*3)));if(U.fail&&U.p>46){U.ph='err';U.fail=false}else if(U.p>=100)U.ph='ready'}
+ else if(U.ph==='inst'){U.p=Math.min(100,U.p+dt*35);if(U.p>=100){U.ph='restart';U.t=0}}
+ else if(U.ph==='restart'&&U.t>1.5){U.prev=U.cur;U.cur=U.avail;U.avail=null;U.crit=false;U.ph='idle';$('#updDlg').hidden=true;updUi();if(S.screen==='set')renderSet();toast('Обновено до версия '+U.cur)}
+ if(!$('#updDlg').hidden)updRender();
+}
+/* в макета: проверката „намира“ нова версия 5 s след пускане */
+setTimeout(()=>{if(S.cfg.upd.upAuto&&!S.upd.avail&&S.upd.cur==='0.5')updFound('0.6',false)},5000);
+
 /* ---------- Цикъл ---------- */
 loadProgram(FILES.mem[0]);applyType(false);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
 let last=performance.now(),acc=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);acc+=dt;
- updDro();updStatus(now);
+ updDro();updStatus(now);updTick(dt);
  if(S.screen==='run')updGc();
  if(S.screen==='run'||S.screen==='jog'||S.screen==='mdi')draw();
  if(S.screen==='tools')updMag(dt);
