@@ -14,7 +14,8 @@
 #            манифест и архив; манифестът е подписан (Ed25519), архивът е проверен по SHA256.
 #            Така се обновяват клиентските машини: те не знаят нищо за изходния код.
 #   git    — ако програмата е компилирана от копие на хранилището (машината за разработка).
-#            „stable“ следи последния таг vX.Y, „test“ следи main. Компилира се в отделна папка (build-upd).
+#            „stable“ следи клона stable (или последния таг vX.Y, ако няма такъв клон), „test“ следи main.
+#            Компилира се в отделна папка (build-upd).
 #
 # Инсталирането не иска root: новата програма се записва до старата, fsync и се преименува върху нея
 # (атомарно, безопасно при спиране на тока). Старата остава като <bin>.prev за „Върни предишната версия“.
@@ -152,15 +153,19 @@ REPO=""
 git_init() {
   REPO=$(git -C "$(dirname "$BIN")" rev-parse --show-toplevel 2>/dev/null) || fail "няма откъде да се обнови"
 }
-git_label() {   # етикет за даден commit: тагът vX.Y или VERSION-кратък хеш
-  local c="$1" t
+git_label() {   # етикет за даден commit: тагът vX.Y, VERSION (върхът на stable) или VERSION-кратък хеш
+  local c="$1" t v
+  c=$(git -C "$REPO" rev-parse "$c")
   t=$(git -C "$REPO" tag --points-at "$c" -l 'v*' | sort -V | tail -1)
   if [ -n "$t" ]; then echo "${t#v}"; return; fi
-  echo "$(git -C "$REPO" show "$c:ui/lvgl/VERSION" 2>/dev/null | head -1 || echo 0)-$(git -C "$REPO" rev-parse --short "$c")"
+  v=$(git -C "$REPO" show "$c:ui/lvgl/VERSION" 2>/dev/null | head -1); v=${v:-0}
+  if [ "$c" = "$(git -C "$REPO" rev-parse -q --verify origin/stable 2>/dev/null)" ]; then echo "$v"; return; fi
+  echo "$v-$(git -C "$REPO" rev-parse --short "$c")"
 }
 git_cur() { local c; c=$(ver_of "$BIN" 2); [ -n "$c" ] && git -C "$REPO" cat-file -e "$c^{commit}" 2>/dev/null && echo "$c" || git -C "$REPO" rev-parse HEAD; }
 git_target() {
   if [ "$CH" = test ]; then git -C "$REPO" rev-parse origin/main 2>/dev/null
+  elif git -C "$REPO" rev-parse -q --verify origin/stable >/dev/null 2>&1; then git -C "$REPO" rev-parse origin/stable
   else
     local t; t=$(git -C "$REPO" tag -l 'v*' | sort -V | tail -1)
     [ -n "$t" ] && git -C "$REPO" rev-parse "$t^{commit}"
@@ -169,7 +174,7 @@ git_target() {
 
 git_check() {
   git_init
-  timeout 60 git -C "$REPO" fetch -q --tags origin main >>"$LOG" 2>&1 || fail "няма връзка"
+  timeout 60 git -C "$REPO" fetch -q --tags origin >>"$LOG" 2>&1 || fail "няма връзка"
   local cur tg; cur=$(git_cur); tg=$(git_target)
   if [ -n "$tg" ] && [ "$tg" != "$cur" ] && git -C "$REPO" merge-base --is-ancestor "$cur" "$tg"; then
     local crit=0
