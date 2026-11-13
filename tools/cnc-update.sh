@@ -196,6 +196,9 @@ git_download() {
   if [ "$(git -C "$REPO" rev-parse HEAD)" != "$tg" ]; then
     git -C "$REPO" merge -q --ff-only "$tg" >>"$LOG" 2>&1 || fail "в хранилището има локални промени"
   fi
+  # ако хранилището вече е напред (ръчен git pull на main), merge не прави нищо и би се компилирал
+  # по-новият код под етикета на избраната версия: по-добре отказ
+  [ "$(git -C "$REPO" rev-parse HEAD)" = "$tg" ] || fail "хранилището е по-напред от версията (ръчен git pull); изберете „Тестови“"
   git -C "$REPO" submodule -q update --init >>"$LOG" 2>&1 || fail "библиотеките не могат да се изтеглят"
   say "P 5"
   local src="$REPO/ui/lvgl" b="$REPO/ui/lvgl/build-upd" tgt; tgt=$(basename "$BIN")
