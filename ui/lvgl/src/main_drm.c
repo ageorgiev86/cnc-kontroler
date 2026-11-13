@@ -15,7 +15,7 @@
 #include "config.h"
 #include "drm_disp.h"
 #include "kbd_evdev.h"
-#include "mouse_wheel.h"
+#include "mouse_evdev.h"
 #include "machine.h"
 #include "program.h"
 #include "ui.h"
@@ -100,11 +100,10 @@ int main(int argc, char **argv)
     /* мишка (с курсор) и тъч (без курсор) */
     char *mouse = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, true);
     if (mouse) {
-        lv_indev_t *in = lv_libinput_create(LV_INDEV_TYPE_POINTER, mouse);
+        /* собственият драйвер: движение по завъртения екран и колелце (mouse_evdev.c) */
+        lv_indev_t *in = mouse_evdev_create(mouse, disp);
         if (in) {
-            lv_indev_set_display(in, disp);
             lv_indev_set_cursor(in, make_cursor());
-            mouse_wheel_start(mouse, in);
             printf("Мишка: %s\n", mouse);
         }
     }
@@ -113,6 +112,7 @@ int main(int argc, char **argv)
         lv_indev_t *in = lv_libinput_create(LV_INDEV_TYPE_POINTER, touch);
         if (in) {
             lv_indev_set_display(in, disp);
+            touch_rotate_attach(in);   /* точките са по монитора: обръщат се при завъртане */
             printf("Тъч: %s\n", touch);
         }
     }
