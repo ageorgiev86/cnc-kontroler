@@ -32,10 +32,27 @@ bool g_portrait = true;
 
 int32_t EM(float x) { return (int32_t)lroundf(x * g_em); }
 
+/* Мащаб: по резолюцията късата страна е 50 em (800 точки → 16 px), но em е най-много EM_MM милиметра
+ * по физическия размер на монитора (EDID), иначе на 24" всичко е огромно. „Мащаб“ от Настройки → Дисплей
+ * умножава резултата. Същото като emOf() в макета. */
+#define EM_MM 3.5f
+static int phys_short_mm;
+static float user_scale = 1.0f;
+void ui_style_set_phys(int short_mm, float scale)
+{
+    phys_short_mm = short_mm;
+    user_scale = scale > 0.2f && scale < 4.0f ? scale : 1.0f;
+}
+
 void ui_style_init(int32_t w, int32_t h)
 {
     int32_t s = w < h ? w : h;
     g_em = s / 800.0f * 16.0f;
+    if (phys_short_mm > 0) {
+        float cap = EM_MM * (float)s / (float)phys_short_mm;
+        if (cap < g_em) g_em = cap;
+    }
+    g_em *= user_scale;
     g_portrait = h > w;
     /* Шрифтовете са в две степени; по-едрата е от em 20 нагоре (1080 и 1200) */
     F = g_em >= 20 ? TIER24 : g_em >= 13 ? TIER16 : TIER10;   /* t10 за 480–600 по късата страна */

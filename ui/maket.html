@@ -2309,9 +2309,21 @@ let MON=[800,1280];
 const DMODES=[[1920,1200],[1920,1080],[1680,1050],[1600,900],[1280,1024],[1280,800],[1280,720],[1080,1920],[1024,768],[1024,600],[800,1280],[800,600],[800,480],[600,1024]];
 const monModes=()=>{const[w,h]=MON,L=DMODES.filter(([a,b])=>a<=w&&b<=h&&(a>=b)===(w>=h));if(!L.some(([a,b])=>a===w&&b===h))L.unshift([w,h]);return L};
 const resOf=D=>{let r=D.dRes==='auto'?[...MON]:D.dRes.split('x').map(Number);if(+D.dRot%180)r=[r[1],r[0]];return r};
+/* Мащабът (em в пиксели). По резолюцията: късата страна е 50 em (800 точки → 16 px). Но на голям монитор това е
+   прекалено едро, затова em е най-много 3,5 мм по физическия размер от EDID (в DRM: mmWidth/mmHeight на конектора).
+   „Мащаб“ в Настройки → Дисплей умножава резултата. Без размер в EDID остава само по резолюцията. */
+const MONMM={'600x1024':[86,154],'800x1280':[136,217],'1080x1920':[268,476],'1024x600':[154,86],'1280x800':[217,136],'1920x1080':[476,268],'1920x1200':[518,324]};
+const EM_MM=3.5;
+function emOf(D){
+ const[W,H]=resOf(D),fill=Math.min(W,H)/800*16,mm=MONMM[MON.join('x')];
+ const cap=mm?EM_MM*Math.min(W,H)/Math.min(...mm):Infinity;
+ return Math.min(fill,cap)*(D.dScale==='auto'?1:+D.dScale/100);
+}
+const monInch=()=>{const mm=MONMM[MON.join('x')];return mm?Math.round(Math.hypot(...mm)/25.4*10)/10:null};
 const P_DISP=[
  {k:'dRes',n:'Резолюция',t:'enum',get opts(){return[['auto','Автоматично'],...monModes().map(([a,b])=>[a+'x'+b,a+'×'+b])]},h:'Режимът на екрана. „Автоматично“ е предпочитаният режим на монитора (обикновено родният). В списъка са само режимите, които мониторът поддържа. По-ниска резолюция = по-едри елементи и по-малко работа за процесора. След „Запиши“ новият режим трябва да се потвърди до 15 s, иначе се връща старият.'},
- {k:'dRot',n:'Завъртане',t:'enum',opts:[['0','0°'],['90','90°'],['180','180°'],['270','270°']],h:'Завърта картината. 90° или 270° прави хоризонтален монитор портретен (800×1280 по подразбиране за машината). Тъчът се завърта заедно с картината. Завъртането се смята от процесора, затова на слаба платка е по-бавно от родната ориентация.'}
+ {k:'dRot',n:'Завъртане',t:'enum',opts:[['0','0°'],['90','90°'],['180','180°'],['270','270°']],h:'Завърта картината. Мишката и тъчът се завъртат заедно с нея. 90° или 270° прави хоризонтален монитор портретен (800×1280 по подразбиране за машината). Тъчът се завърта заедно с картината. Завъртането се смята от процесора, затова на слаба платка е по-бавно от родната ориентация.'},
+ {k:'dScale',n:'Мащаб',t:'enum',opts:[['auto','Автоматично'],['75','75 %'],['90','90 %'],['110','110 %'],['125','125 %'],['150','150 %']],h:'Колко едри са надписите и бутоните. „Автоматично“ ги прави еднакво големи на всеки монитор (по размера му от EDID): на 7" екран запълват екрана, на 24" остава повече място. Процентите увеличават или намаляват автоматичния мащаб.'},
 ];
 const P_LUBE=[
  {k:'luOn',n:'Автоматично смазване',t:'bool',on:'Включено',off:'Изключено',h:'Помпата се включва сама през зададения интервал. Изходът е този с функция „Мазане“ в Настройки → Входове/изходи.'},
@@ -2395,7 +2407,7 @@ S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
 S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mXOn:0,mX:0,mYOn:0,mY:0,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
-S.cfg.upd={upCh:'stable',upAuto:1};S.cfg.disp={dRes:'auto',dRot:'0'};
+S.cfg.upd={upCh:'stable',upAuto:1};S.cfg.disp={dRes:'auto',dRot:'0',dScale:'auto'};
 /* Макроси и логика (docs/makrosi-logika.md). В макета: макросите се изпълняват (G/M редовете), правилата само се настройват. */
 S.cfg.logic={
  macros:[
@@ -2552,16 +2564,16 @@ function renderSet(){
    (sec==='mach'||sec==='sp'||sec==='disp'?'':sec==='upd'?`<div class="teach"><button class="btn" data-act="upd-back" type="button">Върни предишната версия (${S.upd.prev||'—'})</button></div>`:sec==='lube'?`<div class="netst" id="luSt"></div><div class="teach"><button class="btn on" data-act="lube-now" type="button">Смажи сега</button><button class="btn" data-act="lube-reset" type="button">Нулирай брояча</button><button class="btn" data-act="lube-oil" type="button">Симулирай ниско ниво</button></div>`:sec==='prb'?`<div class="teach"><button class="btn" data-act="teach" data-v="prring" type="button">Център на пръстена = текущата X Y</button><button class="btn on" data-act="prb-cal" type="button">Калибрирай в пръстена</button></div>`:sec==='net'?`<div class="teach"><button class="btn" data-act="net-test" type="button">Провери връзката с дяла</button></div>`:sec==='ts'?`<div class="teach"><button class="btn" data-act="teach" data-v="ts-xy" type="button">Вземи текущата X Y</button><button class="btn" data-act="teach" data-v="ts-z" type="button">Вземи текущата Z за начало</button></div>`
    :`<div class="teach">${!S.draft.mag.mOn||!S.draft.mag.atcOn?'<button class="btn" data-act="teach" data-v="mtc" type="button">Ръчна смяна = текущата X Y Z</button>':''}${!S.draft.mag.mOn?'':S.draft.mag.mtype==='linear'?'<button class="btn" data-act="teach" data-v="mag1" type="button">Гнездо 1 = текущата X Y</button>':''}${S.draft.mag.mOn&&S.draft.mag.mtype!=='linear'?'<button class="btn" data-act="teach" data-v="magxy" type="button">Позиция за смяна = текущата X Y</button>':''}${S.draft.mag.mOn?'<button class="btn" data-act="teach" data-v="magz" type="button">Z за смяна = текущата Z</button>':''}</div>`);
   const h=S.setHelp&&PDEF[S.setHelp];
-  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='upd'?'Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
+  help.innerHTML=h&&FORMS[sec].includes(h)?`<b>${h.n}.</b> ${h.h}`:(sec==='lube'?'Помпата се управлява от изхода с функция „Мазане“, а нивото на маслото и налягането се четат от входовете „Ниво масло“ и „Налягане на мазането“ (Настройки → Входове/изходи).':sec==='prb'?'Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена, приблизително в центъра и на дълбочина за измерване, и натиснете „Калибрирай“. Пробникът изчислява ефективния диаметър на сферата и офсета X/Y.':sec==='sp'?'Изберете как контролерът управлява шпиндела. Показват се само параметрите за избрания начин.':sec==='mach'?'Изберете вида на машината. При „Запиши“ се сменят екраните, активните оси, изгледът на траекторията и се зарежда примерна програма за този вид.':sec==='net'?'Orange Pi One има само кабелна мрежа (Ethernet, 100 Mbit/s). За Wi-Fi е нужен USB адаптер. Промените важат след „Запиши“.':sec==='disp'?'Режимът на екрана, завъртането и мащабът. При „Запиши“ новият режим се пробва и се връща сам след 15 s, ако не го потвърдите.':sec==='upd'?'Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.':sec==='ts'?'Позицията се въвежда с клавиатура или се взима от текущата позиция на машината. Осите трябва да са реферирани.':'Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.');
  }else{
   body.innerHTML='<dl>'+STATIC[sec].map(([k,v])=>`<dt>${k}</dt><dd>${v===null?RES.join('×'):v}</dd>`).join('')+'</dl>';
   help.innerHTML='Тази секция е само за преглед в макета.';
  }
 }
 function dispStatus(){
- const[w,h]=resOf(S.cfg.disp),[dw,dh]=resOf(S.draft.disp),ch=dw!==w||dh!==h;
- return`<div class="netst"><div><span>Монитор</span><b class="ok">HDMI-A-1 · ${MON.join('×')} (предпочитан)</b></div><div><span>Сега</span><b>${w}×${h} · ${h>w?'портрет':'хоризонтално'}</b></div>`+
-  (ch?`<div><span>След „Запиши“</span><b>${dw}×${dh} · ${dh>dw?'портрет':'хоризонтално'}</b></div>`:'')+`<div><span>Тъч</span><b>USB · libinput · калибриран (3 точки)</b></div></div>`;
+ const[w,h]=resOf(S.cfg.disp),[dw,dh]=resOf(S.draft.disp),e0=emOf(S.cfg.disp),e1=emOf(S.draft.disp),ch=dw!==w||dh!==h||Math.abs(e0-e1)>.01,inch=monInch();
+ return`<div class="netst"><div><span>Монитор</span><b class="ok">HDMI-A-1 · ${MON.join('×')} (предпочитан)${inch?' · '+inch+'″':''}</b></div><div><span>Сега</span><b>${w}×${h} · ${h>w?'портрет':'хоризонтално'} · текст ${e0.toFixed(1)} px</b></div>`+
+  (ch?`<div><span>След „Запиши“</span><b>${dw}×${dh} · ${dh>dw?'портрет':'хоризонтално'} · текст ${e1.toFixed(1)} px</b></div>`:'')+`<div><span>Тъч</span><b>USB · libinput · калибриран (3 точки)</b></div></div>`;
 }
 let resT=null;
 function resAsk(old){
@@ -3271,7 +3283,7 @@ panel.addEventListener('pointerdown',e=>{
 const vp=$('#viewport');let RES=[800,1280];
 function fit(){
  RES=resOf(S.cfg.disp);const[W,H]=RES,portrait=H>W;panel.classList.toggle('portrait',portrait);
- panel.style.width=W+'px';panel.style.height=H+'px';panel.style.fontSize=(Math.min(W,H)/800*16)+'px';
+ panel.style.width=W+'px';panel.style.height=H+'px';panel.style.fontSize=emOf(S.cfg.disp)+'px';
  const availH=Math.max(480,window.innerHeight-32);
  const s=Math.min(1,vp.clientWidth/W,portrait?availH/H:1);panel.style.transform=`scale(${s})`;
  panel.style.left=Math.max(0,(vp.clientWidth-W*s)/2)+'px';vp.style.height=Math.ceil(H*s)+'px';

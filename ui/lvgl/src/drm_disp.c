@@ -27,6 +27,7 @@ static struct {
     uint8_t *map;
     size_t size;
     int w, h, rot;
+    int mm_w, mm_h;    /* физическият размер на монитора (EDID) */
 } D = {.fd = -1};
 
 /* стандартни тайминги: часовник kHz, h: активни, начало, край, общо; v: същото; флагове */
@@ -216,6 +217,8 @@ lv_display_t *drm_disp_create(const char *dev, const char *want, int rot_deg)
     printf("\n");
     if (!pick_mode(c, want, &D.mode)) { fprintf(stderr, "Няма подходящ режим\n"); return NULL; }
     D.conn_id = c->connector_id;
+    D.mm_w = (int)c->mmWidth;
+    D.mm_h = (int)c->mmHeight;
 
     /* CRTC: на текущия енкодер или първия възможен */
     D.crtc_id = 0;
@@ -280,4 +283,10 @@ void drm_disp_close(void)
     if (D.handle) { struct drm_mode_destroy_dumb d = {.handle = D.handle}; drmIoctl(D.fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d); }
     close(D.fd);
     D.fd = -1;
+}
+
+void drm_disp_mm(int *w, int *h)
+{
+    *w = D.mm_w;
+    *h = D.mm_h;
 }

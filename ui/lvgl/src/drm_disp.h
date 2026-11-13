@@ -10,6 +10,7 @@ void drm_disp_list(const char *dev);   /* конекторите и режими
 /* Намира истинския графичен изход сред /dev/dri/card*: със свързан HDMI/DVI, не simpledrm
  * (временният екран от U-Boot, който остава като отделна карта). Връща malloc низ или NULL. */
 char *drm_disp_find(void);
+void drm_disp_mm(int *w, int *h);     /* размерът на монитора в мм от EDID (0, ако не е даден) */
 void drm_disp_close(void);             /* връща конзолата */
 
 #endif

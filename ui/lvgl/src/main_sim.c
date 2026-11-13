@@ -15,6 +15,7 @@
 #include "lvgl.h"
 #include "program.h"
 #include "ui.h"
+#include "ui_style.h"
 
 /* колелцето на мишката: както на платката, превърта областта под курсора (ui_wheel) */
 static int wheel_acc;
@@ -27,14 +28,15 @@ static int on_sdl_event(void *ud, SDL_Event *e)
 
 static void usage(void)
 {
-    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc] [--screen име] [--act действие] [--conf файл]\n");
+    fprintf(stderr, "Употреба: cnc-ui-sim [--res ШxВ] [--mm ШxВ] [--scale процент] [--zoom к] [--shot файл.bmp] [--after ms] [--reset] [--run] [--prog файл.nc] [--screen име] [--act действие] [--conf файл]\n");
     exit(2);
 }
 
 int main(int argc, char **argv)
 {
     int w = 800, h = 1280, after = 300;
-    float zoom = 1.0f;
+    float zoom = 1.0f, scale = 1.0f;
+    int mm_short = 0;
     const char *shot = NULL;
     int press_reset = 0, run = 0;
     const char *prog = NULL, *screen = NULL, *conf = NULL, *act[16];
@@ -42,6 +44,12 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--res") && i + 1 < argc) {
             if (sscanf(argv[++i], "%dx%d", &w, &h) != 2 || w < 320 || h < 320) usage();
+        } else if (!strcmp(argv[i], "--mm") && i + 1 < argc) {   /* размер на монитора за мащаба, напр. 518x324 (24") */
+            int a = 0, b = 0;
+            if (sscanf(argv[++i], "%dx%d", &a, &b) != 2) usage();
+            mm_short = a < b ? a : b;
+        } else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {   /* „Мащаб“ в проценти */
+            scale = (float)atof(argv[++i]) / 100.0f;
         } else if (!strcmp(argv[i], "--zoom") && i + 1 < argc) {
             zoom = (float)atof(argv[++i]);
         } else if (!strcmp(argv[i], "--shot") && i + 1 < argc) {
@@ -74,6 +82,7 @@ int main(int argc, char **argv)
     lv_indev_t *mouse = lv_sdl_mouse_create();
     SDL_AddEventWatch(on_sdl_event, NULL);
 
+    ui_style_set_phys(mm_short, scale);
     ui_create(disp);
     ui_keys_attach(lv_sdl_keyboard_create());
     if (conf) ui_load_config(conf);   /* в симулатора само при --conf, за да са снимките повторими */

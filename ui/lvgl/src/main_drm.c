@@ -6,6 +6,7 @@
  * Курсорът на мишката се рисува от LVGL (няма X сървър). */
 #include <signal.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -19,6 +20,7 @@
 #include "machine.h"
 #include "program.h"
 #include "ui.h"
+#include "ui_style.h"
 
 static uint32_t tick_ms(void)
 {
@@ -94,6 +96,13 @@ int main(int argc, char **argv)
     printf("Екран: %s, %dx%d, завъртане %d°\n", dev, (int)lv_display_get_horizontal_resolution(disp),
            (int)lv_display_get_vertical_resolution(disp), rot);
     if (found) free(found);
+    /* мащабът: по размера на монитора (EDID) и „Мащаб“ от настройките */
+    int mw, mh;
+    drm_disp_mm(&mw, &mh);
+    const char *sc = cfg_str("disp.dScale");
+    float scale = sc && *sc && strcmp(sc, "auto") ? (float)atof(sc) / 100.0f : 1.0f;
+    ui_style_set_phys(mw > 0 && mh > 0 ? (mw < mh ? mw : mh) : 0, scale);
+    if (mw > 0 && mh > 0) printf("Монитор: %d×%d мм (%.1f\")\n", mw, mh, sqrt((double)mw * mw + (double)mh * mh) / 25.4);
     signal(SIGINT, on_sig);
     signal(SIGTERM, on_sig);
 

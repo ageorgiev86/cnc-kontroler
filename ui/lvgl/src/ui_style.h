@@ -57,6 +57,7 @@ extern ui_fonts_t F;
 extern float g_em;
 extern bool g_portrait;
 
+void ui_style_set_phys(int short_mm, float scale);   /* преди ui_create: късата страна на монитора в мм (0 = не се знае) и „Мащаб“ */
 void ui_style_init(int32_t w, int32_t h);
 int32_t EM(float x);
 

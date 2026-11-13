@@ -613,7 +613,7 @@ static const char *sec_help(void)
     case S_PRB: return "Калибриране: центрирайте шпиндела над пръстена с индикатор и натиснете „Център на пръстена = текущата X Y“. После сложете пробника в пръстена и натиснете „Калибрирай“.";
     case S_MAG: return "Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.";
     case S_UPD: return "Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.";
-    case S_DISP: return "Режимът на екрана и завъртането. Прилага се при следващото пускане на интерфейса (собственият DRM драйвер е следваща стъпка).";
+    case S_DISP: return "Режимът на екрана, завъртането и мащабът. Прилагат се при следващото пускане на интерфейса.";
     case S_MCU: return "Само за преглед: параметрите на връзката се задават във фърмуера на STM32.";
     case S_LOGIC: return "Макросите M100–M199 и правилата се изпълняват от интерпретатора и PLC слоя, които идват след стабилната основа (docs/makrosi-logika.md). Тук е прегледът им.";
     case S_ACC: return "PIN кодовете се пазят на контролера. Дневникът се пази и след изключване и не може да се изтрие от екрана.";
@@ -729,7 +729,7 @@ static void on_save(lv_event_t *e)
                 log_change(w, L[s][i].t == PT_PASS ? "••••" : f, L[s][i].t == PT_PASS ? "••••" : t);
             }
         }
-    bool disp_ch = cfg_changed("disp.dRes") || cfg_changed("disp.dRot");
+    bool disp_ch = cfg_changed("disp.dRes") || cfg_changed("disp.dRot") || cfg_changed("disp.dScale");
     bool prog_ch = cfg_changed("mach.gDial") || cfg_changed("mach.miAx");
     cfg_commit();
     if (prog_ch) { program_reparse(); ui_program_changed(); }   /* програмата се чете наново с новия диалект */
