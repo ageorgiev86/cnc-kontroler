@@ -313,7 +313,7 @@ void stepgen_init(void)
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
   for (unsigned i = 0; i < STEPGEN_AXES; i++) {
-    cfg[i].step_invert = 0;
+    cfg[i].step_invert = BOARD_STEP_ACTIVE_LOW;   /* общ анод: импулсът е 0 */
     cfg[i].dir_invert  = 0;
     cfg[i].step_len    = 2;           /* 5 µs */
     cfg[i].step_space  = 2;           /* 5 µs → до 100 kHz */
@@ -381,6 +381,17 @@ void stepgen_init(void)
   }
   __HAL_TIM_ENABLE_DMA(&htim, TIM_DMA_UPDATE);
   __HAL_TIM_ENABLE(&htim);
+
+  /* Изходите на буферите към драйверите (74ACT541) се разрешават чак сега, когато пиновете
+   * вече са в покой. До този момент резистор държи OE = 1 и драйверите не получават нищо. */
+  BOARD_DRV_OE_CLK_ENABLE();
+  HAL_GPIO_WritePin(BOARD_DRV_OE_N, GPIO_PIN_SET);
+  g.Pin   = BOARD_DRV_OE_PIN;
+  g.Mode  = GPIO_MODE_OUTPUT_PP;
+  g.Pull  = GPIO_NOPULL;
+  g.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(BOARD_DRV_OE_PORT, &g);
+  HAL_GPIO_WritePin(BOARD_DRV_OE_N, GPIO_PIN_RESET);
 }
 
 /* ---- главен цикъл ---- */

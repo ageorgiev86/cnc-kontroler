@@ -1,0 +1,67 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "180aec81-a467-5ae5-aea9-3619526582a4")
+	(paper "A3")
+	(lib_symbols)
+	(text "CNC контролер: разширителен модул 8 входа + 8 изхода"
+		(exclude_from_sim no)
+		(at 25.4 25.4 0)
+		(effects
+			(font
+				(size 3 3)
+			)
+			(justify left top)
+		)
+		(uuid "f607752c-2ea1-43cb-93fe-ce76002c0ea3")
+	)
+	(sheet
+		(at 25.4 50.8)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "2820dc9f-ba97-5469-b109-7d9297e3626d")
+		(property "Sheetname" "Разширителен модул"
+			(at 25.4 50.0884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "modul.kicad_sch"
+			(at 25.4 69.1716 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "razshiritel"
+				(path "/180aec81-a467-5ae5-aea9-3619526582a4"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)

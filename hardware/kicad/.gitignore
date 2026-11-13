@@ -1,0 +1,9 @@
+# временни файлове на KiCad
+*.kicad_prl
+*-backups/
+fp-info-cache
+_autosave-*
+*.lck
+*.dsn
+*.ses
+__pycache__/

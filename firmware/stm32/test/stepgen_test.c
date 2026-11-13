@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 GPIO_TypeDef mock_gpiod;
+GPIO_TypeDef mock_gpioe;
 DWT_Type mock_dwt;
 CoreDebug_Type mock_coredebug;
 
@@ -185,6 +186,12 @@ int main(void)
   long before;
 
   stepgen_init();
+  /* симулацията брои нарастващите фронтове: импулсът да е 1 (на платката е 0, общ анод) */
+  for (unsigned i = 0; i < N; i++) {
+    struct stepgen_axis_config c = cfg[i];
+    c.step_invert = 0;
+    stepgen_configure(i, &c);
+  }
   sim_reset_stats();
 
   /* 1. X напред 1000 */

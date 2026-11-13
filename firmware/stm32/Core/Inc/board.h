@@ -1,116 +1,120 @@
 /*
- * Всичко, което зависи от конкретната платка WAVGAT STM32H723ZGT6.
+ * Всичко, което зависи от основната платка на контролера (STM32H723ZGT6 директно на платката).
  * Copyright (c) 2026 ageorgiev86. Всички права запазени.
  *
- * Платката: надпис на гърба „LXB723ZG-P1“ (鹿小班), продава се от WAVGAT.
- * Проверено по схемата на LXB743ZI-P1: същата платка със STM32H743ZIT6.
- * Корпусът (LQFP144) и GPIO пиновете са еднакви с H723ZG.
+ * Схемата и платката: hardware/kicad (osnovna_platka.py, platka.py). Процесорната част е
+ * по схемата на WAVGAT LXB743ZI-P1:
+ *   Кварци        25 MHz (PH0/PH1), 32,768 kHz (PC14/PC15)
+ *   Ядро          LDO: 2 × 4,7 µF на VCAP (изводи 71 и 106)
+ *   Захранване    24 V → LM2596S-5.0 → AP2112K-3.3; при програмиране 5 V и от USB
+ *   Светодиод     PG7, свети при 0
+ *   Бутони        BOOT0 (10 kΩ към маса), RESET
+ *   USB-B         PA11 (D−), PA12 (D+); SWD гнездо: 3V3, SWCLK, GND, SWDIO, NRST
  *
- *   Кварци        25 MHz (U2, PH0/PH1, кварц, не генератор), 32,768 kHz (X1, PC14/PC15)
- *   Ядро          LDO: 2 × 4,7 µF на VCAP (пинове 71 и 106)
- *   Захранване    USB-C (VBUS = +5V) → преобразувател RY3420 → 3,3 V
- *   Светодиоди    LED22 (червен, захранване); LED1 (син) на PG7, свети при 0
- *   Бутони        BOOT0 (към 3,3 V, 10 kΩ към GND), RST
- *   USB-C         PA11 (D−), PA12 (D+); CC1/CC2 с 5,1 kΩ към GND; VBUS не е към PA9
- *   Конектор H1   1 CLK (PA14), 2 DIO (PA13), 3 GND, 4 +5V,
- *                 5 RXD (PA10, USART1_RX), 6 TXD (PA9, USART1_TX), 7 RST (през 1 kΩ), 8 3,3 V
- *
- * Заети пинове (да не се ползват за стъпки, енкодери и входове):
- *   флаш W25Q64 (запоена)   OCTOSPI: PF6 IO3, PF7 IO2, PF8 IO0, PF9 IO1, PF10 CLK, PG6 NCS
- *   microSD (гнездо)         SDMMC1: PC8 D0, PC9 D1, PC10 D2, PC11 D3, PC12 CLK, PD2 CMD
- *   LCD (FPC 10 пина)        SPI6: PG13 SCK, PG14 MOSI, PG8 NSS; PG15 DC, PG12 подсветка
- *   CAMERA (FPC 24 пина)     DCMI: PA4, PA6, PG9, PC6, PC7, PG10, PG11, PE4, PD3, PE5, PE6;
- *                            PF13 PWDN, PF14/PF15 SCCB, PA5
- *   други                    PA13/PA14 SWD, PA11/PA12 USB, PG7 светодиод,
- *                            PA9/PA10 USART1 (на H1), PC14/PC15 и PH0/PH1 кварци
- * Пиновете на LCD и CAMERA са свободни, докато в конекторите няма нищо,
- * но е по-добре да остават за резерв.
- *
- * ОСТАВА да се провери на самата платка: че чипът е H723ZG (Device ID 0x483)
- * и че светодиодът мига (PG7).
+ * Обърнати сигнали (заради схемата):
+ *   - енкодерите минават през Шмитов инвертор 74LVC14 → полярност „обратна“ на входа на таймера;
+ *   - пробник, toolsetter, авариен стоп, LIM и HOME минават през оптрон → 0 = активен;
+ *   - драйверите са свързани с общ анод (+5V) → изход 0 включва оптрона в драйвера.
  */
 #ifndef BOARD_H
 #define BOARD_H
 
 #include "stm32h7xx_hal.h"
 
-/* Светодиод LED1 (син): 3,3 V → 1 kΩ → светодиод → PG7, свети при 0 */
+/* Светодиод: 3,3 V → 1 kΩ → светодиод → PG7, свети при 0 */
 #define BOARD_LED_PORT        GPIOG
 #define BOARD_LED_PIN         GPIO_PIN_7
 #define BOARD_LED_CLK_ENABLE() __HAL_RCC_GPIOG_CLK_ENABLE()
 #define BOARD_LED_ACTIVE_LOW  1
 
-/* Захранване на ядрото: LDO (кондензатори на VCAP по схемата) */
+/* Захранване на ядрото: LDO */
 #define BOARD_SUPPLY          PWR_LDO_SUPPLY
 
 /*
  * ---------------------------------------------------------------------------
- * Разпределение на пиновете. Таблицата и мотивите: docs/stm32-pinove.md.
- * Сигнал, който е само GPIO, е дефиниран като двойка „порт, пин“ и се
- * ползва направо: HAL_GPIO_ReadPin(BOARD_PROBE).
+ * Разпределение на пиновете (таблицата: docs/stm32-pinove.md).
+ * Сигнал, който е само GPIO, е двойка „порт, пин“: HAL_GPIO_ReadPin(BOARD_PROBE).
+ * Каналите 1–6 са общи: кой е X, Y1, Y2, Z, A, C се избира в Настройки.
  * ---------------------------------------------------------------------------
  */
 
-/* Стъпки и посока: всички на порт D (DMA пише в един регистър BSRR).
- * Редът на осите: X, Y, Z, A, B, C. */
+/* Стъпки и посока: всички на порт D (DMA пише в един регистър BSRR). Канал 1–6. */
 #define BOARD_STEP_PORT         GPIOD
 #define BOARD_STEP_CLK_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
 #define BOARD_STEP_PINS  { GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_8, GPIO_PIN_10, GPIO_PIN_12, GPIO_PIN_14 }
 #define BOARD_DIR_PINS   { GPIO_PIN_5, GPIO_PIN_7, GPIO_PIN_9, GPIO_PIN_11, GPIO_PIN_13, GPIO_PIN_15 }
 #define BOARD_AXES_MAX          6
+#define BOARD_STEP_ACTIVE_LOW   1                    /* общ анод: импулсът е 0 */
 
-#define BOARD_DRV_EN            GPIOB, GPIO_PIN_11   /* разрешение на драйверите (изход) */
-#define BOARD_DRV_FAULT         GPIOE, GPIO_PIN_3    /* грешка от драйвер (вход, EXTI3) */
+#define BOARD_DRV_EN            GPIOB, GPIO_PIN_11   /* разрешение (ENA) на драйверите, изход */
+#define BOARD_DRV_FAULT         GPIOE, GPIO_PIN_3    /* аларма (ALM) от драйвер, вход, 0 = аларма */
+#define BOARD_DRV_OE_PORT       GPIOE                /* 0 = изходите на буферите 74ACT541 са разрешени */
+#define BOARD_DRV_OE_PIN        GPIO_PIN_9
+#define BOARD_DRV_OE_N          BOARD_DRV_OE_PORT, BOARD_DRV_OE_PIN
+#define BOARD_DRV_OE_CLK_ENABLE() __HAL_RCC_GPIOE_CLK_ENABLE()
 
-/* Енкодери: таймер в encoder mode, A = CH1, B = CH2, индекс Z = CH3 (input capture) */
-#define BOARD_ENC_X_TIM         TIM5                 /* 32 бита */
-#define BOARD_ENC_X_AF          GPIO_AF2_TIM5
-#define BOARD_ENC_X_A           GPIOA, GPIO_PIN_0
-#define BOARD_ENC_X_B           GPIOA, GPIO_PIN_1
-#define BOARD_ENC_X_Z           GPIOA, GPIO_PIN_2
+/* Енкодери (TTL, A и B): таймер в encoder mode, A = CH1, B = CH2 */
+#define BOARD_ENC1_TIM          TIM5                 /* 32 бита */
+#define BOARD_ENC1_AF           GPIO_AF2_TIM5
+#define BOARD_ENC1_A            GPIOA, GPIO_PIN_0
+#define BOARD_ENC1_B            GPIOA, GPIO_PIN_1
 
-#define BOARD_ENC_Y_TIM         TIM2                 /* 32 бита */
-#define BOARD_ENC_Y_AF          GPIO_AF1_TIM2
-#define BOARD_ENC_Y_A           GPIOA, GPIO_PIN_15
-#define BOARD_ENC_Y_B           GPIOB, GPIO_PIN_3
-#define BOARD_ENC_Y_Z           GPIOB, GPIO_PIN_10
+#define BOARD_ENC2_TIM          TIM2                 /* 32 бита */
+#define BOARD_ENC2_AF           GPIO_AF1_TIM2
+#define BOARD_ENC2_A            GPIOA, GPIO_PIN_15
+#define BOARD_ENC2_B            GPIOB, GPIO_PIN_3
 
-#define BOARD_ENC_Z_TIM         TIM23                /* 32 бита */
-#define BOARD_ENC_Z_AF          GPIO_AF13_TIM23
-#define BOARD_ENC_Z_A           GPIOF, GPIO_PIN_0
-#define BOARD_ENC_Z_B           GPIOF, GPIO_PIN_1
-#define BOARD_ENC_Z_Z           GPIOF, GPIO_PIN_2
+#define BOARD_ENC3_TIM          TIM23                /* 32 бита */
+#define BOARD_ENC3_AF           GPIO_AF13_TIM23
+#define BOARD_ENC3_A            GPIOF, GPIO_PIN_0
+#define BOARD_ENC3_B            GPIOF, GPIO_PIN_1
 
-#define BOARD_ENC_A_TIM         TIM3                 /* 16 бита */
-#define BOARD_ENC_A_AF          GPIO_AF2_TIM3
-#define BOARD_ENC_A_A           GPIOB, GPIO_PIN_4
-#define BOARD_ENC_A_B           GPIOB, GPIO_PIN_5
-#define BOARD_ENC_A_Z           GPIOB, GPIO_PIN_0
+#define BOARD_ENC4_TIM          TIM3                 /* 16 бита */
+#define BOARD_ENC4_AF           GPIO_AF2_TIM3
+#define BOARD_ENC4_A            GPIOB, GPIO_PIN_4
+#define BOARD_ENC4_B            GPIOB, GPIO_PIN_5
 
-#define BOARD_ENC_B_TIM         TIM4                 /* 16 бита */
-#define BOARD_ENC_B_AF          GPIO_AF2_TIM4
-#define BOARD_ENC_B_A           GPIOB, GPIO_PIN_6
-#define BOARD_ENC_B_B           GPIOB, GPIO_PIN_7
-#define BOARD_ENC_B_Z           GPIOB, GPIO_PIN_8
+#define BOARD_ENC5_TIM          TIM4                 /* 16 бита */
+#define BOARD_ENC5_AF           GPIO_AF2_TIM4
+#define BOARD_ENC5_A            GPIOB, GPIO_PIN_6
+#define BOARD_ENC5_B            GPIOB, GPIO_PIN_7
 
-#define BOARD_ENC_C_TIM         TIM1                 /* 16 бита; PA9/PA10 са и на H1 (TXD/RXD) */
-#define BOARD_ENC_C_AF          GPIO_AF1_TIM1
-#define BOARD_ENC_C_A           GPIOA, GPIO_PIN_8
-#define BOARD_ENC_C_B           GPIOA, GPIO_PIN_9
-#define BOARD_ENC_C_Z           GPIOA, GPIO_PIN_10
+#define BOARD_ENC6_TIM          TIM1                 /* 16 бита */
+#define BOARD_ENC6_AF           GPIO_AF1_TIM1
+#define BOARD_ENC6_A            GPIOA, GPIO_PIN_8
+#define BOARD_ENC6_B            GPIOA, GPIO_PIN_9
 
 #define BOARD_ENC_SP_TIM        TIM24                /* шпиндел, 32 бита */
 #define BOARD_ENC_SP_AF         GPIO_AF14_TIM24
 #define BOARD_ENC_SP_A          GPIOF, GPIO_PIN_11
 #define BOARD_ENC_SP_B          GPIOF, GPIO_PIN_12
-#define BOARD_ENC_SP_Z          GPIOF, GPIO_PIN_13   /* на конектора CAMERA (празен) */
 
-/* MPG пулт: колелото (5 V A/B през буфер на Шмит до 3,3 V). Превключвателите и бутоните на пулта
- * са входовете IN28–IN40 от веригата 74HC165 (BOARD_IO_*), виж docs/arhitektura.md, 7.1. */
-#define BOARD_MPG_TIM           TIM8                 /* encoder mode, 16 бита */
-#define BOARD_MPG_AF            GPIO_AF3_TIM8
-#define BOARD_MPG_A             GPIOC, GPIO_PIN_6    /* на конектора CAMERA (празен) */
-#define BOARD_MPG_B             GPIOC, GPIO_PIN_7
+/* MPG пулт: отделен модул по RS-485 (THVD1450), гнездо 2 × 3: +24V, 0V, A, B, авариен стоп ×2.
+ * Пултът праща на всяка 1 ms колело, ос, ×1/×10/×100, Старт, Пауза, Стоп; без пакети 20 ms → плавно спиране. */
+#define BOARD_MPG_UART          UART4
+#define BOARD_MPG_AF            GPIO_AF8_UART4
+#define BOARD_MPG_RX            GPIOD, GPIO_PIN_0
+#define BOARD_MPG_TX            GPIOD, GPIO_PIN_1
+#define BOARD_MPG_DE            GPIOD, GPIO_PIN_3    /* 1 = предаване (DE и ~RE заедно) */
+
+/* Крайни изключватели и HOME, канал 1–6 (през оптрон, 0 = активен) */
+#define BOARD_LIM1              GPIOG, GPIO_PIN_8
+#define BOARD_LIM2              GPIOG, GPIO_PIN_9
+#define BOARD_LIM3              GPIOG, GPIO_PIN_10
+#define BOARD_LIM4              GPIOG, GPIO_PIN_11
+#define BOARD_LIM5              GPIOG, GPIO_PIN_12
+#define BOARD_LIM6              GPIOG, GPIO_PIN_13
+#define BOARD_HOME1             GPIOG, GPIO_PIN_14
+#define BOARD_HOME2             GPIOG, GPIO_PIN_15
+#define BOARD_HOME3             GPIOF, GPIO_PIN_6
+#define BOARD_HOME4             GPIOF, GPIO_PIN_7
+#define BOARD_HOME5             GPIOF, GPIO_PIN_8
+#define BOARD_HOME6             GPIOF, GPIO_PIN_9
+
+/* Бързи входове (по EXTI, през оптрон, 0 = активен) */
+#define BOARD_PROBE             GPIOA, GPIO_PIN_7    /* EXTI7 */
+#define BOARD_TOOLSETTER        GPIOB, GPIO_PIN_1    /* EXTI1 */
+#define BOARD_ESTOP             GPIOC, GPIO_PIN_13   /* EXTI13, наблюдение на веригата */
 
 /* Връзка с Linux: SPI4 slave */
 #define BOARD_LINK_SPI          SPI4
@@ -122,60 +126,30 @@
 #define BOARD_LINK_READY        GPIOE, GPIO_PIN_15   /* изход: готов за пакет */
 #define BOARD_LINK_IRQ          GPIOE, GPIO_PIN_10   /* изход: спешно събитие */
 
-/* Входове и изходи 40 + 32 (5 × 74HC165, 4 × 74HC595), ADC и DAC зад изолатора: SPI2 master */
+/* Входове и изходи 8 + 8 (и разширителните модули верижно): SPI2 master през ISO7761 */
 #define BOARD_IO_SPI            SPI2
 #define BOARD_IO_AF             GPIO_AF5_SPI2
 #define BOARD_IO_SCK            GPIOB, GPIO_PIN_13
-#define BOARD_IO_MISO           GPIOB, GPIO_PIN_14
-#define BOARD_IO_MOSI           GPIOB, GPIO_PIN_15
-#define BOARD_IO_LATCH          GPIOB, GPIO_PIN_12   /* 74HC595 */
-#define BOARD_IO_LOAD           GPIOE, GPIO_PIN_7    /* 74HC165 */
-#define BOARD_IO_OE             GPIOE, GPIO_PIN_8    /* 74HC595, активен при 0 */
-#define BOARD_IO_ADC_CS         GPIOE, GPIO_PIN_9
-#define BOARD_IO_DAC_CS         GPIOE, GPIO_PIN_2
-#define BOARD_IO_IN_N           40                   /* входове (5 × 74HC165) */
-#define BOARD_IO_OUT_N          32
-#define BOARD_IO_MPG_FIRST      27                   /* IN28 (от 0): ос X…C, ×1/×10/×100, постоянно, Старт, Пауза (NC), Стоп (NC) */
+#define BOARD_IO_MISO           GPIOB, GPIO_PIN_14   /* от 74HCT165 */
+#define BOARD_IO_MOSI           GPIOB, GPIO_PIN_15   /* към 74HCT595 */
+#define BOARD_IO_LATCH          GPIOB, GPIO_PIN_12   /* 74HCT595 RCLK */
+#define BOARD_IO_LOAD           GPIOE, GPIO_PIN_7    /* 74HCT165 ~PL */
+#define BOARD_IO_OE             GPIOE, GPIO_PIN_8    /* 74HCT595 ~OE, 0 = изходите разрешени */
 
-/* Бързи входове (по EXTI) */
-#define BOARD_PROBE             GPIOA, GPIO_PIN_7    /* EXTI7; и TIM14_CH1 (AF9) */
-#define BOARD_TOOLSETTER        GPIOB, GPIO_PIN_1    /* EXTI1 */
-#define BOARD_ESTOP             GPIOC, GPIO_PIN_13   /* EXTI13, наблюдение на веригата */
+/* Изходите са свързани по физическия ред на изводите (без кръстосване), а номерацията е естествена:
+ * клема k = Q_A..Q_H на 74HCT595 (изход 1 = Q_A). Еднакво на основната платка и на модулите.
+ * Входовете: клема k → бит D на 74HCT165 (по физическия ред на изводите на чипа). */
+#define BOARD_IN_MAP_MAIN       { 6, 7, 0, 1, 2, 3, 4, 5 }   /* основна платка: клема 1..8 → D */
+#define BOARD_IN_MAP_MODULE     { 2, 3, 4, 5, 6, 7, 0, 1 }   /* разширителен модул: клема 1..8 → D */
 
-/* Крайни изключватели (NC) и HOME; редът на осите: X, Y, Z, A, B, C */
-#define BOARD_LIMIT_X           GPIOF, GPIO_PIN_3
-#define BOARD_LIMIT_Y           GPIOF, GPIO_PIN_4
-#define BOARD_LIMIT_Z           GPIOF, GPIO_PIN_5
-#define BOARD_LIMIT_A           GPIOG, GPIO_PIN_0
-#define BOARD_LIMIT_B           GPIOG, GPIO_PIN_1
-#define BOARD_LIMIT_C           GPIOG, GPIO_PIN_2
-#define BOARD_HOME_X            GPIOG, GPIO_PIN_3
-#define BOARD_HOME_Y            GPIOG, GPIO_PIN_4
-#define BOARD_HOME_Z            GPIOG, GPIO_PIN_5
-#define BOARD_HOME_A            GPIOE, GPIO_PIN_0
-#define BOARD_HOME_B            GPIOE, GPIO_PIN_1
-#define BOARD_HOME_C            GPIOB, GPIO_PIN_2
-
-/* Шпиндел */
+/* Шпиндел: 0–10 V (PWM → филтър → LM358), FWD и REV през оптрон */
 #define BOARD_SPINDLE_PWM_TIM   TIM17                /* CH1 */
 #define BOARD_SPINDLE_PWM_AF    GPIO_AF1_TIM17
 #define BOARD_SPINDLE_PWM       GPIOB, GPIO_PIN_9
-#define BOARD_SPINDLE_DIR       GPIOC, GPIO_PIN_4
-#define BOARD_SPINDLE_EN        GPIOC, GPIO_PIN_5
+#define BOARD_SPINDLE_DIR       GPIOC, GPIO_PIN_4    /* REV на регулатора */
+#define BOARD_SPINDLE_EN        GPIOC, GPIO_PIN_5    /* FWD на регулатора */
 
-/* Аналогови входове (4) и изходи (2) за опитите: вградените ADC и DAC.
- * На машината са зад изолатора по SPI2 (BOARD_IO_ADC_CS, BOARD_IO_DAC_CS). */
-#define BOARD_AIN1              GPIOC, GPIO_PIN_0    /* ADC1_INP10 */
-#define BOARD_AIN2              GPIOC, GPIO_PIN_1    /* ADC1_INP11 */
-#define BOARD_AIN3_ADC3_CH      0                    /* PC2_C, ADC3_INP0 (само аналогов) */
-#define BOARD_AIN4_ADC3_CH      1                    /* PC3_C, ADC3_INP1 (само аналогов) */
-#define BOARD_AOUT1             GPIOA, GPIO_PIN_4    /* DAC1_OUT1; на конектора CAMERA */
-#define BOARD_AOUT2             GPIOA, GPIO_PIN_5    /* DAC1_OUT2; на конектора CAMERA */
-
-/* Резерв: PA3 (ADC1_INP15, TIM5_CH4); PD0/PD1 FDCAN1 RX/TX (AF9) */
-
-/*
- * USB: PA11 (D−) и PA12 (D+), фиксирани в чипа; описани са в usb_cdc.c.
- */
+/* Свободни (настройват се като аналогови): PA2–PA6, PA10, PB0, PB2, PB8, PB10, PC0–PC3, PC6–PC12,
+ * PD2, PE0–PE2, PE4–PE6, PF2–PF5, PF10, PF13–PF15, PG0–PG6. USB: PA11/PA12 (usb_cdc.c). */
 
 #endif /* BOARD_H */

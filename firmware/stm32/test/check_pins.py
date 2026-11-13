@@ -15,10 +15,8 @@ from pathlib import Path
 
 BOARD_H = Path(__file__).resolve().parent.parent / "Core" / "Inc" / "board.h"
 
-# заети от платката (по схемата на LXB743ZI-P1 / LXB723ZG-P1)
+# заети от процесорната част на платката (USB, SWD, кварци)
 RESERVED = {
-    "PF6", "PF7", "PF8", "PF9", "PF10", "PG6",            # флаш W25Q64 (OCTOSPI)
-    "PC8", "PC9", "PC10", "PC11", "PC12", "PD2",          # microSD
     "PA11", "PA12", "PA13", "PA14",                       # USB, SWD
     "PH0", "PH1", "PC14", "PC15",                         # кварци
 }

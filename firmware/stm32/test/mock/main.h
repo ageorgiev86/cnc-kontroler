@@ -98,6 +98,17 @@ void Error_Handler(void);
 #define BOARD_STEP_PINS  { GPIO_PIN_4, GPIO_PIN_6, GPIO_PIN_8, GPIO_PIN_10, GPIO_PIN_12, GPIO_PIN_14 }
 #define BOARD_DIR_PINS   { GPIO_PIN_5, GPIO_PIN_7, GPIO_PIN_9, GPIO_PIN_11, GPIO_PIN_13, GPIO_PIN_15 }
 #define BOARD_AXES_MAX          6
+#define BOARD_STEP_ACTIVE_LOW   1
+extern GPIO_TypeDef mock_gpioe;
+#define GPIOE (&mock_gpioe)
+#define GPIO_PIN_SET   1
+#define GPIO_PIN_RESET 0
+#define GPIO_SPEED_FREQ_LOW 0
+#define BOARD_DRV_OE_PORT       GPIOE
+#define BOARD_DRV_OE_PIN        GPIO_PIN_9
+#define BOARD_DRV_OE_N          BOARD_DRV_OE_PORT, BOARD_DRV_OE_PIN
+#define BOARD_DRV_OE_CLK_ENABLE() ((void)0)
+static inline void HAL_GPIO_WritePin(GPIO_TypeDef *p, uint16_t pin, int st) { (void)p; (void)pin; (void)st; }
 /* тестът проверява ос X */
 #define BOARD_AXIS0_STEP_PIN    GPIO_PIN_4
 #define BOARD_AXIS0_DIR_PIN     GPIO_PIN_5
