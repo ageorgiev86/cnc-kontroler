@@ -156,7 +156,7 @@ def main():
         sys.exit(f'няма Freerouting: {jar} (задай --jar или FREEROUTING_JAR)')
     os.makedirs(dst, exist_ok=True)
     for f in os.listdir(src):
-        if f.endswith(('.kicad_pcb', '.kicad_pro', '.kicad_sch', '.json')):
+        if f.endswith(('.kicad_pcb', '.kicad_pro', '.kicad_sch', '.kicad_dru', '.json')):
             shutil.copy(os.path.join(src, f), dst)
     pcb = [os.path.join(dst, f) for f in os.listdir(dst) if f.endswith('.kicad_pcb')][0]
     dsn, ses = pcb[:-10] + '.dsn', pcb[:-10] + '.ses'
@@ -168,8 +168,11 @@ def main():
         sys.exit('неуспешен износ на DSN')
     cmd = [java, '-jar', jar, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false']
     print(' '.join(cmd), flush=True)
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-    tail = [ln for ln in (r.stdout + r.stderr).splitlines() if 'completed' in ln or 'ERROR' in ln or 'Error' in ln]
+    log = os.path.join(dst, 'freerouting.log')
+    with open(log, 'w', encoding='utf-8', errors='replace') as flog:   # напредъкът се вижда в лога
+        subprocess.run(cmd, stdout=flog, stderr=subprocess.STDOUT)
+    lines = open(log, encoding='utf-8', errors='replace').read().splitlines()
+    tail = [ln for ln in lines if 'completed' in ln or 'ERROR' in ln or 'Error' in ln]
     print('\n'.join(tail[-8:]), flush=True)
     if not os.path.exists(ses):
         sys.exit('Freerouting не върна резултат')
