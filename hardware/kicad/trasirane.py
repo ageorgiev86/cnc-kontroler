@@ -4,7 +4,10 @@ Copyright (c) 2026 ageorgiev86. Всички права запазени.
 
 Пускане:
   "C:\\Program Files\\KiCad\\10.0\\bin\\python.exe" -I trasirane.py <проект> <копие> [проходи]
-  python3 -I trasirane.py <проект> <копие> [проходи] [--jar <freerouting.jar>] [--java <java>]   (Linux)
+  python3 -I trasirane.py <проект> <копие> [проходи] [--minutes N] [--jar <freerouting.jar>] [--java <java>]   (Linux)
+
+Freerouting 2.1 не спира по броя проходи (цикълът му не ги чете), а по времето: --minutes
+(или FREEROUTING_MINUTES, по подразбиране 60); тогава спира меко и записва най-добрия резултат.
 
 1. Копира проекта в папката <копие> (оригиналът не се пипа).
 2. До всяка SMD площадка на маса (GND, GND_IO) слага преход към масата на другия слой.
@@ -163,21 +166,23 @@ def ground_zones(board, zones):
 
 def parse_args(argv):
     """<проект> <копие> [проходи] [--jar път] [--java път]"""
-    opts = {'jar': os.environ.get('FREEROUTING_JAR') or None, 'java': os.environ.get('FREEROUTING_JAVA') or None}
+    opts = {'jar': os.environ.get('FREEROUTING_JAR') or None, 'java': os.environ.get('FREEROUTING_JAVA') or None,
+            'minutes': os.environ.get('FREEROUTING_MINUTES') or '60'}
     pos = []
     it = iter(argv)
     for a in it:
-        if a in ('--jar', '--java'):
+        if a in ('--jar', '--java', '--minutes'):
             opts[a[2:]] = next(it, None)
         else:
             pos.append(a)
     if len(pos) < 2:
         sys.exit(__doc__)
-    return pos[0], pos[1], (pos[2] if len(pos) > 2 else '30'), opts['jar'] or default_jar(), opts['java'] or default_java()
+    return (pos[0], pos[1], (pos[2] if len(pos) > 2 else '30'), opts['jar'] or default_jar(),
+            opts['java'] or default_java(), int(opts['minutes']))
 
 
 def main():
-    src, dst, passes, jar, java = parse_args(sys.argv[1:])
+    src, dst, passes, jar, java, minutes = parse_args(sys.argv[1:])
     if not os.path.exists(jar):
         sys.exit(f'няма Freerouting: {jar} (задай --jar или FREEROUTING_JAR)')
     os.makedirs(dst, exist_ok=True)
@@ -195,7 +200,8 @@ def main():
     # Freerouting 2.x взима броя проходи от freerouting.json (по подразбиране 9999), затова и --router.max_passes;
     # без телеметрия
     cmd = [java, '-jar', jar, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false',
-           f'--router.max_passes={passes}', '--usage_and_diagnostic_data.disable_analytics=true',
+           f'--router.max_passes={passes}', f'--router.job_timeout={minutes // 60:02d}:{minutes % 60:02d}:00',
+           '--usage_and_diagnostic_data.disable_analytics=true',
            '--profile.allow_telemetry=false']
     print(' '.join(cmd), flush=True)
     log = os.path.join(dst, 'freerouting.log')
