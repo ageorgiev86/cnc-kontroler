@@ -22,10 +22,9 @@ import sys
 import pcbnew
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sch import parse, tokenize  # noqa: E402
+from sch import KICAD_CLI, KICAD_FP, parse, tokenize  # noqa: E402
 
-KICAD = r"C:\Program Files\KiCad\10.0"
-FPDIR = os.path.join(KICAD, 'share', 'kicad', 'footprints')
+FPDIR = KICAD_FP
 GAP = 1.0             # между съседни клеми (корпусите почти един до друг)
 BARRIER = 8.0         # изолационна граница: разстояние между зоните
 X0, Y0 = 30.0, 30.0   # горен ляв ъгъл на платката в листа
@@ -73,7 +72,7 @@ def text(e):
 
 
 def read_netlist(sch_path, out):
-    subprocess.run([os.path.join(KICAD, 'bin', 'kicad-cli.exe'), 'sch', 'export', 'netlist',
+    subprocess.run([KICAD_CLI, 'sch', 'export', 'netlist',
                     '--format', 'kicadsexpr', '-o', out, sch_path], check=True, capture_output=True)
     tree, _ = parse(tokenize(open(out, encoding='utf-8').read()))
     root = tree[0]

@@ -4,18 +4,25 @@ Copyright (c) 2026 ageorgiev86. Всички права запазени.
 
 Пускане:
   "C:\\Program Files\\KiCad\\10.0\\bin\\python.exe" -I trasirane.py <проект> <копие> [проходи]
+  python3 -I trasirane.py <проект> <копие> [проходи] [--jar <freerouting.jar>] [--java <java>]   (Linux)
 
 1. Копира проекта в папката <копие> (оригиналът не се пипа).
 2. До всяка SMD площадка на маса (GND, GND_IO) слага преход към масата на другия слой.
 3. Freerouting трасира всичко без масите (класът Ground се пропуска).
 4. Масите стават заливка на двата слоя по зоните от zony.json (логика / изолирана част),
    която служи и като екран на платката.
-Freerouting е от плъгина на KiCad; Java 25 — от кеша на плъгина.
+Къде са Freerouting и Java (първото намерено):
+  1. аргументите --jar и --java;
+  2. променливите на средата FREEROUTING_JAR и FREEROUTING_JAVA;
+  3. Windows: jar-ът от плъгина на KiCad и Java 25 от кеша на плъгина;
+     Linux: най-новият /opt/freerouting/freerouting-*.jar и java от PATH.
+Freerouting 2.5 иска Java 25; 2.1.0 върви с Java 21.
 """
 import glob
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,11 +30,29 @@ import sys
 import pcbnew
 
 HOME = os.path.expanduser('~')
-JAR = os.path.join(HOME, 'Documents', 'KiCad', '10.0', '3rdparty', 'plugins', 'app_freerouting_kicad-plugin', 'jar',
-                   'freerouting-2.5.0.jar')
-# Freerouting 2.5 иска Java 25: плъгинът я сваля в своя кеш при първото пускане
-JAVA = (sorted(glob.glob(os.path.join(HOME, 'AppData', 'Local', 'freerouting', 'cache', 'jre', '*', 'bin',
-                                      'java.exe'))) or ['java'])[-1]
+
+
+def default_jar():
+    if os.name == 'nt':
+        return os.path.join(HOME, 'Documents', 'KiCad', '10.0', '3rdparty', 'plugins',
+                            'app_freerouting_kicad-plugin', 'jar', 'freerouting-2.5.0.jar')
+    jars = sorted(glob.glob('/opt/freerouting/freerouting-*.jar'), key=_version)
+    return jars[-1] if jars else 'freerouting.jar'
+
+
+def default_java():
+    if os.name == 'nt':
+        # Freerouting 2.5 иска Java 25: плъгинът я сваля в своя кеш при първото пускане
+        return (sorted(glob.glob(os.path.join(HOME, 'AppData', 'Local', 'freerouting', 'cache', 'jre', '*', 'bin',
+                                              'java.exe'))) or ['java'])[-1]
+    return 'java'
+
+
+def _version(path):
+    nums = re.findall(r'\d+', os.path.basename(path))
+    return [int(n) for n in nums]
+
+
 GROUND = ('GND', 'GND_IO')
 VIA_D, VIA_DRILL = 1.2, 0.6
 
@@ -110,9 +135,25 @@ def ground_zones(board, zones):
     return len(out), None
 
 
+def parse_args(argv):
+    """<проект> <копие> [проходи] [--jar път] [--java път]"""
+    opts = {'jar': os.environ.get('FREEROUTING_JAR') or None, 'java': os.environ.get('FREEROUTING_JAVA') or None}
+    pos = []
+    it = iter(argv)
+    for a in it:
+        if a in ('--jar', '--java'):
+            opts[a[2:]] = next(it, None)
+        else:
+            pos.append(a)
+    if len(pos) < 2:
+        sys.exit(__doc__)
+    return pos[0], pos[1], (pos[2] if len(pos) > 2 else '30'), opts['jar'] or default_jar(), opts['java'] or default_java()
+
+
 def main():
-    src, dst = sys.argv[1], sys.argv[2]
-    passes = sys.argv[3] if len(sys.argv) > 3 else '30'
+    src, dst, passes, jar, java = parse_args(sys.argv[1:])
+    if not os.path.exists(jar):
+        sys.exit(f'няма Freerouting: {jar} (задай --jar или FREEROUTING_JAR)')
     os.makedirs(dst, exist_ok=True)
     for f in os.listdir(src):
         if f.endswith(('.kicad_pcb', '.kicad_pro', '.kicad_sch', '.json')):
@@ -125,7 +166,7 @@ def main():
     board = pcbnew.LoadBoard(pcb)
     if not pcbnew.ExportSpecctraDSN(board, dsn):
         sys.exit('неуспешен износ на DSN')
-    cmd = [JAVA, '-jar', JAR, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false']
+    cmd = [java, '-jar', jar, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false']
     print(' '.join(cmd), flush=True)
     r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     tail = [ln for ln in (r.stdout + r.stderr).splitlines() if 'completed' in ln or 'ERROR' in ln or 'Error' in ln]

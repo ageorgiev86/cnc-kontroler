@@ -26,6 +26,37 @@
 
 Ако вече си трасирал или местил нещо ръчно в KiCad, **не пускай `platka.py`** (ще го изтрие). Промените по схемата тогава се пренасят с F8 (Update PCB from Schematic): връзката схема ↔ платка е по постоянни UUID.
 
+## На Linux (и трасиране)
+
+KiCad 10 от PPA-то на KiCad (Ubuntu 24.04), Java 21 и Freerouting 2.1.0 (2.5 иска Java 25):
+
+```
+sudo add-apt-repository ppa:kicad/kicad-10.0-releases
+sudo apt install --no-install-recommends kicad kicad-footprints kicad-symbols openjdk-21-jre-headless
+sudo mkdir -p /opt/freerouting
+sudo curl -L -o /opt/freerouting/freerouting-2.1.0.jar \
+    https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
+```
+
+Скриптовете се пускат с Python-а, с който е компилиран модулът `pcbnew` (на Ubuntu 24.04 — `python3.12`):
+
+```
+python3.12 -I osnovna_platka.py osnovna_platka
+python3.12 -I pravila.py osnovna_platka
+python3.12 -I platka.py osnovna_platka 136
+python3.12 -I trasirane.py osnovna_platka /tmp/trasirane 30
+kicad-cli pcb drc --severity-all /tmp/trasirane/osnovna_platka.kicad_pcb
+```
+
+`trasirane.py` търси Freerouting и Java така: аргументите `--jar`/`--java`, после променливите
+`FREEROUTING_JAR`/`FREEROUTING_JAVA`, после (Linux) най-новия `/opt/freerouting/freerouting-*.jar` и `java` от PATH,
+(Windows) плъгина на KiCad. Пътищата до KiCad (символи, отпечатъци, `kicad-cli`) се сменят с `KICAD_DIR`,
+`KICAD_SYMBOL_DIR`, `KICAD_FOOTPRINT_DIR`, `KICAD_CLI`. Ако ERC/DRC се оплакват „library not included“, копирай
+`/usr/share/kicad/template/{sym,fp}-lib-table` в `~/.config/kicad/10.0/`.
+
+`pravila.py` записва и `osnovna_platka.kicad_dru`: 0,2 мм при всичко в U1 (изводите на STM32 са на 0,2 мм един от друг
+и при масата и неизползваните изводи).
+
 ## Правила за домашно производство
 
 - Двуслойна, фоторезист; метализирани отвори; най-малкото свредло 0,5 мм → преход с отвор 0,6 мм и площадка 1,2 мм.

@@ -12,7 +12,20 @@ import os
 import re
 import uuid as _uuid
 
-KICAD_SYM = r"C:\Program Files\KiCad\10.0\share\kicad\symbols"
+# Пътищата до KiCad: на Windows — стандартната инсталация, на Linux — пакетите (PPA на KiCad).
+# Всеки може да се смени с променлива на средата: KICAD_DIR (папката на инсталацията),
+# KICAD_SYMBOL_DIR, KICAD_FOOTPRINT_DIR, KICAD_CLI.
+if os.name == 'nt':
+    KICAD = os.environ.get('KICAD_DIR', r"C:\Program Files\KiCad\10.0")
+    _SHARE = os.path.join(KICAD, 'share', 'kicad')
+    _CLI = os.path.join(KICAD, 'bin', 'kicad-cli.exe')
+else:
+    KICAD = os.environ.get('KICAD_DIR', '/usr')
+    _SHARE = os.path.join(KICAD, 'share', 'kicad')
+    _CLI = os.path.join(KICAD, 'bin', 'kicad-cli')
+KICAD_SYM = os.environ.get('KICAD_SYMBOL_DIR', os.path.join(_SHARE, 'symbols'))
+KICAD_FP = os.environ.get('KICAD_FOOTPRINT_DIR', os.path.join(_SHARE, 'footprints'))
+KICAD_CLI = os.environ.get('KICAD_CLI', _CLI)
 POWER_NETS = ('+3V3', '+5V', 'GND', '+24V')
 
 

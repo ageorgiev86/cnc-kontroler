@@ -35,6 +35,15 @@ POWER_PATTERNS = ['+24V', '+24V_IO', '+5V', '+5V_IO', 'VBUS',
                   '*/5v_mod', '*/sw', '*/vin*', '*/24io_f', '*/24f', '*/e*_5v', '*/mpg_5v', '*/mpg_24v']
 GROUND_PATTERNS = ['GND', 'GND_IO']
 
+# Изводите на STM32 (LQFP144, стъпка 0,5 мм) са на 0,2 мм един от друг, каквато и да е мрежата им
+# (маса, неизползван извод): 0,2 мм важи за всичко, което е в U1 или влиза в корпуса му.
+DRU = """(version 1)
+
+(rule "stm32_lqfp144_0.2mm"
+	(constraint clearance (min 0.2mm))
+	(condition "A.memberOfFootprint('U1') || B.memberOfFootprint('U1') || A.intersectsCourtyard('U1') || B.intersectsCourtyard('U1')"))
+"""
+
 
 def mcu_patterns():
     """Мрежите, които излизат от STM32 (от речника MCU на схемата), и +3V3."""
@@ -72,6 +81,8 @@ def main():
                                [{'netclass': 'MCU', 'pattern': p} for p in mcu_patterns()])
     ds['track_widths'] = [0.0, 0.3, 0.4, 0.6, 1.0]
     json.dump(pro, open(path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+    with open(path[:-len('.kicad_pro')] + '.kicad_dru', 'w', encoding='utf-8', newline='\n') as fdru:
+        fdru.write(DRU)
     print('правилата са записани в', path)
 
 
