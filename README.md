@@ -21,6 +21,20 @@
 | [`firmware/stm32/`](firmware/stm32/) | Firmware за STM32H723ZG (CMake, VS Code); инструкция в [`firmware/stm32/README.md`](firmware/stm32/README.md) |
 | [`ui/maket.html`](ui/maket.html) | Интерактивен макет на интерфейса (отваря се в браузър) |
 
+## Инсталиране на чиста система
+
+На чист Armbian (Orange Pi) или Raspberry Pi OS Lite, като обикновения потребител:
+
+```sh
+sudo apt-get update && sudo apt-get install -y git
+git clone https://github.com/ageorgiev86/cnc-kontroler.git
+cd cnc-kontroler
+sudo bash tools/cnc-install.sh            # интерфейсът, ядрото, услугата, USB, мрежата, логото
+sudo reboot
+```
+
+Скриптът (`tools/cnc-install.sh`) пуска по ред отделните скриптове от `tools/`, компилира и проверява ядрото с тестовете му. Дневникът е в `install.log`. С `--readonly` включва и системата само за четене (за работа на машината), с `--no-splash` е без началния екран.
+
 ## Как се отваря макетът
 
 Свали `ui/maket.html` и го отвори в браузър (Chrome, Edge, Firefox). Не е нужен сървър. Машината в макета е симулирана.

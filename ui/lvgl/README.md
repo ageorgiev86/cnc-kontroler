@@ -11,7 +11,7 @@ CMake строи всяка цел, за която има библиотеки.
 
 ## Orange Pi (Armbian Minimal)
 
-Еднократно:
+Най-лесно е всичко наведнъж: `sudo bash tools/cnc-install.sh` (виж главния `README.md`). Същото на ръка, еднократно:
 
 ```sh
 sudo apt install build-essential cmake pkg-config git libdrm-dev libinput-dev
