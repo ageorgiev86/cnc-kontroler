@@ -55,6 +55,8 @@ def _version(path):
 
 GROUND = ('GND', 'GND_IO')
 VIA_D, VIA_DRILL = 1.2, 0.6
+QFP_PADS = 40      # от толкова изводи нагоре преходът към масата е навътре под корпуса
+QFP_IN = 1.6       # колко навътре от края на площадката
 
 
 def mm(v):
@@ -83,6 +85,30 @@ def ground_vias(board):
         px, py = tomm(p.GetPosition().x), tomm(p.GetPosition().y)
         b = p.GetBoundingBox()
         half = max(tomm(b.GetWidth()), tomm(b.GetHeight())) / 2
+        if len(fp.Pads()) >= QFP_PADS:
+            # QFP: навън преходът би затворил изхода на съседните изводи → късо трасе навътре под корпуса
+            if abs(px - cx) > abs(py - cy):
+                ux, uy = (-1.0 if px > cx else 1.0), 0.0
+            else:
+                ux, uy = 0.0, (-1.0 if py > cy else 1.0)
+            vx, vy = px + ux * (half + QFP_IN), py + uy * (half + QFP_IN)
+            if all(math.hypot(vx - ox, vy - oy) > VIA_D + 0.3 for ox, oy in vias):
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(p.GetPosition())
+                t.SetEnd(pcbnew.VECTOR2I(mm(vx), mm(vy)))
+                t.SetWidth(mm(0.3))
+                t.SetLayer(pcbnew.F_Cu if p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu)
+                t.SetNet(p.GetNet())
+                board.Add(t)
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(pcbnew.VECTOR2I(mm(vx), mm(vy)))
+                v.SetDrill(mm(VIA_DRILL))
+                v.SetWidth(mm(VIA_D))
+                v.SetNet(p.GetNet())
+                board.Add(v)
+                vias.append((vx, vy))
+                n += 1
+                continue
         dx, dy = px - cx, py - cy
         d = math.hypot(dx, dy) or 1.0
         placed = False
@@ -166,7 +192,11 @@ def main():
     board = pcbnew.LoadBoard(pcb)
     if not pcbnew.ExportSpecctraDSN(board, dsn):
         sys.exit('неуспешен износ на DSN')
-    cmd = [java, '-jar', jar, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false']
+    # Freerouting 2.x взима броя проходи от freerouting.json (по подразбиране 9999), затова и --router.max_passes;
+    # без телеметрия
+    cmd = [java, '-jar', jar, '-de', dsn, '-do', ses, '-mp', passes, '-inc', 'Ground', '--gui.enabled=false',
+           f'--router.max_passes={passes}', '--usage_and_diagnostic_data.disable_analytics=true',
+           '--profile.allow_telemetry=false']
     print(' '.join(cmd), flush=True)
     log = os.path.join(dst, 'freerouting.log')
     with open(log, 'w', encoding='utf-8', errors='replace') as flog:   # напредъкът се вижда в лога
