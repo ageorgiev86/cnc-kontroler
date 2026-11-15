@@ -213,7 +213,7 @@ def one_pass(pcb, exe, rip, final=False, only=None):
             board.Add(v)
 
     # разкъсване: чуждите трасета до клетките X (с запас 0,1 мм)
-    dead = {}
+    dead, victims = {}, []
     if cross:
         for tr in board.GetTracks():
             if not soft(tr):
@@ -231,6 +231,7 @@ def one_pass(pcb, exe, rip, final=False, only=None):
                 if seg_dist(px, py, x1, y1, x2, y2) < reach:
                     dead[tr.m_Uuid.AsString()] = tr
                     break
+        victims = sorted({tr.GetNetname() for tr in dead.values()})   # преди Delete
         for tr in dead.values():
             board.Delete(tr)
     # при разкъсването остатъците на мрежата остават (следващият кръг свързва островчетата им);
@@ -242,7 +243,6 @@ def one_pass(pcb, exe, rip, final=False, only=None):
           f'почистени {removed}', flush=True)
     if failed:
         print('  не стават:', ', '.join(sorted(set(failed))), flush=True)
-    victims = sorted({tr.GetNetname() for tr in dead.values()}) if dead else []
     with open(pcb + '.victims.json', 'w', encoding='utf-8') as fv:
         json.dump({'victims': victims, 'ok': ok, 'failed': failed}, fv, ensure_ascii=False)
 
