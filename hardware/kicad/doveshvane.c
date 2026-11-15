@@ -33,6 +33,7 @@ static short *labt[2];           /* трасета, които могат да �
 static double bl, bt, br, bb, bclr;
 static double fl, ft, fr, fb, fclr;
 static double *holes; static int nholes, capholes;   /* x, y, радиус на всеки отвор (мм) */
+#define RIPR 3.0                 /* разкъсване само до толкова мм от краищата на връзката */
 #define HOLE_GAP 0.5             /* отвор до отвор (pravila.py: min_hole_to_hole) */
 
 #define NONET 32000              /* мед без мрежа (отвори без мед): пречка за всички */
@@ -108,7 +109,7 @@ static void edt1(const float *f, float *d, int n, int *v, float *z)
 static void edt2(float *g, int w, int h)
 {
     int n = w > h ? w : h;
-    float *f = malloc(sizeof(float) * n), *d = malloc(sizeof(float) * n), *z = malloc(sizeof(float) * (n + 1));
+    float *f = calloc(n, sizeof(float)), *d = calloc(n, sizeof(float)), *z = malloc(sizeof(float) * (n + 1));
     int *v = malloc(sizeof(int) * n);
     for (int x = 0; x < w; x++) {
         for (int y = 0; y < h; y++) f[y] = g[(size_t)y * w + x];
@@ -220,10 +221,6 @@ static int route(int id, int net, double clr, double viad, double viac, double w
                 }
         }
     free(g);
-    if (!rip) {                       /* без разкъсване: трасетата също са пречка */
-        for (size_t i = 0; i < 2 * N; i++) freet[i] &= softt[i];
-        for (size_t i = 0; i < N; i++) freev[i] &= softv[i];
-    }
     /* преходите: и отвор до отвор */
     for (int k = 0; k < nholes; k++) {
         double hx = holes[3 * k], hy = holes[3 * k + 1], need = holes[3 * k + 2] + HOLE_GAP + viadrill / 2 + 0.02;
@@ -244,6 +241,22 @@ static int route(int id, int net, double clr, double viad, double viac, double w
             if (p->layer == L || p->layer == 2)
                 fill_poly(ms + L * N, w_, h_, ox, oy, p->xy, p->n, k < ns ? 1 : 2, 1);
     }
+    /* трасетата са пречка навсякъде, освен при разкъсване до RIPR мм от двата края (там изводът е затворен) */
+    {
+        unsigned char *zone = calloc(N, 1);
+        if (rip) {
+            float *gz = malloc(sizeof(float) * N);
+            for (size_t i = 0; i < N; i++) gz[i] = (ms[i] || ms[N + i]) ? 0.0f : 1e20f;
+            edt2(gz, w_, h_);
+            for (size_t i = 0; i < N; i++) zone[i] = sqrt(gz[i]) * RES <= RIPR;
+            free(gz);
+        }
+        for (size_t i = 0; i < N; i++) {
+            if (!zone[i]) { freet[i] &= softt[i]; freet[N + i] &= softt[N + i]; freev[i] &= softv[i]; }
+        }
+        free(zone);
+    }
+
     /* началото и краят са цялото островче мед, до което се допират (на двата слоя, през преходите) */
     {
         int *q = malloc(sizeof(int) * 2 * N);
