@@ -160,6 +160,10 @@ def qfp_fanout(board):
         b = p.GetBoundingBox()
         others.append((tomm(b.GetLeft()), tomm(b.GetTop()), tomm(b.GetRight()), tomm(b.GetBottom()),
                        p.GetNetname(), p.GetParentFootprint().GetReference()))
+    for v in board.GetTracks():   # и преходите към масата, сложени преди това
+        if v.GetClass() == 'PCB_VIA':
+            x, y, r = tomm(v.GetPosition().x), tomm(v.GetPosition().y), tomm(v.GetWidth()) / 2
+            others.append((x - r, y - r, x + r, y + r, v.GetNetname(), ''))
     n = 0
     for fp in board.GetFootprints():
         if len(fp.Pads()) < QFP_PADS:
