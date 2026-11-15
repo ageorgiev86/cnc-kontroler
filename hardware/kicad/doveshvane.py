@@ -106,7 +106,7 @@ def seg_dist(px, py, x1, y1, x2, y2):
     return math.hypot(x1 + t * dx - px, y1 + t * dy - py)
 
 
-def one_pass(pcb, exe, rip, final=False):
+def one_pass(pcb, exe, rip, final=False, only=None):
     """Един кръг: DRC → връзки → рутерът → нови трасета, разкъсване, почистване, заливки."""
     rep = drc(pcb, os.path.join(os.path.dirname(pcb), 'doveshvane_drc.json'))
     board = pcbnew.LoadBoard(pcb)
@@ -158,13 +158,15 @@ def one_pass(pcb, exe, rip, final=False):
         cls = cls.split(',')[0] if cls else 'Default'
         pa, pc = u['items'][0]['pos'], u['items'][1]['pos']
         jobs.append((math.hypot(pa['x'] - pc['x'], pa['y'] - pc['y']), i, a.GetNetCode(), cls, a, c, a.GetNetname()))
+    if only is not None:
+        jobs = [j for j in jobs if j[6] in only]
     jobs.sort(key=lambda j: j[0])
     body = []
     for dist, i, net, cls, a, c, name in jobs:
         vd, _ = VIA.get(cls, (1.2, 0.6))
         ws = WIDTHS.get(cls, WIDTHS['Default'])
         # 0,25 мм навсякъде (чуждата мед може да е от клас с 0,25); 0,2 мм само до изводите на U1 (ред F)
-        body.append(f'J {i} {net} 0.25 {vd} 0.25 {1 if rip else 0} {len(ws)} ' + ' '.join(str(w) for w in ws))
+        body.append(f'J {i} {net} 0.25 {vd} 0.25 {rip} {len(ws)} ' + ' '.join(str(w) for w in ws))
         body += poly_lines('S', a)
         body += poly_lines('T', c)
         body.append('E')
@@ -240,6 +242,9 @@ def one_pass(pcb, exe, rip, final=False):
           f'почистени {removed}', flush=True)
     if failed:
         print('  не стават:', ', '.join(sorted(set(failed))), flush=True)
+    victims = sorted({tr.GetNetname() for tr in dead.values()}) if dead else []
+    with open(pcb + '.victims.json', 'w', encoding='utf-8') as fv:
+        json.dump({'victims': victims, 'ok': ok, 'failed': failed}, fv, ensure_ascii=False)
 
 
 def count(pcb):
@@ -259,11 +264,72 @@ def evaluate(work, exe):
     return count(base + '_c.kicad_pcb')
 
 
+def copy_board(src, dst):
+    sb, db = src[:-len('.kicad_pcb')], dst[:-len('.kicad_pcb')]
+    for ext in ('.kicad_pcb', '.kicad_pro', '.kicad_dru'):
+        if os.path.exists(sb + ext):
+            shutil.copy(sb + ext, db + ext)
+
+
+def run_pass(pcb, exe, rip, nets):
+    lst = pcb + '.nets.json'
+    with open(lst, 'w', encoding='utf-8') as f:
+        json.dump(sorted(nets), f, ensure_ascii=False)
+    subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--pass', str(rip), pcb, exe, lst],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return json.load(open(pcb + '.victims.json', encoding='utf-8'))
+
+
+def greedy(args):
+    """Връзка по връзка: разкъсване в разширяваща се зона около нея, после наново разкъсаните мрежи;
+    приема се само ако несвързаните намалеят и DRC остане без грешки. Записва след всяко приемане."""
+    pcb = os.path.abspath(args[0])
+    out = os.path.abspath(args[1]) if len(args) > 1 else pcb
+    exe = build(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doveshvane.c'))
+    work = os.path.join(os.path.dirname(out), '_greedy.kicad_pcb')
+    trial = os.path.join(os.path.dirname(out), '_greedy_t.kicad_pcb')
+    copy_board(pcb, work)
+    fix_uuids(work)
+    cur, errs = count(work)
+    print(f'начало: несвързани {cur}, други грешки {errs}', flush=True)
+    rep = json.load(open(os.path.join(os.path.dirname(work), 'doveshvane_drc.json'), encoding='utf-8'))
+    targets = []
+    for u in rep['unconnected_items']:
+        name = u['items'][0]['description'].split('[')[-1].split(']')[0]
+        if name not in GROUND and name not in targets:
+            targets.append(name)
+    for name in targets:
+        for r in (3, 6, 12, 25):
+            copy_board(work, trial)
+            v = run_pass(trial, exe, r, {name})
+            if not v['ok']:
+                continue
+            if v['victims']:
+                run_pass(trial, exe, 0, set(v['victims']) | {name})
+            n, e = evaluate(trial, exe)
+            print(f'  {name}, зона {r} мм: разкъсани мрежи {len(v["victims"])} → несвързани {n}, грешки {e}',
+                  flush=True)
+            if e == 0 and n < cur:
+                copy_board(trial[:-len('.kicad_pcb')] + '_c.kicad_pcb', work)
+                cur = n
+                shutil.copy(work, out)
+                print(f'приета: {name} → несвързани {cur}', flush=True)
+                break
+    shutil.copy(work, out)
+    print(f'край: несвързани {cur} → {out}')
+
+
 def main():
     args = sys.argv[1:]
     if args and args[0] == '--pass':            # един кръг в отделен процес (pcbnew не обича много Delete)
-        one_pass(args[2], args[3], args[1] == 'rip')
+        # --pass <разкъсване мм | rip | plain> <платка> <рутер> [мрежи.json]
+        r = {'rip': '3', 'plain': '0'}.get(args[1], args[1])
+        only = set(json.load(open(args[4], encoding='utf-8'))) if len(args) > 4 else None
+        one_pass(args[2], args[3], r, only=only)
         return
+    if '--greedy' in args:
+        args.remove('--greedy')
+        return greedy(args)
     if args and args[0] == '--clean':           # само почистване и заливки
         board = pcbnew.LoadBoard(args[1])
         print('  почистени:', cleanup(board))

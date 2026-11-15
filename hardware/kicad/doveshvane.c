@@ -12,8 +12,8 @@
  *   P layer net n x y ...          неподвижна мед (layer 0 = F.Cu, 1 = B.Cu, 2 = двата)
  *   Q layer net n x y ...          трасе/преход, което може да се разкъса
  *   H x y r                        отвор (за разстоянието отвор до отвор при преходите)
- *   J id net clr viad viac rip nw w...  връзка: разстояние, преход (диаметър, разстояние), с разкъсване ли,
- *                                  ширини за опит
+ *   J id net clr viad viac rip nw w...  връзка: разстояние, преход (диаметър, разстояние), разкъсване
+ *                                  до rip мм от краищата (0 = без), ширини за опит
  *   S layer n x y ... / T ...      начало / край (медта на двата края)
  *   E                              трасирай връзката
  * Изход: OK id / L layer w x1 y1 x2 y2 / V x y d / X layer x y (минава през чуждо трасе) / FAIL id
@@ -33,7 +33,7 @@ static short *labt[2];           /* трасета, които могат да �
 static double bl, bt, br, bb, bclr;
 static double fl, ft, fr, fb, fclr;
 static double *holes; static int nholes, capholes;   /* x, y, радиус на всеки отвор (мм) */
-#define RIPR 3.0                 /* разкъсване само до толкова мм от краищата на връзката */
+static double ripr = 3.0;        /* разкъсване само до толкова мм от краищата на връзката (от реда J) */
 #define HOLE_GAP 0.5             /* отвор до отвор (pravila.py: min_hole_to_hole) */
 
 #define NONET 32000              /* мед без мрежа (отвори без мед): пречка за всички */
@@ -241,14 +241,14 @@ static int route(int id, int net, double clr, double viad, double viac, double w
             if (p->layer == L || p->layer == 2)
                 fill_poly(ms + L * N, w_, h_, ox, oy, p->xy, p->n, k < ns ? 1 : 2, 1);
     }
-    /* трасетата са пречка навсякъде, освен при разкъсване до RIPR мм от двата края (там изводът е затворен) */
+    /* трасетата са пречка навсякъде, освен при разкъсване до ripr мм от двата края (там изводът е затворен) */
     {
         unsigned char *zone = calloc(N, 1);
         if (rip) {
             float *gz = malloc(sizeof(float) * N);
             for (size_t i = 0; i < N; i++) gz[i] = (ms[i] || ms[N + i]) ? 0.0f : 1e20f;
             edt2(gz, w_, h_);
-            for (size_t i = 0; i < N; i++) zone[i] = sqrt(gz[i]) * RES <= RIPR;
+            for (size_t i = 0; i < N; i++) zone[i] = sqrt(gz[i]) * RES <= ripr;
             free(gz);
         }
         for (size_t i = 0; i < N; i++) {
@@ -423,7 +423,10 @@ int main(void)
             if (scanf("%lf %lf %lf", &holes[3 * nholes], &holes[3 * nholes + 1], &holes[3 * nholes + 2]) != 3) die("H");
             nholes++;
         } else if (cmd[0] == 'J') {
-            if (scanf("%d %d %lf %lf %lf %d %d", &id, &net, &clr, &viad, &viac, &rip, &nw) != 7) die("J");
+            double ripv;
+            if (scanf("%d %d %lf %lf %lf %lf %d", &id, &net, &clr, &viad, &viac, &ripv, &nw) != 7) die("J");
+            rip = ripv > 0;
+            ripr = ripv;
             for (int i = 0; i < nw; i++) if (scanf("%lf", &ws[i]) != 1) die("J w");
             ns = nd = 0;
         } else if (cmd[0] == 'S' || cmd[0] == 'T') {
