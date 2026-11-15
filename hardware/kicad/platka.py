@@ -114,7 +114,14 @@ def load_fp(fpid):
             raise RuntimeError('няма посадъчно място ' + fpid)
         fp.SetFPID(pcbnew.LIB_ID(lib, name))
         _fp_cache[fpid] = fp
-    return pcbnew.FOOTPRINT(_fp_cache[fpid])
+    fp = pcbnew.FOOTPRINT(_fp_cache[fpid])
+    # копието пази UUID-тата на площадките: всяко копие трябва да има свои (иначе DRC и всичко, което
+    # търси елемент по UUID, намира площадката на друг елемент)
+    for p in fp.Pads():
+        p.ResetUuidDirect()
+    for g in fp.GraphicalItems():
+        g.ResetUuidDirect()
+    return fp
 
 
 def bbox(fp):
