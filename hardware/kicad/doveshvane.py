@@ -106,7 +106,7 @@ def seg_dist(px, py, x1, y1, x2, y2):
     return math.hypot(x1 + t * dx - px, y1 + t * dy - py)
 
 
-def one_pass(pcb, exe, rip):
+def one_pass(pcb, exe, rip, final=False):
     """Един кръг: DRC → връзки → рутерът → нови трасета, разкъсване, почистване, заливки."""
     rep = drc(pcb, os.path.join(os.path.dirname(pcb), 'doveshvane_drc.json'))
     board = pcbnew.LoadBoard(pcb)
@@ -176,6 +176,7 @@ def one_pass(pcb, exe, rip):
 
     nets = {j[1]: j[2] for j in jobs}
     names = {j[1]: j[6] for j in jobs}
+    classes = {j[1]: j[3] for j in jobs}
     ok, failed, cross = 0, [], []
     cur = None
     for ln in res.stdout.splitlines():
@@ -185,7 +186,10 @@ def one_pass(pcb, exe, rip):
         elif f[0] == 'FAIL':
             failed.append(names[int(f[1])])
         elif f[0] == 'X':
-            cross.append((int(f[1]), float(f[2]), float(f[3]), nets[cur]))
+            # половината от нашето: преход или най-тясното трасе на класа
+            cls = classes[cur]
+            ours = VIA.get(cls, (1.2, 0.6))[0] / 2 if f[1] == '2' else WIDTHS.get(cls, WIDTHS['Default'])[-1] / 2
+            cross.append((int(f[1]), float(f[2]), float(f[3]), nets[cur], ours))
         elif f[0] == 'L':
             x1, y1, x2, y2 = map(float, f[3:7])
             if (x1, y1) == (x2, y2):
@@ -215,19 +219,21 @@ def one_pass(pcb, exe, rip):
             via = tr.GetClass() == 'PCB_VIA'
             x1, y1 = tomm(tr.GetStart().x), tomm(tr.GetStart().y)
             x2, y2 = tomm(tr.GetEnd().x), tomm(tr.GetEnd().y)
-            half = tomm(tr.GetWidth()) / 2
-            for layer, px, py, net in cross:
+            half = tomm(tr.GetWidth(pcbnew.F_Cu) if via else tr.GetWidth()) / 2
+            for layer, px, py, net, ours in cross:
                 if tr.GetNetCode() == net:
                     continue
                 if not via and layer != 2 and tr.GetLayer() != (pcbnew.F_Cu if layer == 0 else pcbnew.B_Cu):
                     continue
-                reach = 0.25 + half + (0.7 if layer == 2 else 0.2) + 0.1
+                reach = 0.25 + half + ours + 0.02     # разстояние + двете половини
                 if seg_dist(px, py, x1, y1, x2, y2) < reach:
                     dead[tr.m_Uuid.AsString()] = tr
                     break
         for tr in dead.values():
             board.Delete(tr)
-    removed = cleanup(board)
+    # при разкъсването остатъците на мрежата остават (следващият кръг свързва островчетата им);
+    # висящите парчета се махат само в последния кръг
+    removed = cleanup(board) if final else 0
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     board.Save(pcb)
     print(f'  връзки {len(jobs)}: свързани {ok}, не стават {len(failed)}, разкъсани трасета {len(dead)}, '
@@ -242,10 +248,27 @@ def count(pcb):
     return len(rep['unconnected_items']), errs
 
 
+def evaluate(work, exe):
+    """Почистено копие (<work>_c) и неговите несвързани / грешки."""
+    base = work[:-len('.kicad_pcb')]
+    for ext in ('.kicad_pcb', '.kicad_pro', '.kicad_dru'):
+        if os.path.exists(base + ext):
+            shutil.copy(base + ext, base + '_c' + ext)
+    subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--clean', base + '_c.kicad_pcb'],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return count(base + '_c.kicad_pcb')
+
+
 def main():
     args = sys.argv[1:]
     if args and args[0] == '--pass':            # един кръг в отделен процес (pcbnew не обича много Delete)
         one_pass(args[2], args[3], args[1] == 'rip')
+        return
+    if args and args[0] == '--clean':           # само почистване и заливки
+        board = pcbnew.LoadBoard(args[1])
+        print('  почистени:', cleanup(board))
+        pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        board.Save(args[1])
         return
     rounds = 12
     if '--rounds' in args:
@@ -264,12 +287,12 @@ def main():
     best, best_n = None, None
     stale = 0
     for k in range(rounds):
-        n, errs = count(work)
+        n, errs = evaluate(work, exe)
         print(f'кръг {k + 1}: несвързани {n}, други грешки {errs}', flush=True)
         if errs == 0 and (best_n is None or n < best_n):
             best_n, stale = n, 0
             best = work + '.best'
-            shutil.copy(work, best)
+            shutil.copy(work[:-len('.kicad_pcb')] + '_c.kicad_pcb', best)
         else:
             stale += 1
         if n == 0 or stale >= 3:
@@ -278,19 +301,22 @@ def main():
         subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--pass', 'rip' if k else 'plain', work, exe],
                        check=True)
     else:
-        n, errs = count(work)
+        n, errs = evaluate(work, exe)
         print(f'край: несвързани {n}, други грешки {errs}', flush=True)
         if errs == 0 and (best_n is None or n < best_n):
             best_n = n
-            shutil.copy(work, work + '.best')
             best = work + '.best'
+            shutil.copy(work[:-len('.kicad_pcb')] + '_c.kicad_pcb', best)
     if best is None:
         sys.exit('няма резултат без грешки')
     shutil.copy(best, out)
-    for f in (work, work + '.best', work[:-len('.kicad_pcb')] + '.kicad_pro', work[:-len('.kicad_pcb')] + '.kicad_dru',
-              work[:-len('.kicad_pcb')] + '.kicad_prl'):
-        if os.path.exists(f):
-            os.remove(f)
+    base = work[:-len('.kicad_pcb')]
+    for b_ in (base, base + '_c'):
+        for ext in ('.kicad_pcb', '.kicad_pro', '.kicad_dru', '.kicad_prl', '.kicad_pcb.best'):
+            if os.path.exists(b_ + ext):
+                os.remove(b_ + ext)
+    if os.path.exists(work + '.best'):
+        os.remove(work + '.best')
     print(f'най-добрият резултат: {best_n} несвързани → {out}')
 
 

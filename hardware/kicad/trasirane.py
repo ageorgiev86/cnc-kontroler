@@ -220,7 +220,10 @@ def cleanup(board):
         for v in board.GetTracks():
             if v.GetClass() == 'PCB_VIA' and v.GetNetname() not in GROUND:
                 p = v.GetPosition()
-                if ends.get((p.x, p.y, v.GetNetCode()), 0) < 2:
+                n = ends.get((p.x, p.y, v.GetNetCode()), 0)
+                if n < 2:   # преход в площадка на същата мрежа: площадката е втората връзка
+                    n += any(pd.GetNetCode() == v.GetNetCode() and pd.HitTest(p) for pd in board.GetPads())
+                if n < 2:
                     dead.append(v)
         if not dead:
             return removed
