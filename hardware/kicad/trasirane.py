@@ -154,7 +154,7 @@ def ground_zones(board, zones):
                 ol.Append(mm(x), mm(y))
             zone.SetLocalClearance(mm(0.4))
             zone.SetMinThickness(mm(0.3))
-            zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+            zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THT_THERMAL)   # SMD плътно, изводите с отвор — с термо
             zone.SetThermalReliefGap(mm(0.4))
             zone.SetThermalReliefSpokeWidth(mm(0.5))
             zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
