@@ -175,6 +175,10 @@ def edge_rot(fp, edge):
     return 0
 
 
+# с толкова по-далеч от изводите на STM32 са кондензаторите и кварците: място за изводите навън (fan-out)
+MCU_GAP = 2.0
+
+
 class Layout:
     def __init__(self, folder):
         self.folder = folder
@@ -500,6 +504,7 @@ class Layout:
                                                         tomm(p.GetPosition().y)))
 
         def outside(px, py, d):
+            d += MCU_GAP
             dx, dy = px - cx, py - cy
             if abs(dx) > abs(dy):
                 return (px + (d if dx > 0 else -d), py, 0)

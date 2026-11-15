@@ -60,6 +60,7 @@ GROUND = ('GND', 'GND_IO')
 VIA_D, VIA_DRILL = 1.2, 0.6
 QFP_PADS = 40      # от толкова изводи нагоре преходът към масата е навътре под корпуса
 QFP_IN = 1.6       # колко навътре от края на площадката
+QFP_OUT = 1.5      # заключен извод навън от всеки сигнален извод на QFP (fan-out)
 
 
 def mm(v):
@@ -94,24 +95,30 @@ def ground_vias(board):
                 ux, uy = (-1.0 if px > cx else 1.0), 0.0
             else:
                 ux, uy = 0.0, (-1.0 if py > cy else 1.0)
-            vx, vy = px + ux * (half + QFP_IN), py + uy * (half + QFP_IN)
-            if all(math.hypot(vx - ox, vy - oy) > VIA_D + 0.3 for ox, oy in vias):
-                t = pcbnew.PCB_TRACK(board)
-                t.SetStart(p.GetPosition())
-                t.SetEnd(pcbnew.VECTOR2I(mm(vx), mm(vy)))
-                t.SetWidth(mm(0.3))
-                t.SetLayer(pcbnew.F_Cu if p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu)
-                t.SetNet(p.GetNet())
-                board.Add(t)
-                v = pcbnew.PCB_VIA(board)
-                v.SetPosition(pcbnew.VECTOR2I(mm(vx), mm(vy)))
-                v.SetDrill(mm(VIA_DRILL))
-                v.SetWidth(mm(VIA_D))
-                v.SetNet(p.GetNet())
-                board.Add(v)
-                vias.append((vx, vy))
-                n += 1
+            # навътре на няколко дълбочини; никога навън (там са изводите навън на сигналите)
+            for depth in (QFP_IN, QFP_IN + 1.6, QFP_IN + 3.2, QFP_IN + 4.8):
+                vx, vy = px + ux * (half + depth), py + uy * (half + depth)
+                if all(math.hypot(vx - ox, vy - oy) > VIA_D + 0.3 for ox, oy in vias):
+                    break
+            else:
+                print('  без преход към масата:', fp.GetReference(), p.GetNumber())
                 continue
+            t = pcbnew.PCB_TRACK(board)
+            t.SetStart(p.GetPosition())
+            t.SetEnd(pcbnew.VECTOR2I(mm(vx), mm(vy)))
+            t.SetWidth(mm(0.3))
+            t.SetLayer(pcbnew.F_Cu if p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu)
+            t.SetNet(p.GetNet())
+            board.Add(t)
+            v = pcbnew.PCB_VIA(board)
+            v.SetPosition(pcbnew.VECTOR2I(mm(vx), mm(vy)))
+            v.SetDrill(mm(VIA_DRILL))
+            v.SetWidth(mm(VIA_D))
+            v.SetNet(p.GetNet())
+            board.Add(v)
+            vias.append((vx, vy))
+            n += 1
+            continue
         dx, dy = px - cx, py - cy
         d = math.hypot(dx, dy) or 1.0
         placed = False
@@ -137,6 +144,58 @@ def ground_vias(board):
                 break
         if not placed:
             print('  без преход:', fp.GetReference(), p.GetNumber())
+    return n
+
+
+def qfp_fanout(board):
+    """Заключено трасе навън от всеки сигнален извод на QFP.
+
+    Без него Freerouting слага рано трасе покрай редицата изводи и то запушва изхода на всички
+    останали (стъпка 0,5 мм: между края на изводите и трасето преход не се побира)."""
+    count = {}
+    for p in board.GetPads():
+        count[p.GetNetname()] = count.get(p.GetNetname(), 0) + 1
+    others = []
+    for p in board.GetPads():
+        b = p.GetBoundingBox()
+        others.append((tomm(b.GetLeft()), tomm(b.GetTop()), tomm(b.GetRight()), tomm(b.GetBottom()),
+                       p.GetNetname(), p.GetParentFootprint().GetReference()))
+    n = 0
+    for fp in board.GetFootprints():
+        if len(fp.Pads()) < QFP_PADS:
+            continue
+        cx, cy = tomm(fp.GetPosition().x), tomm(fp.GetPosition().y)
+        for p in fp.Pads():
+            net = p.GetNetname()
+            if not net or net in GROUND or net.startswith('unconnected-') or count.get(net, 0) < 2:
+                continue
+            px, py = tomm(p.GetPosition().x), tomm(p.GetPosition().y)
+            b = p.GetBoundingBox()
+            half = max(tomm(b.GetWidth()), tomm(b.GetHeight())) / 2
+            if abs(px - cx) > abs(py - cy):
+                ux, uy = (1.0 if px > cx else -1.0), 0.0
+            else:
+                ux, uy = 0.0, (1.0 if py > cy else -1.0)
+            w = 0.2 if p.GetNetClassName() == 'MCU' else 0.25   # класът MCU е 0,2 мм (pravila.py)
+            length = half + QFP_OUT
+            while length > half:
+                ex, ey = px + ux * length, py + uy * length
+                r = w / 2 + 0.3
+                if all(not (ex + r > l and ex - r < rr and ey + r > t and ey - r < bb) or nn == net or ref == fp.GetReference()
+                       for (l, t, rr, bb, nn, ref) in others):
+                    break
+                length -= 0.25
+            if length <= half:
+                continue
+            t = pcbnew.PCB_TRACK(board)
+            t.SetStart(p.GetPosition())
+            t.SetEnd(pcbnew.VECTOR2I(mm(px + ux * length), mm(py + uy * length)))
+            t.SetWidth(mm(w))
+            t.SetLayer(pcbnew.F_Cu if p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu)
+            t.SetNet(p.GetNet())
+            t.SetLocked(True)
+            board.Add(t)
+            n += 1
     return n
 
 
@@ -193,6 +252,7 @@ def main():
     dsn, ses = pcb[:-10] + '.dsn', pcb[:-10] + '.ses'
     board = pcbnew.LoadBoard(pcb)
     print('преходи към масата:', ground_vias(board), flush=True)
+    print('изводи навън от QFP:', qfp_fanout(board), flush=True)
     board.Save(pcb)
     board = pcbnew.LoadBoard(pcb)
     if not pcbnew.ExportSpecctraDSN(board, dsn):
