@@ -9,12 +9,17 @@
  *   G W H RES                      размер на мрежата в клетки
  *   B l t r b clr                  контур на платката и разстояние до ръба
  *   F l t r b clr                  правоъгълник с по-малко разстояние (изводите на STM32)
- *   P layer net n x y ...          мед (layer 0 = F.Cu, 1 = B.Cu, 2 = двата)
+ *   P layer net n x y ...          неподвижна мед (layer 0 = F.Cu, 1 = B.Cu, 2 = двата)
+ *   Q layer net n x y ...          трасе/преход, което може да се разкъса
  *   H x y r                        отвор (за разстоянието отвор до отвор при преходите)
- *   J id net clr viad viac nw w... връзка: разстояние, преход (диаметър, разстояние), ширини за опит
+ *   J id net clr viad viac rip nw w...  връзка: разстояние, преход (диаметър, разстояние), с разкъсване ли,
+ *                                  ширини за опит
  *   S layer n x y ... / T ...      начало / край (медта на двата края)
  *   E                              трасирай връзката
- * Изход: OK id / L layer w x1 y1 x2 y2 / V x y d / FAIL id
+ * Изход: OK id / L layer w x1 y1 x2 y2 / V x y d / X layer x y (минава през чуждо трасе) / FAIL id
+ *
+ * Разкъсване: ако връзката не става, втори опит, при който чуждите трасета (не площадките) се минават срещу
+ * висока цена; клетките им се изпращат с X и Python маха тези трасета (мрежите им се трасират наново).
  */
 #include <math.h>
 #include <stdio.h>
@@ -23,7 +28,8 @@
 
 static int GW, GH;
 static double RES;
-static short *lab[2];            /* мрежата на медта в клетката: 0 няма, иначе номер на мрежа */
+static short *lab[2];            /* неподвижна мед в клетката (площадки, заключени трасета, маса): номер на мрежа */
+static short *labt[2];           /* трасета, които могат да се разкъсат */
 static double bl, bt, br, bb, bclr;
 static double fl, ft, fr, fb, fclr;
 static double *holes; static int nholes, capholes;   /* x, y, радиус на всеки отвор (мм) */
@@ -158,14 +164,14 @@ static void paint_seg(int layer, double x1, double y1, double x2, double y2, dou
             double ex = x1 + t * dx - px, ey = y1 + t * dy - py;
             if (ex * ex + ey * ey <= r * r)
                 for (int l = 0; l < 2; l++)
-                    if (layer == l || layer == 2) lab[l][(size_t)y * GW + x] = net;
+                    if (layer == l || layer == 2) labt[l][(size_t)y * GW + x] = net;
         }
 }
 
 typedef struct { int layer, n; double *xy; } Poly;
 
 static int route(int id, int net, double clr, double viad, double viac, double w,
-                 Poly *src, int ns, Poly *dst, int nd, double margin)
+                 Poly *src, int ns, Poly *dst, int nd, double margin, int rip)
 {
     /* прозорец около двата края */
     double l = 1e9, t = 1e9, r = -1e9, b = -1e9;
@@ -187,29 +193,37 @@ static int route(int id, int net, double clr, double viad, double viac, double w
     const double eps = 0.04;
     double viadrill = viad >= 1.4 ? 0.7 : 0.6;
 
-    /* свободни клетки: за трасе и за преход */
+    /* свободни клетки за трасе и за преход: H спрямо неподвижната мед, S спрямо трасетата */
     unsigned char *freet = calloc(2 * N, 1), *freev = calloc(N, 1);
+    unsigned char *softt = calloc(2 * N, 1), *softv = calloc(N, 1);
     float *g = malloc(sizeof(float) * N);
-    for (int L = 0; L < 2; L++) {
-        for (int y = 0; y < h_; y++)
-            for (int x = 0; x < w_; x++) {
-                short v = lab[L][(size_t)(y + oy) * GW + x + ox];
-                g[(size_t)y * w_ + x] = (v != 0 && v != net) ? 0.0f : 1e20f;
-            }
-        edt2(g, w_, h_);
-        for (int y = 0; y < h_; y++)
-            for (int x = 0; x < w_; x++) {
-                double px = (x + ox) * RES, py = (y + oy) * RES;
-                double c = (px >= fl && px <= fr && py >= ft && py <= fb) ? fclr : clr;
-                double d = sqrt(g[(size_t)y * w_ + x]) * RES;
-                double de = fmin(fmin(px - bl, br - px), fmin(py - bt, bb - py));
-                size_t i = (size_t)y * w_ + x;
-                freet[L * N + i] = d >= c + w / 2 + eps && de >= bclr + w / 2;
-                int fv = d >= viac + viad / 2 + eps && de >= bclr + viad / 2;
-                freev[i] = L == 0 ? fv : (freev[i] && fv);
-            }
-    }
+    for (int kind = 0; kind < 2; kind++)
+        for (int L = 0; L < 2; L++) {
+            short *m = kind == 0 ? lab[L] : labt[L];
+            for (int y = 0; y < h_; y++)
+                for (int x = 0; x < w_; x++) {
+                    short v = m[(size_t)(y + oy) * GW + x + ox];
+                    g[(size_t)y * w_ + x] = (v != 0 && v != net) ? 0.0f : 1e20f;
+                }
+            edt2(g, w_, h_);
+            unsigned char *ftr = kind == 0 ? freet : softt, *fv_ = kind == 0 ? freev : softv;
+            for (int y = 0; y < h_; y++)
+                for (int x = 0; x < w_; x++) {
+                    double px = (x + ox) * RES, py = (y + oy) * RES;
+                    double c = (px >= fl && px <= fr && py >= ft && py <= fb) ? fclr : clr;
+                    double d = sqrt(g[(size_t)y * w_ + x]) * RES;
+                    double de = fmin(fmin(px - bl, br - px), fmin(py - bt, bb - py));
+                    size_t i = (size_t)y * w_ + x;
+                    ftr[L * N + i] = d >= c + w / 2 + eps && de >= bclr + w / 2;
+                    int fv = d >= viac + viad / 2 + eps && de >= bclr + viad / 2;
+                    fv_[i] = L == 0 ? fv : (fv_[i] && fv);
+                }
+        }
     free(g);
+    if (!rip) {                       /* без разкъсване: трасетата също са пречка */
+        for (size_t i = 0; i < 2 * N; i++) freet[i] &= softt[i];
+        for (size_t i = 0; i < N; i++) freev[i] &= softv[i];
+    }
     /* преходите: и отвор до отвор */
     for (int k = 0; k < nholes; k++) {
         double hx = holes[3 * k], hy = holes[3 * k + 1], need = holes[3 * k + 2] + HOLE_GAP + viadrill / 2 + 0.02;
@@ -248,8 +262,9 @@ static int route(int id, int net, double clr, double viad, double viac, double w
                 int j = nb[k];
                 if (j < 0 || ms[j]) continue;
                 int Lj = j / (int)N, rj = j % (int)N;
-                if (lab[Lj][(size_t)(rj / w_ + oy) * GW + rj % w_ + ox] != net) continue;
-                if (k == 4 && lab[L][(size_t)(y + oy) * GW + x + ox] != net) continue;
+                size_t cj = (size_t)(rj / w_ + oy) * GW + rj % w_ + ox, ci = (size_t)(y + oy) * GW + x + ox;
+                if (lab[Lj][cj] != net && labt[Lj][cj] != net) continue;
+                if (k == 4 && lab[L][ci] != net && labt[L][ci] != net) continue;
                 ms[j] = ms[i];
                 q[qt++] = j;
             }
@@ -267,6 +282,7 @@ static int route(int id, int net, double clr, double viad, double viac, double w
     int *par = malloc(sizeof(int) * 2 * N);
     for (size_t i = 0; i < 2 * N; i++) { gs[i] = 1e30f; par[i] = -1; }
     const float VIA = (float)(3.0 / RES);   /* преходът струва колкото 3 мм трасе */
+    const float RIP = (float)(2.0 / RES);   /* клетка през чуждо трасе: колкото 2 мм */
     hn = 0;
     int nsrc = 0;
     for (size_t i = 0; i < 2 * N; i++)
@@ -292,10 +308,12 @@ static int route(int id, int net, double clr, double viad, double viac, double w
             } else {
                 if (!freev[rem]) continue;
                 nl = 1 - L; cost = VIA;
+                if (rip && !softv[rem]) cost += 20 * RIP;
             }
             j = nl * (int)N + ny * w_ + nx;
             if (!freet[j] && ms[j] != 2) continue;
             if (!freet[j] && ms[j] == 2 && k == 8) continue;
+            if (rip && k < 8 && !softt[j]) cost += RIP;
             float ng = gi + cost;
             if (ng < gs[j]) {
                 gs[j] = ng; par[j] = i;
@@ -316,6 +334,13 @@ static int route(int id, int net, double clr, double viad, double viac, double w
         int k = cnt;
         for (int i = found; ; i = par[i]) { pth[--k] = i; if (par[i] == i) break; }
         printf("OK %d\n", id);
+        if (rip)
+            for (int a = 0; a < cnt; a++) {
+                int La = pth[a] / (int)N, ra = pth[a] % (int)N;
+                int via = a + 1 < cnt && pth[a + 1] / (int)N != La;
+                if (!softt[pth[a]] || (via && !softv[ra]))
+                    printf("X %d %.4f %.4f\n", via ? 2 : La, (ra % w_ + ox) * RES, (ra / w_ + oy) * RES);
+            }
         /* по слоеве; в един слой се пазят само точките, където посоката се сменя */
         int s = 0;
         while (s < cnt) {
@@ -351,7 +376,7 @@ static int route(int id, int net, double clr, double viad, double viac, double w
     }
     if (!ok)
         fprintf(stderr, "D %d w=%.2f прозорец %dx%d начало %d край %d обходени %d\n", id, w, w_, h_, nsrc, ntgt, expanded);
-    free(freet); free(freev); free(ms); free(gs); free(par);
+    free(freet); free(freev); free(softt); free(softv); free(ms); free(gs); free(par);
     return ok;
 }
 
@@ -359,29 +384,33 @@ int main(void)
 {
     char cmd[4];
     Poly src[64], dst[64];
-    int ns = 0, nd = 0, id = 0, net = 0, nw = 0;
+    int ns = 0, nd = 0, id = 0, net = 0, nw = 0, rip = 0;
     double clr = 0, viad = 0, viac = 0, ws[8];
     while (scanf("%3s", cmd) == 1) {
         if (cmd[0] == 'G') {
             if (scanf("%d %d %lf", &GW, &GH, &RES) != 3) die("G");
-            for (int l = 0; l < 2; l++) lab[l] = calloc((size_t)GW * GH, sizeof(short));
+            for (int l = 0; l < 2; l++) {
+                lab[l] = calloc((size_t)GW * GH, sizeof(short));
+                labt[l] = calloc((size_t)GW * GH, sizeof(short));
+            }
         } else if (cmd[0] == 'B') {
             if (scanf("%lf %lf %lf %lf %lf", &bl, &bt, &br, &bb, &bclr) != 5) die("B");
         } else if (cmd[0] == 'F') {
             if (scanf("%lf %lf %lf %lf %lf", &fl, &ft, &fr, &fb, &fclr) != 5) die("F");
-        } else if (cmd[0] == 'P') {
+        } else if (cmd[0] == 'P' || cmd[0] == 'Q') {
             int layer, nn, n;
             if (scanf("%d %d %d", &layer, &nn, &n) != 3) die("P");
             double *xy = read_pts(n);
             for (int l = 0; l < 2; l++)
-                if (layer == l || layer == 2) fill_poly(lab[l], GW, GH, 0, 0, xy, n, (short)nn, 0);
+                if (layer == l || layer == 2)
+                    fill_poly(cmd[0] == 'P' ? lab[l] : labt[l], GW, GH, 0, 0, xy, n, (short)nn, 0);
             free(xy);
         } else if (cmd[0] == 'H') {
             if (nholes == capholes) { capholes = capholes ? capholes * 2 : 1024; holes = realloc(holes, sizeof(double) * 3 * capholes); }
             if (scanf("%lf %lf %lf", &holes[3 * nholes], &holes[3 * nholes + 1], &holes[3 * nholes + 2]) != 3) die("H");
             nholes++;
         } else if (cmd[0] == 'J') {
-            if (scanf("%d %d %lf %lf %lf %d", &id, &net, &clr, &viad, &viac, &nw) != 6) die("J");
+            if (scanf("%d %d %lf %lf %lf %d %d", &id, &net, &clr, &viad, &viac, &rip, &nw) != 7) die("J");
             for (int i = 0; i < nw; i++) if (scanf("%lf", &ws[i]) != 1) die("J w");
             ns = nd = 0;
         } else if (cmd[0] == 'S' || cmd[0] == 'T') {
@@ -395,7 +424,9 @@ int main(void)
             int ok = 0;
             for (int m = 0; m < 2 && !ok; m++)
                 for (int i = 0; i < nw && !ok; i++)
-                    ok = route(id, net, clr, viad, viac, ws[i], src, ns, dst, nd, m == 0 ? 12.0 : 60.0);
+                    ok = route(id, net, clr, viad, viac, ws[i], src, ns, dst, nd, m == 0 ? 12.0 : 60.0, 0);
+            for (int m = 0; m < 2 && !ok && rip; m++)       /* с разкъсване, най-тясното трасе */
+                ok = route(id, net, clr, viad, viac, ws[nw - 1], src, ns, dst, nd, m == 0 ? 12.0 : 60.0, 1);
             if (!ok) printf("FAIL %d\n", id);
             fflush(stdout);
             for (int i = 0; i < ns; i++) free(src[i].xy);

@@ -1,11 +1,15 @@
 """Довършва връзките, които Freerouting не е трасирал (след trasirane.py).
 
-    python3.12 -I doveshvane.py <платка.kicad_pcb> [изход.kicad_pcb]
+    python3.12 -I doveshvane.py <платка.kicad_pcb> [изход.kicad_pcb] [--rounds N]
 
 Несвързаните двойки идват от DRC на KiCad (kicad-cli). Медта на платката и връзките отиват към doveshvane.c
 (мрежа 0,05 мм, A* на двата слоя; компилира се при всяко пускане с cc/gcc). Новите трасета и преходи се
 добавят, масите се пълнят наново и платката се записва (по подразбиране върху входа). Папката трябва да има
 .kicad_pro и .kicad_dru със същото име (правилата и класовете).
+
+На кръгове (по подразбиране до 12): връзка, която не става, минава през чужди трасета (не през площадките,
+заключените трасета и масата) срещу висока цена; тези трасета се махат и мрежите им се трасират в следващия
+кръг. Пази се платката с най-малко несвързани; спира при 0 или след 3 кръга без подобрение.
 """
 import json
 import math
@@ -16,6 +20,9 @@ import sys
 import tempfile
 
 import pcbnew
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # -I не слага папката на скрипта
+from trasirane import GROUND, cleanup  # noqa: E402
 
 RES = 0.05
 WIDTHS = {'MCU': [0.2], 'Power': [1.0, 0.6, 0.4], 'Ground': [0.6, 0.4], 'Default': [0.4, 0.3, 0.25]}
@@ -72,13 +79,9 @@ def build(src):
     return exe
 
 
-def main():
-    pcb = os.path.abspath(sys.argv[1])
-    out = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else pcb
-    here = os.path.dirname(os.path.abspath(__file__))
-    exe = build(os.path.join(here, 'doveshvane.c'))
+def fix_uuids(pcb):
+    """Площадки с еднакви UUID (стари версии на platka.py): DRC би посочил площадката на друг елемент."""
     board = pcbnew.LoadBoard(pcb)
-    # площадки с еднакви UUID (стари версии на platka.py): DRC би посочил площадката на друг елемент
     seen, dup = set(), 0
     for p in board.GetPads():
         u = p.m_Uuid.AsString()
@@ -89,9 +92,24 @@ def main():
     if dup:
         print('нови UUID на площадки:', dup)
         board.Save(pcb)
-        board = pcbnew.LoadBoard(pcb)
-    rep = drc(pcb, os.path.join(os.path.dirname(pcb), 'doveshvane_drc.json'))
 
+
+def soft(tr):
+    """Трасе, което може да се разкъса: не е заключено и не е маса."""
+    return not tr.IsLocked() and tr.GetNetname() not in GROUND
+
+
+def seg_dist(px, py, x1, y1, x2, y2):
+    dx, dy = x2 - x1, y2 - y1
+    L2 = dx * dx + dy * dy
+    t = 0 if L2 == 0 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / L2))
+    return math.hypot(x1 + t * dx - px, y1 + t * dy - py)
+
+
+def one_pass(pcb, exe, rip):
+    """Един кръг: DRC → връзки → рутерът → нови трасета, разкъсване, почистване, заливки."""
+    rep = drc(pcb, os.path.join(os.path.dirname(pcb), 'doveshvane_drc.json'))
+    board = pcbnew.LoadBoard(pcb)
     e = board.GetBoardEdgesBoundingBox()
     l, t, r, b = tomm(e.GetLeft()), tomm(e.GetTop()), tomm(e.GetRight()), tomm(e.GetBottom())
     gw, gh = int(math.ceil((r + 1) / RES)), int(math.ceil((b + 1) / RES))
@@ -104,9 +122,9 @@ def main():
     else:
         head.append('F 0 0 0 0 0.25')
 
-    # медта: трасета, преходи, площадки, медни графики (без заливките: пълнят се после)
+    # медта: трасета и преходи (Q: могат да се разкъсат), площадки и медни графики (P); без заливките
     for tr in board.GetTracks():
-        head += poly_lines('P', tr, tr.GetNetCode())
+        head += poly_lines('Q' if soft(tr) else 'P', tr, tr.GetNetCode())
         if tr.GetClass() == 'PCB_VIA':
             head.append(f'H {tomm(tr.GetPosition().x):.4f} {tomm(tr.GetPosition().y):.4f} {tomm(tr.GetDrill()) / 2:.4f}')
     for fp in board.GetFootprints():
@@ -128,50 +146,46 @@ def main():
             if g.IsOnLayer(pcbnew.F_Cu) or g.IsOnLayer(pcbnew.B_Cu):
                 head += poly_lines('P', g, 32000)
 
-    # връзките: от най-късата
+    # връзките: от най-късата (масата минава през заливката)
     jobs = []
     for i, u in enumerate(rep['unconnected_items']):
         items = [board.ResolveItem(pcbnew.KIID(it['uuid'])) for it in u['items']]
         items = [it.Cast() if it else None for it in items]
         if len(items) != 2 or not all(items) or any(it.GetClass() == 'ZONE' for it in items):
-            print('  пропусната (заливка):', u['items'][0]['description'])
             continue
         a, c = items
         cls = a.GetNetClassName() if a.GetNetCode() else c.GetNetClassName()
         cls = cls.split(',')[0] if cls else 'Default'
-        net = a.GetNetCode()
         pa, pc = u['items'][0]['pos'], u['items'][1]['pos']
-        jobs.append((math.hypot(pa['x'] - pc['x'], pa['y'] - pc['y']), i, net, cls, a, c,
-                     a.GetNetname()))
+        jobs.append((math.hypot(pa['x'] - pc['x'], pa['y'] - pc['y']), i, a.GetNetCode(), cls, a, c, a.GetNetname()))
     jobs.sort(key=lambda j: j[0])
     body = []
     for dist, i, net, cls, a, c, name in jobs:
         vd, _ = VIA.get(cls, (1.2, 0.6))
         ws = WIDTHS.get(cls, WIDTHS['Default'])
         # 0,25 мм навсякъде (чуждата мед може да е от клас с 0,25); 0,2 мм само до изводите на U1 (ред F)
-        body.append(f'J {i} {net} 0.25 {vd} 0.25 {len(ws)} ' +
-                    ' '.join(str(w) for w in ws))
+        body.append(f'J {i} {net} 0.25 {vd} 0.25 {1 if rip else 0} {len(ws)} ' + ' '.join(str(w) for w in ws))
         body += poly_lines('S', a)
         body += poly_lines('T', c)
         body.append('E')
-    print(f'връзки за довършване: {len(jobs)}', flush=True)
     res = subprocess.run([exe], input='\n'.join(head + body) + '\n', capture_output=True, text=True)
     if res.returncode:
         sys.exit(res.stderr)
     if os.environ.get('DOVESHVANE_DEBUG'):
         print(res.stderr)
 
-    names = {j[1]: j[6] for j in jobs}
     nets = {j[1]: j[2] for j in jobs}
-    ok = fail = 0
+    names = {j[1]: j[6] for j in jobs}
+    ok, failed, cross = 0, [], []
     cur = None
     for ln in res.stdout.splitlines():
         f = ln.split()
         if f[0] == 'OK':
             cur = int(f[1]); ok += 1
         elif f[0] == 'FAIL':
-            fail += 1
-            print('  не става:', names[int(f[1])])
+            failed.append(names[int(f[1])])
+        elif f[0] == 'X':
+            cross.append((int(f[1]), float(f[2]), float(f[3]), nets[cur]))
         elif f[0] == 'L':
             x1, y1, x2, y2 = map(float, f[3:7])
             if (x1, y1) == (x2, y2):
@@ -191,9 +205,93 @@ def main():
             v.SetDrill(mm(0.7 if d >= 1.4 else 0.6))
             v.SetNetCode(nets[cur])
             board.Add(v)
-    print(f'довършени: {ok}, не стават: {fail}', flush=True)
+
+    # разкъсване: чуждите трасета до клетките X (с запас 0,1 мм)
+    dead = {}
+    if cross:
+        for tr in board.GetTracks():
+            if not soft(tr):
+                continue
+            via = tr.GetClass() == 'PCB_VIA'
+            x1, y1 = tomm(tr.GetStart().x), tomm(tr.GetStart().y)
+            x2, y2 = tomm(tr.GetEnd().x), tomm(tr.GetEnd().y)
+            half = tomm(tr.GetWidth()) / 2
+            for layer, px, py, net in cross:
+                if tr.GetNetCode() == net:
+                    continue
+                if not via and layer != 2 and tr.GetLayer() != (pcbnew.F_Cu if layer == 0 else pcbnew.B_Cu):
+                    continue
+                reach = 0.25 + half + (0.7 if layer == 2 else 0.2) + 0.1
+                if seg_dist(px, py, x1, y1, x2, y2) < reach:
+                    dead[tr.m_Uuid.AsString()] = tr
+                    break
+        for tr in dead.values():
+            board.Delete(tr)
+    removed = cleanup(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
-    board.Save(out)
+    board.Save(pcb)
+    print(f'  връзки {len(jobs)}: свързани {ok}, не стават {len(failed)}, разкъсани трасета {len(dead)}, '
+          f'почистени {removed}', flush=True)
+    if failed:
+        print('  не стават:', ', '.join(sorted(set(failed))), flush=True)
+
+
+def count(pcb):
+    rep = drc(pcb, os.path.join(os.path.dirname(pcb), 'doveshvane_drc.json'))
+    errs = sum(1 for v in rep['violations'] if v['severity'] == 'error')
+    return len(rep['unconnected_items']), errs
+
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] == '--pass':            # един кръг в отделен процес (pcbnew не обича много Delete)
+        one_pass(args[2], args[3], args[1] == 'rip')
+        return
+    rounds = 12
+    if '--rounds' in args:
+        k = args.index('--rounds'); rounds = int(args[k + 1]); del args[k:k + 2]
+    pcb = os.path.abspath(args[0])
+    out = os.path.abspath(args[1]) if len(args) > 1 else pcb
+    here = os.path.dirname(os.path.abspath(__file__))
+    exe = build(os.path.join(here, 'doveshvane.c'))
+    work = os.path.join(os.path.dirname(pcb), '_doveshvane.kicad_pcb')
+    for ext in ('.kicad_pro', '.kicad_dru'):
+        src = pcb[:-len('.kicad_pcb')] + ext
+        if os.path.exists(src):
+            shutil.copy(src, work[:-len('.kicad_pcb')] + ext)
+    shutil.copy(pcb, work)
+    fix_uuids(work)
+    best, best_n = None, None
+    stale = 0
+    for k in range(rounds):
+        n, errs = count(work)
+        print(f'кръг {k + 1}: несвързани {n}, други грешки {errs}', flush=True)
+        if errs == 0 and (best_n is None or n < best_n):
+            best_n, stale = n, 0
+            best = work + '.best'
+            shutil.copy(work, best)
+        else:
+            stale += 1
+        if n == 0 or stale >= 3:
+            break
+        # първият кръг без разкъсване, после с
+        subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--pass', 'rip' if k else 'plain', work, exe],
+                       check=True)
+    else:
+        n, errs = count(work)
+        print(f'край: несвързани {n}, други грешки {errs}', flush=True)
+        if errs == 0 and (best_n is None or n < best_n):
+            best_n = n
+            shutil.copy(work, work + '.best')
+            best = work + '.best'
+    if best is None:
+        sys.exit('няма резултат без грешки')
+    shutil.copy(best, out)
+    for f in (work, work + '.best', work[:-len('.kicad_pcb')] + '.kicad_pro', work[:-len('.kicad_pcb')] + '.kicad_dru',
+              work[:-len('.kicad_pcb')] + '.kicad_prl'):
+        if os.path.exists(f):
+            os.remove(f)
+    print(f'най-добрият резултат: {best_n} несвързани → {out}')
 
 
 if __name__ == '__main__':
