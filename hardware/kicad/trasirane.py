@@ -199,6 +199,32 @@ def qfp_fanout(board):
     return n
 
 
+def cleanup(board):
+    """Маха висящите парчета трасе и преходите на сигнали с по-малко от две трасета (като Cleanup Tracks)."""
+    removed = 0
+    while True:
+        board.BuildConnectivity()
+        conn = board.GetConnectivity()
+        dead = [t for t in board.GetTracks()
+                if t.GetClass() == 'PCB_TRACK' and conn.TestTrackEndpointDangling(t, False)]
+        ends = {}
+        for t in board.GetTracks():
+            if t.GetClass() == 'PCB_TRACK':
+                for p in (t.GetStart(), t.GetEnd()):
+                    k = (p.x, p.y, t.GetNetCode())
+                    ends[k] = ends.get(k, 0) + 1
+        for v in board.GetTracks():
+            if v.GetClass() == 'PCB_VIA' and v.GetNetname() not in GROUND:
+                p = v.GetPosition()
+                if ends.get((p.x, p.y, v.GetNetCode()), 0) < 2:
+                    dead.append(v)
+        if not dead:
+            return removed
+        for t in dead:
+            board.Delete(t)
+        removed += len(dead)
+
+
 def ground_zones(board, zones):
     out = []
     for z in zones:
@@ -219,6 +245,13 @@ def ground_zones(board, zones):
             zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
             board.Add(zone)
             out.append(zone)
+    # клемите и гнездата: изводите на маса плътно към заливката (иначе термото им остава с едно
+    # мостче между съседните изводи, а през тях минава токът на машината)
+    for fp in board.GetFootprints():
+        if fp.GetReference()[:1] in ('X', 'J'):
+            for p in fp.Pads():
+                if p.GetNetname() in GROUND and p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
+                    p.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     return len(out), None
 
@@ -275,6 +308,7 @@ def main():
     board = pcbnew.LoadBoard(pcb)
     if not pcbnew.ImportSpecctraSES(board, ses):
         sys.exit('неуспешен внос на SES')
+    print('почистени висящи парчета:', cleanup(board), flush=True)
     zf = os.path.join(dst, 'zony.json')
     if os.path.exists(zf):
         nz, _ = ground_zones(board, json.load(open(zf, encoding='utf-8')))

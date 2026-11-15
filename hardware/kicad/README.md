@@ -44,7 +44,7 @@ sudo curl -L -o /opt/freerouting/freerouting-2.1.0.jar \
 python3.12 -I osnovna_platka.py osnovna_platka
 python3.12 -I pravila.py osnovna_platka
 python3.12 -I platka.py osnovna_platka 136
-python3.12 -I trasirane.py osnovna_platka /tmp/trasirane 30
+python3.12 -I trasirane.py osnovna_platka /tmp/trasirane --minutes 90
 kicad-cli pcb drc --severity-all /tmp/trasirane/osnovna_platka.kicad_pcb
 ```
 
@@ -53,6 +53,12 @@ kicad-cli pcb drc --severity-all /tmp/trasirane/osnovna_platka.kicad_pcb
 (Windows) плъгина на KiCad. Пътищата до KiCad (символи, отпечатъци, `kicad-cli`) се сменят с `KICAD_DIR`,
 `KICAD_SYMBOL_DIR`, `KICAD_FOOTPRINT_DIR`, `KICAD_CLI`. Ако ERC/DRC се оплакват „library not included“, копирай
 `/usr/share/kicad/template/{sym,fp}-lib-table` в `~/.config/kicad/10.0/`.
+
+Freerouting 2.1 не спира по броя проходи (`-mp` се пренебрегва), а само по време: `--minutes N` (или
+`FREEROUTING_MINUTES`, по подразбиране 60). Напредъкът е в `<копие>/freerouting.log` („pass #… (N unrouted)“).
+Преди Freerouting `trasirane.py` слага преходите към масата (при QFP навътре под корпуса) и заключени изводи навън
+по 1,5 мм от всеки сигнален извод на STM32 (fan-out: иначе рано сложено трасе покрай изводите запушва изхода на
+останалите); след него маха висящите парчета и пълни масите (клемите — плътно към заливката).
 
 `pravila.py` записва и `osnovna_platka.kicad_dru`: 0,2 мм при всичко в U1 (изводите на STM32 са на 0,2 мм един от друг
 и при масата и неизползваните изводи).
