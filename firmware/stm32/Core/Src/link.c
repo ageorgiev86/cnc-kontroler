@@ -21,7 +21,9 @@ static uint16_t tx_seq;
 static uint16_t rx_seq;
 static uint8_t  cfg_fault;             /* BAD_CONFIG или VERSION, докато не дойде RESET_REQ */
 static uint32_t last_ok_ms;
+static uint32_t timeout_ms = LINK_USB_TIMEOUT_MS;
 static int      active;
+static int      via_spi;
 
 /* ---- CRC-32 (ISO-HDLC, както zlib), таблица по 4 бита ---- */
 
@@ -315,9 +317,11 @@ void link_usb_byte(uint8_t b)
     rx_errors++;
     return;
   }
+  if (via_spi) {
+    return;                                       /* връзката е по SPI: пакетите по USB не командват */
+  }
   link_process(usb_rx, usb_tx);
-  last_ok_ms = HAL_GetTick();
-  active     = 1;
+  link_rx_ok(0, LINK_USB_TIMEOUT_MS);
   (void)usb_cdc_write(usb_tx, LINK_PKT_SIZE);
 }
 
@@ -329,10 +333,34 @@ void link_poll(void)
     usb_idx = 0;                                  /* непълен пакет */
     rx_errors++;
   }
-  if (active && now - last_ok_ms > LINK_USB_TIMEOUT_MS) {
-    active = 0;
+  if (active && now - last_ok_ms > timeout_ms) {
+    active  = 0;
+    via_spi = 0;
     stepgen_fault(STEPGEN_FAULT_LINK);            /* спиране по рампа */
   }
+}
+
+void link_rx_ok(int spi, uint32_t tmo_ms)
+{
+  last_ok_ms = HAL_GetTick();
+  timeout_ms = tmo_ms;
+  active     = 1;
+  via_spi    = spi;
+}
+
+void link_rx_error(void)
+{
+  rx_errors++;
+}
+
+void link_idle_reply(uint8_t tx[LINK_PKT_SIZE])
+{
+  build_reply(tx);
+}
+
+int link_via_spi(void)
+{
+  return active && via_spi;
 }
 
 int link_active(void)

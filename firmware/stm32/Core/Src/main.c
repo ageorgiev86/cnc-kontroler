@@ -39,11 +39,13 @@ int main(void)
   stepgen_init();
   inputs_init();
   machio_init();
+  link_spi_init();
 
   uint32_t led_time = HAL_GetTick();
   int on = 0;
   for (;;) {
     console_poll();
+    link_spi_poll();
     link_poll();
     homing_service();
     machio_poll();

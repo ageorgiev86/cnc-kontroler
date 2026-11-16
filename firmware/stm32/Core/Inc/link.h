@@ -86,4 +86,23 @@ void link_poll(void);
 /* 1, ако горното ниво праща пакети (връзката е активна) */
 int link_active(void);
 
+/* --- общо за преносите --- */
+
+/* валиден пакет по даден пренос: watchdog-ът на връзката тръгва с това време */
+void link_rx_ok(int spi, uint32_t tmo_ms);
+/* отхвърлен пакет (CRC, дължина, непълен): брои се в STATUS.rx_errors */
+void link_rx_error(void);
+/* отговор без приет пакет (първият по SPI) */
+void link_idle_reply(uint8_t tx[LINK_PKT_SIZE]);
+/* 1, ако връзката е по SPI (тогава пакетите по USB се пренебрегват) */
+int link_via_spi(void);
+
+/* --- пренос по SPI4 (slave, link_spi.c) --- */
+
+#define LINK_SPI_TIMEOUT_MS 10u   /* docs/spi-protokol.md, раздел 6 */
+
+void link_spi_init(void);
+/* от главния цикъл: обработва приетия пакет и подготвя отговора за следващата транзакция */
+void link_spi_poll(void);
+
 #endif /* LINK_H */

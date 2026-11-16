@@ -63,6 +63,7 @@ set(OWN_SOURCES
   Core/Src/resume.c
   Core/Src/inputs.c
   Core/Src/link.c
+  Core/Src/link_spi.c
   Core/Src/homing.c
   Core/Src/machio.c
 )

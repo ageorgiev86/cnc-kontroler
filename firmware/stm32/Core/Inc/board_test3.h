@@ -84,6 +84,16 @@
 #define BOARD_SPINDLE_DIR       GPIOC, GPIO_PIN_4    /* REV */
 #define BOARD_SPINDLE_EN        GPIOC, GPIO_PIN_5    /* FWD */
 
+/* Връзка с Linux: SPI4 slave, същите пинове като на основната платка (PE11–PE14, READY PE15);
+ * IRQ (PE10 на основната платка) тук е HOME Z и не се ползва */
+#define BOARD_LINK_SPI          SPI4
+#define BOARD_LINK_AF           GPIO_AF5_SPI4
+#define BOARD_LINK_NSS          GPIOE, GPIO_PIN_11
+#define BOARD_LINK_SCK          GPIOE, GPIO_PIN_12
+#define BOARD_LINK_MISO         GPIOE, GPIO_PIN_13
+#define BOARD_LINK_MOSI         GPIOE, GPIO_PIN_14
+#define BOARD_LINK_READY        GPIOE, GPIO_PIN_15   /* изход: готов за пакет */
+
 /* Аналогов вход 1: датчик за налягане 0–5 V → делител 12 kΩ / 20 kΩ → PC0 (ADC1_INP10) */
 #define BOARD_AIN1_PORT         GPIOC
 #define BOARD_AIN1_PIN          GPIO_PIN_0
