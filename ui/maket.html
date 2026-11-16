@@ -3356,7 +3356,7 @@ const HW={on:false,port:null,wr:null,rd:null,rx:new Uint8Array(0),st:null,base:n
  resync:false,faultSeen:false,pendBtn:null,pk:0,pkT:0,pkRate:0,crcErr:0,
  home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0,
  ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
-const HW_SEG_MS=4,HW_DEPTH=25;   /* 25 сегмента × 4 ms = 100 ms напред */
+const HW_SEG_MS=4,HW_DEPTH=50;   /* 50 сегмента × 4 ms = 200 ms напред: браузърът понякога закъснява */
 const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',4:'сработи краен изключвател',
  6:'авариен стоп',7:'поисканата скорост е над възможното за генератора (OVERSPEED)',8:'невалидна настройка (BAD_CONFIG)',9:'различна версия на протокола'};
 const HW_IN=[['LIM 1','PG8'],['LIM 2','PG9'],['LIM 3','PG10'],['LIM 4','PG11'],['LIM 5','PG12'],['LIM 6','PG13'],
@@ -3400,7 +3400,7 @@ function hwFlush(){
 }
 function hwSeg(p,force){
  const q=toQ(p),stat=!!HW.lastQ&&q.every((x,k)=>x===HW.lastQ[k]);
- if(stat&&!force&&(256-HW.qFree)+HW.inflight+HW.sendQ.length>40)return;   /* в покой буферът не расте */
+ if(stat&&!force&&(256-HW.qFree)+HW.inflight+HW.sendQ.length>HW_DEPTH+20)return;   /* в покой буферът не расте */
  HW.sendQ.push({id:++HW.segId,q,f:stat?1:0});HW.lastQ=q;HW.lastStat=stat;
 }
 function hwPad(n){const p={...S.mach};HW.lastQ=toQ(p);for(let i=0;i<n;i++)hwSeg(p,true)}
@@ -3498,7 +3498,7 @@ function hwApply(now){
  }
  HW.t0=now;HW.p0=p1;
  const used=(256-HW.qFree)+HW.inflight+HW.sendQ.length;
- if(HW.lastStat&&used<20)hwPad(HW_DEPTH-used);   /* в покой: буферът се попълва до 100 ms */
+ if(HW.lastStat&&used<HW_DEPTH-10)hwPad(HW_DEPTH-used);   /* в покой: буферът се попълва до 200 ms */
  hwFlush();
 }
 /* Изходи (OUT1–3 = изходите 1–3 от Настройки → Входове/изходи), шпиндел, бутоните Старт/Стоп и колелото на MPG */
@@ -3560,6 +3560,8 @@ function hwHomeTick(st){
   else{HW.homeFail=a+': '+(d.result===1?'датчикът HOME не сработи в рамките на хода':'реферирането е прекъснато');H.axes=[]}
   H.cur=null}
 }
+/* сегментите се пращат и от таймер: браузърът спира рисуването (и кадрите), когато прозорецът е покрит или минимизиран */
+setInterval(()=>{if(HW.on)hwApply(performance.now())},10);
 hwChip.addEventListener('click',()=>{if(HW.on)hwClose('Връзката с платката е прекъсната');else hwConnect()});
 /* Стоп, Авариен стоп и RESET към платката (Пауза спира като симулацията) */
 document.addEventListener('click',e=>{
