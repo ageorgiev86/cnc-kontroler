@@ -71,6 +71,7 @@ static bool line_has_m(const gc_interp_t *in, const run_t *R, int pc, int m)
 static int step(gc_interp_t *in, run_t *R, gc_err_t *e)
 {
     if (R->pc >= R->n) { R->done = true; return 1; }
+    if (in->cancel) return seterr(e, R->pc, "Програмата е спряна");
     gc_block_t b;
     const char *s = R->ln[R->pc];
     if (gc_parse_line(s, &b, e) == 0 && b.percent) {

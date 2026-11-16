@@ -362,8 +362,9 @@ static void pop(pl_t *p)
 
 static void add_ev(pl_sample_t *s, const gc_cmd_t *c)
 {
+    if (!s->has_ev) s->ev = *c;
     s->has_ev = true;
-    s->ev = *c;
+    if (s->nev < PL_EV_MAX) s->evs[s->nev++] = *c;
 }
 
 /* една част от такта (h = dt / NSUB): jerk може да се сменя и между тактовете, затова

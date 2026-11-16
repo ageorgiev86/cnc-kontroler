@@ -34,8 +34,11 @@ typedef struct {
     double v, a;           /* скорост и ускорение по пътя, мм/s, мм/s² */
     int line;              /* редът на програмата */
     bool has_ev;
-    gc_cmd_t ev;           /* събитието, стигнато в този такт */
+    gc_cmd_t ev;           /* събитието, стигнато в този такт (първото) */
+    int nev;               /* всички събития в такта (до PL_EV_MAX) */
+    gc_cmd_t evs[8];
 } pl_sample_t;
+#define PL_EV_MAX 8
 
 pl_t *pl_create(const pl_config_t *cfg, const double start[GC_NAX]);
 void pl_destroy(pl_t *p);

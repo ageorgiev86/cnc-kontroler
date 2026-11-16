@@ -21,10 +21,14 @@ add_library(cnc-core STATIC
   src/gc_job.c
   src/planner.c
   src/hmap.c
+  src/link.c
+  src/vmcu.c
+  src/mc.c
 )
 target_include_directories(cnc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(cnc-core PRIVATE ${CORE_WARNINGS})
-target_link_libraries(cnc-core PUBLIC m)
+find_package(Threads REQUIRED)
+target_link_libraries(cnc-core PUBLIC m Threads::Threads)
 
 if(CNC_CORE_SANITIZE)
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -66,3 +70,9 @@ target_link_libraries(test_planner PRIVATE cnc-core)
 add_test(NAME planner COMMAND test_planner)
 # реална програма през планера: лимитите на осите по позициите и краят
 add_test(NAME plan_flatcam_outline COMMAND gcsim --plan ${CMAKE_CURRENT_SOURCE_DIR}/tests/programs/flatcam_junction_outline.tap)
+
+# управлението на машината срещу виртуалния STM32: реферирането, ръчно, програма, грешки
+add_executable(test_mc tests/test_mc.c)
+target_compile_options(test_mc PRIVATE ${CORE_WARNINGS})
+target_link_libraries(test_mc PRIVATE cnc-core)
+add_test(NAME mc COMMAND test_mc)
