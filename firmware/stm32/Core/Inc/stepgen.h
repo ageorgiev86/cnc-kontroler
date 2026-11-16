@@ -34,6 +34,7 @@
 #define STEPGEN_FAULT_NONE      0u
 #define STEPGEN_FAULT_LINK      1u   /* връзката с горното ниво е прекъснала (LINK_TIMEOUT) */
 #define STEPGEN_FAULT_UNDERRUN  2u
+#define STEPGEN_FAULT_LIMIT     4u   /* сработил краен изключвател */
 #define STEPGEN_FAULT_ESTOP     6u   /* авариен стоп, поискан от горното ниво */
 #define STEPGEN_FAULT_OVERSPEED 7u
 

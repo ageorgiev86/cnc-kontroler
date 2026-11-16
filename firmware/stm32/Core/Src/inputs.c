@@ -5,17 +5,17 @@
 #include "inputs.h"
 #include "main.h"
 
+#include <stddef.h>
+
 struct in_pin {
   GPIO_TypeDef *port;
   uint16_t pin;
 };
 
-/* редът съвпада с битовете в inputs.h */
-static const struct in_pin pins[16] = {
-  { BOARD_LIM1 }, { BOARD_LIM2 }, { BOARD_LIM3 }, { BOARD_LIM4 }, { BOARD_LIM5 }, { BOARD_LIM6 },
-  { BOARD_HOME1 }, { BOARD_HOME2 }, { BOARD_HOME3 }, { BOARD_HOME4 }, { BOARD_HOME5 }, { BOARD_HOME6 },
-  { BOARD_PROBE }, { BOARD_TOOLSETTER }, { BOARD_ESTOP }, { BOARD_DRV_FAULT },
-};
+/* редът съвпада с битовете в inputs.h; списъкът е в board.h / board_test3.h */
+static const struct in_pin pins[] = BOARD_INPUTS;
+
+#define N_PINS (sizeof(pins) / sizeof(pins[0]))
 
 void inputs_init(void)
 {
@@ -30,9 +30,11 @@ void inputs_init(void)
   g.Mode  = GPIO_MODE_INPUT;
   g.Pull  = GPIO_PULLUP;
   g.Speed = GPIO_SPEED_FREQ_LOW;
-  for (unsigned i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
-    g.Pin = pins[i].pin;
-    HAL_GPIO_Init(pins[i].port, &g);
+  for (unsigned i = 0; i < N_PINS; i++) {
+    if (pins[i].port != NULL) {
+      g.Pin = pins[i].pin;
+      HAL_GPIO_Init(pins[i].port, &g);
+    }
   }
 }
 
@@ -40,10 +42,10 @@ uint32_t inputs_read(void)
 {
   uint32_t v = 0;
 
-  for (unsigned i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
-    if ((pins[i].port->IDR & pins[i].pin) == 0u) {
+  for (unsigned i = 0; i < N_PINS && i < 32u; i++) {
+    if (pins[i].port != NULL && (pins[i].port->IDR & pins[i].pin) == 0u) {
       v |= 1u << i;
     }
   }
-  return v;
+  return v ^ (BOARD_IN_INVERT);
 }

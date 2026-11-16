@@ -11,6 +11,7 @@
 #include "inputs.h"
 #include "usb_cdc.h"
 #include "homing.h"
+#include "machio.h"
 
 #include <string.h>
 
@@ -195,9 +196,11 @@ static void build_reply(uint8_t tx[LINK_PKT_SIZE])
   /* enc_pos (s + 40) и ferror (s + 64): още няма енкодери, остават 0 */
   /* inputs (s + 88, 8 байта): 8 + 8 по SPI2 още не се четат, остават 0 */
   put32(s + 96, in);                                  /* local_in */
-  put32(s + 100, 0);                                  /* outputs */
+  put32(s + 100, machio_outputs());                   /* outputs */
   put32(s + 104, rx_errors);
-  /* rules (s + 108), pendant (s + 112), mpg_count (s + 116): още няма */
+  /* rules (s + 108): резервирано */
+  put32(s + 112, machio_pendant());
+  put32(s + 116, (uint32_t)machio_mpg_count());
   len = 2u + LINK_STATUS_SIZE;
 
   if (fault) {
@@ -206,6 +209,15 @@ static void build_reply(uint8_t tx[LINK_PKT_SIZE])
     f[1] = 8;
     f[2] = fault;
     len += 10u;
+  }
+  {
+    uint8_t *f = b + len;                         /* аналоговите входове: напрежение на датчика, mV */
+    f[0] = LINK_T_AIN;
+    f[1] = LINK_AIN_SIZE;
+    for (unsigned i = 0; i < 4u; i++) {
+      put16(f + 2 + 2 * i, machio_ain_mv(i));
+    }
+    len += 2u + LINK_AIN_SIZE;
   }
   {
     struct home_done h;
@@ -263,6 +275,10 @@ void link_process(const uint8_t rx[LINK_PKT_SIZE], uint8_t tx[LINK_PKT_SIZE])
       do_motion_ctrl(r + 2);
     } else if (type == LINK_T_HOME_START && size == LINK_HOME_START_SIZE) {
       do_home_start(r + 2);
+    } else if (type == LINK_T_IO_SET && size == 12u) {
+      machio_set_outputs(get32(r + 2), get32(r + 6));   /* синхронизацията със сегмент (r + 10) още не се ползва */
+    } else if (type == LINK_T_SPINDLE && size == 12u) {
+      machio_spindle(r[2]);                             /* посока; оборотите и PWM още не се ползват */
     }                                             /* непознат запис: пропуска се по size */
     i += 2u + size;
   }

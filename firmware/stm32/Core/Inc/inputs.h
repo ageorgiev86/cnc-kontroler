@@ -20,6 +20,15 @@
 #define IN_TOOLSETTER    (1u << 13)
 #define IN_ESTOP         (1u << 14)
 #define IN_DRV_FAULT     (1u << 15)
+/* само на тестовата 3-осна машина (бутони и превключвателите на MPG колелото) */
+#define IN_BTN_START     (1u << 16)
+#define IN_BTN_STOP      (1u << 17)
+#define IN_MPG_X         (1u << 18)
+#define IN_MPG_Y         (1u << 19)
+#define IN_MPG_Z         (1u << 20)
+#define IN_MPG_X1        (1u << 21)
+#define IN_MPG_X10       (1u << 22)
+#define IN_MPG_X100      (1u << 23)
 
 void inputs_init(void);
 

@@ -2692,7 +2692,7 @@ const AOUT_F=[['none','Не се използва'],['spindle','Обороти �
 const SIG=[['010','0–10 V'],['05','0–5 V'],['420','4–20 mA']];
 const AACT=[['none','Нищо'],['warn','Предупреждение'],['alarm','Аларма']];
 S.aiV=[0,0,0,0];S.aOut=[0,0,0];S.airDrop=false;S.aiAl=[0,0,0,0];
-function aiTrue(i){if(HW.on)return S.cfg.aio.in[i].lo;   /* от платката: още не се чете, т.е. 0 V */
+function aiTrue(i){if(HW.on){const c=S.cfg.aio.in[i],V=(HW.ain[i]||0)/1000,fr=c.sig==='05'?V/5:c.sig==='420'?0:V/10;return c.lo+(c.hi-c.lo)*Math.max(0,Math.min(1.2,fr))}   /* от платката: напрежение на датчика */
  const c=S.cfg.aio.in[i];const n=(Math.random()-.5);
  switch(c.f){case'airP':return(S.airDrop?4.6:6.2)+n*.06;case'oilP':return performance.now()<S.lu.until?14+n*.4:0;
   case'temp':return 24+S.sp.act/Math.max(1,S.cfg.sp.spMax)*30+n*.2;case'load':return S.sp.on?22+S.F/200+n*2:0;
@@ -3354,13 +3354,15 @@ setTimeout(()=>{if(S.cfg.upd.upAuto&&!S.upd.avail&&S.upd.cur==='0.5')updFound('0
 const HW={on:false,port:null,wr:null,rd:null,rx:new Uint8Array(0),st:null,base:null,t0:0,p0:null,genT:0,
  segId:0,lastQ:null,lastStat:true,sendQ:[],ctrlQ:[],pktSegs:{},inflight:0,qFree:256,ack:0,seq:0,flags:0,resetN:0,
  resync:false,faultSeen:false,pendBtn:null,pk:0,pkT:0,pkRate:0,crcErr:0,
- home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0};
+ home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0,
+ ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
 const HW_SEG_MS=4,HW_DEPTH=25;   /* 25 сегмента × 4 ms = 100 ms напред */
-const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',
+const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',4:'сработи краен изключвател',
  6:'авариен стоп',7:'поисканата скорост е над възможното за генератора (OVERSPEED)',8:'невалидна настройка (BAD_CONFIG)',9:'различна версия на протокола'};
 const HW_IN=[['LIM 1','PG8'],['LIM 2','PG9'],['LIM 3','PG10'],['LIM 4','PG11'],['LIM 5','PG12'],['LIM 6','PG13'],
- ['HOME 1','PG14'],['HOME 2','PG15'],['HOME 3','PF6'],['HOME 4','PF7'],['HOME 5','PF8'],['HOME 6','PF9'],
- ['3D пробник','PA7'],['Toolsetter','PB1'],['Авариен стоп (наблюдение)','PC13'],['Аларма драйвер','PE3']];
+ ['HOME 1','PG14'],['HOME 2','PG15'],['HOME 3','PE10 (PF6 на основната платка)'],['HOME 4','PF7'],['HOME 5','PF8'],['HOME 6','PF9'],
+ ['3D пробник','PA7'],['Toolsetter','PB1'],['Авариен стоп (наблюдение)','PC13'],['Аларма драйвер','PE3'],
+ ['Бутон Старт','PG0'],['Бутон Стоп','PG1'],['MPG ос X','PG2'],['MPG ос Y','PG3'],['MPG ос Z','PG4'],['MPG ×1','PF2'],['MPG ×10','PF3'],['MPG ×100','PF4']];
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 const crc32=(u,n)=>{let c=0xFFFFFFFF;for(let i=0;i<n;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
 const hwChip=$('#sbLinkLed').parentElement,hwLed=$('#sbLinkLed'),hwTxt=hwChip.lastChild;
@@ -3372,6 +3374,8 @@ const recSeg=s=>{const r=new Uint8Array(58),v=new DataView(r.buffer);r[0]=0x01;r
  v.setUint16(6,HW_SEG_MS*1000,true);v.setUint16(8,s.f,true);s.q.forEach((x,k)=>v.setBigInt64(10+8*k,x,true));return r};
 const recCfg=(axis,param,val)=>{const r=new Uint8Array(10),v=new DataView(r.buffer);r[0]=0x07;r[1]=8;r[2]=axis;r[3]=param;v.setInt32(6,val,true);return r};
 const recCtrl=c=>{const r=new Uint8Array(6);r[0]=0x08;r[1]=4;r[2]=c;return r};
+const recIo=(val,mask)=>{const r=new Uint8Array(14),v=new DataView(r.buffer);r[0]=0x02;r[1]=12;v.setUint32(2,val,true);v.setUint32(6,mask,true);return r};
+const recSp=dir=>{const r=new Uint8Array(14);r[0]=0x03;r[1]=12;r[2]=dir;return r};
 const toQ=p=>AX.map(a=>BigInt(Math.round((p[a]-HW.base[a])*S.cfg[a].spm*65536)));
 
 function hwPacket(recs){
@@ -3449,8 +3453,10 @@ function hwStatus(pk,v){
  const myAck=v.getUint16(6,true);
  for(let o=12;o+2<=12+len;){const t=pk[o],sz=pk[o+1];if(!t)break;
   if(t===0x81&&sz>=120){const s=o+2;st={state:pk[s],qFree:v.getUint16(s+2,true),exec:v.getUint32(s+4,true),lastRx:v.getUint32(s+8,true),
-   cmd:AX.map((a,k)=>v.getInt32(s+16+4*k,true)),inputs:v.getUint32(s+88,true),local:v.getUint32(s+96,true),rxErr:v.getUint32(s+104,true)}}
+   cmd:AX.map((a,k)=>v.getInt32(s+16+4*k,true)),inputs:v.getUint32(s+88,true),local:v.getUint32(s+96,true),out:v.getUint32(s+100,true),rxErr:v.getUint32(s+104,true),
+   pend:v.getUint32(s+112,true),mpg:v.getInt32(s+116,true)}}
   if(t===0x83&&sz>=1)fault=pk[o+2];
+  if(t===0x87&&sz>=8)for(let k=0;k<4;k++)HW.ain[k]=v.getUint16(o+2+2*k,true);
   if(t===0x84&&sz>=12)hd={req:v.getUint32(o+2,true),axis:pk[o+6],result:pk[o+7],pos:v.getInt32(o+10,true)};
   o+=2+sz}
  if(!st)return;
@@ -3466,6 +3472,7 @@ function hwApply(now){
  if(!HW.on)return;
  if(now-HW.pkT>=1000){HW.pkRate=HW.pk*1000/(now-HW.pkT);HW.pk=0;HW.pkT=now}
  if(!st||!HW.base){hwFlush();return}
+ hwMachIo(now,st);
  const faulted=st.state===6||st.state===7;
  if(faulted&&!HW.faultSeen){HW.faultSeen=true;HW.resync=true;if(HW.home){HW.homeFail='грешка '+st.fault;HW.home=null}
   if(st.fault!==6&&S.state!=='estop'){halt();S.state='alarm';S.alarm='Платката спря: '+(HW_FAULT[st.fault]||'грешка '+st.fault)+'. Натиснете RESET.'}}
@@ -3479,6 +3486,7 @@ function hwApply(now){
   hwFlush();return;
  }
  if(now-HW.genT>500)HW.genT=now-100;   /* раздел във фона: старото се изпуска */
+ hwMpgMove((now-HW.t0)/1000);
  /* скок по-бърз от възможното = нова координата (напр. край на реферирването), а не движение */
  const dt=Math.max(1e-3,(now-HW.t0)/1000);
  AX.forEach(a=>{const d=S.mach[a]-HW.p0[a],lim=Math.max(S.cfg[a].vmax,RAPID)/60*dt*2+1;if(Math.abs(d)>lim){HW.base[a]+=d;HW.p0[a]+=d}});
@@ -3492,6 +3500,29 @@ function hwApply(now){
  const used=(256-HW.qFree)+HW.inflight+HW.sendQ.length;
  if(HW.lastStat&&used<20)hwPad(HW_DEPTH-used);   /* в покой: буферът се попълва до 100 ms */
  hwFlush();
+}
+/* Изходи (OUT1–3 = изходите 1–3 от Настройки → Входове/изходи), шпиндел, бутоните Старт/Стоп и колелото на MPG */
+function hwMachIo(now,st){
+ let out=0;for(let i=0;i<3&&i<S.cfg.io.out.length;i++)if(outVal(i))out|=1<<i;
+ const sp=S.sp.on&&S.state!=='estop'?(S.sp.dir==='CCW'?2:1):0;
+ if(out!==HW.lastOut||now-HW.ioT>500){HW.ctrlQ.push(recIo(out,7));HW.lastOut=out;HW.ioT=now;HW.ctrlQ.push(recSp(sp));HW.lastSp=sp}
+ else if(sp!==HW.lastSp){HW.ctrlQ.push(recSp(sp));HW.lastSp=sp}
+ const p=st.pend,rise=b=>(p>>b&1)&&!(HW.pend>>b&1);
+ if(rise(6))document.querySelector('[data-act="start"]').click();
+ if(rise(8))document.querySelector('[data-act="stop"]').click();
+ HW.pend=p;
+ /* колелото: 4 импулса на щрак; ос X/Y/Z и ×1/×10/×100 от превключвателите */
+ if(HW.mpg===null){HW.mpg=st.mpg;return}
+ const d=st.mpg-HW.mpg;HW.mpg=st.mpg;HW.mpgRem+=d;const det=Math.trunc(HW.mpgRem/4);HW.mpgRem-=det*4;
+ const a=['','X','Y','Z'][p&7],inc=[0,0.001,0.01,0.1][(p>>3)&3];
+ if(det&&a&&inc&&S.state==='idle'&&S.enabled&&!HW.home&&!HW.resync)HW.mpgPend[a]+=det*inc;
+ if(!a||!inc||S.state!=='idle')HW.mpgPend={X:0,Y:0,Z:0};
+}
+function hwMpgMove(dt){
+ for(const a of ['X','Y','Z']){const r=HW.mpgPend[a];if(!r)continue;
+  const c=S.cfg[a],mx=c.vmax/60*Math.max(dt,0.001)*0.5,st=Math.max(-mx,Math.min(mx,r));
+  let t=S.mach[a]+st;if(S.homed[a])t=Math.max(c.min,Math.min(c.max,t));
+  HW.mpgPend[a]=Math.abs(r-st)<1e-9||t!==S.mach[a]+st?0:r-st;S.mach[a]=t}
 }
 /* Диагностика: собствените входове на STM32 от платката */
 const hwIo=()=>{const L=HW.st?HW.st.local:0;return HW_IN.map(([n,p],i)=>[n,p,HW.st?(L>>>i&1?'hot':''):''])};

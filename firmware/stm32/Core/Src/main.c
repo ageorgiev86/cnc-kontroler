@@ -18,6 +18,7 @@
 #include "inputs.h"
 #include "link.h"
 #include "homing.h"
+#include "machio.h"
 
 static void MPU_Config(void);
 static void SystemClock_Config(void);
@@ -37,6 +38,7 @@ int main(void)
   usb_cdc_init();
   stepgen_init();
   inputs_init();
+  machio_init();
 
   uint32_t led_time = HAL_GetTick();
   int on = 0;
@@ -44,6 +46,7 @@ int main(void)
     console_poll();
     link_poll();
     homing_service();
+    machio_poll();
     stepgen_service();
 
     /* светодиодът мига 2 пъти в секунда: главният цикъл не е забил */

@@ -10,10 +10,14 @@
       "cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
     },
     { "name": "Debug", "displayName": "Debug", "inherits": "default", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
-    { "name": "Release", "displayName": "Release", "inherits": "default", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } }
+    { "name": "Release", "displayName": "Release", "inherits": "default", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "Test3", "displayName": "Test3 (тестова 3-осна машина)", "inherits": "default", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "CNC_BOARD": "test3" } },
+    { "name": "Test3-Release", "displayName": "Test3 Release", "inherits": "default", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "CNC_BOARD": "test3" } }
   ],
   "buildPresets": [
     { "name": "Debug", "configurePreset": "Debug" },
-    { "name": "Release", "configurePreset": "Release" }
+    { "name": "Release", "configurePreset": "Release" },
+    { "name": "Test3", "configurePreset": "Test3" },
+    { "name": "Test3-Release", "configurePreset": "Test3-Release" }
   ]
 }

@@ -9,6 +9,7 @@
 #include "resume.h"
 #include "link.h"
 #include "inputs.h"
+#include "machio.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -78,12 +79,15 @@ static void cmd_status(int argc, char **argv)
                  (unsigned long)st.blocks, (unsigned long)st.fill_cycles_max,
                  (unsigned long)(st.fill_cycles_max * 1000u / (HAL_RCC_GetSysClockFreq() / 1000000u)));
   {
-    static const char *const in_names[16] = { "LIM1", "LIM2", "LIM3", "LIM4", "LIM5", "LIM6",
+    static const char *const in_names[24] = { "LIM1", "LIM2", "LIM3", "LIM4", "LIM5", "LIM6",
                                               "HOME1", "HOME2", "HOME3", "HOME4", "HOME5", "HOME6",
-                                              "PROBE", "TOOLSET", "ESTOP", "DRV_ALM" };
+                                              "PROBE", "TOOLSET", "ESTOP", "DRV_ALM",
+                                              "START", "STOP", "MPG_X", "MPG_Y", "MPG_Z", "MPG_x1", "MPG_x10", "MPG_x100" };
     uint32_t in = inputs_read();
+    console_printf("изходи 0x%08lX, MPG брояч %ld, AIN1 %u mV\r\n", (unsigned long)machio_outputs(),
+                   (long)machio_mpg_count(), machio_ain_mv(0));
     console_printf("активни входове:");
-    for (unsigned i = 0; i < 16u; i++) {
+    for (unsigned i = 0; i < 24u; i++) {
       if (in & (1u << i)) {
         console_printf(" %s", in_names[i]);
       }
@@ -242,7 +246,7 @@ void console_poll(void)
   int connected = usb_cdc_connected();
 
   if (connected && !was_connected) {
-    console_printf("\r\nCNC MCU (STM32H723), сборка " __DATE__ " " __TIME__ "\r\nhelp за командите\r\n> ");
+    console_printf("\r\nCNC MCU (STM32H723), " BOARD_NAME ", сборка " __DATE__ " " __TIME__ "\r\nhelp за командите\r\n> ");
     line_len = 0;
   }
   was_connected = connected;

@@ -29,6 +29,10 @@
 
 /* записи */
 #define LINK_T_MOTION_SEGMENT 0x01u
+#define LINK_T_IO_SET         0x02u
+#define LINK_T_SPINDLE        0x03u
+#define LINK_T_AIN            0x87u
+#define LINK_AIN_SIZE         8u
 #define LINK_T_HOME_START     0x05u
 #define LINK_T_HOME_DONE      0x84u
 #define LINK_HOME_START_SIZE  24u

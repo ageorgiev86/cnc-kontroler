@@ -46,6 +46,8 @@ cmake --build --preset Debug
 
 Резултатът е в `build/Debug/`: `cnc_mcu.elf` (за дебъг), `cnc_mcu.hex` и `cnc_mcu.bin` (за записване).
 
+**Тестовата 3-осна машина** (модул FK723M1 + тестова платка, пиновете в `Core/Inc/board_test3.h`, описанието в [`docs/test-masina-3osi.md`](../../docs/test-masina-3osi.md)) е отделна конфигурация: `cmake --preset Test3` и `cmake --build --preset Test3` → `build/Test3/cnc_mcu.hex`. Във VS Code: конфигурацията „Test3“.
+
 ## Свързване на ST-LINK (SWD)
 
 На основната платка има гнездо **SWD** (1 × 5, стъпка 2,54 мм): **1 3V3, 2 SWCLK (PA14), 3 GND, 4 SWDIO (PA13), 5 NRST**.

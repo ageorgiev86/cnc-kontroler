@@ -47,6 +47,8 @@ set(HAL_SOURCES
   ${HAL}/Src/stm32h7xx_hal_pcd.c
   ${HAL}/Src/stm32h7xx_hal_pcd_ex.c
   ${HAL}/Src/stm32h7xx_ll_usb.c
+  ${HAL}/Src/stm32h7xx_hal_adc.c
+  ${HAL}/Src/stm32h7xx_hal_adc_ex.c
 )
 
 # собственият код (компилира се с повече предупреждения)
@@ -62,6 +64,7 @@ set(OWN_SOURCES
   Core/Src/inputs.c
   Core/Src/link.c
   Core/Src/homing.c
+  Core/Src/machio.c
 )
 
 set(APP_SOURCES
@@ -75,6 +78,14 @@ set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE USE_HAL_DRIVER STM32H723xx
   $<$<CONFIG:Debug>:DEBUG>)
+
+# платката: основната (по подразбиране) или тестовата 3-осна машина (конфигурация Test3)
+set(CNC_BOARD "osnovna" CACHE STRING "платката: osnovna или test3")
+if(CNC_BOARD STREQUAL "test3")
+  target_compile_definitions(${PROJECT_NAME} PRIVATE BOARD_TEST3)
+elseif(NOT CNC_BOARD STREQUAL "osnovna")
+  message(FATAL_ERROR "Непозната платка CNC_BOARD=${CNC_BOARD} (osnovna или test3)")
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
   Core/Inc

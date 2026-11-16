@@ -21,6 +21,12 @@
 
 #include "stm32h7xx_hal.h"
 
+#if defined(BOARD_TEST3)
+#include "board_test3.h"   /* тестовата 3-осна машина (конфигурация Test3) */
+#else
+
+#define BOARD_NAME            "основна платка"
+
 /* Светодиод: 3,3 V → 1 kΩ → светодиод → PG7, свети при 0 */
 #define BOARD_LED_PORT        GPIOG
 #define BOARD_LED_PIN         GPIO_PIN_7
@@ -151,5 +157,16 @@
 
 /* Свободни (настройват се като аналогови): PA2–PA6, PA10, PB0, PB2, PB8, PB10, PC0–PC3, PC6–PC12,
  * PD2, PE0–PE2, PE4–PE6, PF2–PF5, PF10, PF13–PF15, PG0–PG6. USB: PA11/PA12 (usb_cdc.c). */
+
+/* редът е битовете на STATUS.local_in (inputs.h) */
+#define BOARD_INPUTS { \
+  { BOARD_LIM1 }, { BOARD_LIM2 }, { BOARD_LIM3 }, { BOARD_LIM4 }, { BOARD_LIM5 }, { BOARD_LIM6 }, \
+  { BOARD_HOME1 }, { BOARD_HOME2 }, { BOARD_HOME3 }, { BOARD_HOME4 }, { BOARD_HOME5 }, { BOARD_HOME6 }, \
+  { BOARD_PROBE }, { BOARD_TOOLSETTER }, { BOARD_ESTOP }, { BOARD_DRV_FAULT } }
+#define BOARD_IN_INVERT         0u
+#define BOARD_LIM_MASK          0x3Fu
+/* изходите са през 74HCT595 (SPI2), а не направо: BOARD_OUTPUTS не е дефиниран */
+
+#endif /* BOARD_TEST3 */
 
 #endif /* BOARD_H */
