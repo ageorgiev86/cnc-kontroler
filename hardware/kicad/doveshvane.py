@@ -1,6 +1,7 @@
 """Довършва връзките, които Freerouting не е трасирал (след trasirane.py).
 
     python3.12 -I doveshvane.py <платка.kicad_pcb> [изход.kicad_pcb] [--rounds N]
+    python3.12 -I doveshvane.py --greedy <платка.kicad_pcb> [изход.kicad_pcb]   (връзка по връзка)
 
 Несвързаните двойки идват от DRC на KiCad (kicad-cli). Медта на платката и връзките отиват към doveshvane.c
 (мрежа 0,05 мм, A* на двата слоя; компилира се при всяко пускане с cc/gcc). Новите трасета и преходи се
@@ -95,7 +96,10 @@ def fix_uuids(pcb):
 
 
 def soft(tr):
-    """Трасе, което може да се разкъса: не е заключено и не е маса."""
+    """Трасе, което може да се разкъса: не е заключено и не е маса (с DOVESHVANE_RIP_GND=1 и масата: SMD
+    площадките на маса се свързват и през заливката, а DRC казва дали нещо е прекъснато)."""
+    if os.environ.get('DOVESHVANE_RIP_GND'):
+        return not tr.IsLocked()
     return not tr.IsLocked() and tr.GetNetname() not in GROUND
 
 
