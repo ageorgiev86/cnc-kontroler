@@ -429,11 +429,29 @@ void stepgen_stop(void)
   stop_req    = 1;
 }
 
+void stepgen_fault(uint8_t code)
+{
+  NVIC_DisableIRQ(DMA1_Stream0_IRQn);
+  test.active = 0;
+  set_fault(code);
+  q_tail = q_head;                    /* и в покой: изхвърля чакащите сегменти */
+  NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+}
+
 void stepgen_clear_fault(void)
 {
   if (state == SG_IDLE) {
     fault = STEPGEN_FAULT_NONE;
   }
+}
+
+int stepgen_get_config(unsigned axis, struct stepgen_axis_config *c)
+{
+  if (axis >= STEPGEN_AXES) {
+    return -1;
+  }
+  *c = cfg[axis];
+  return 0;
 }
 
 void stepgen_get_status(struct stepgen_status *st)
@@ -445,6 +463,7 @@ void stepgen_get_status(struct stepgen_status *st)
   st->queue_size      = STEPGEN_QUEUE;
   st->fault           = fault;
   st->running         = (state != SG_IDLE);
+  st->stopping        = (state == SG_STOPPING);
   st->exec_id         = exec_id;
   st->blocks          = blocks;
   st->fill_cycles_max = fill_max;

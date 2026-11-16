@@ -32,7 +32,9 @@
 
 /* грешки (кодовете съвпадат с FAULT в SPI протокола) */
 #define STEPGEN_FAULT_NONE      0u
+#define STEPGEN_FAULT_LINK      1u   /* връзката с горното ниво е прекъснала (LINK_TIMEOUT) */
 #define STEPGEN_FAULT_UNDERRUN  2u
+#define STEPGEN_FAULT_ESTOP     6u   /* авариен стоп, поискан от горното ниво */
 #define STEPGEN_FAULT_OVERSPEED 7u
 
 struct stepgen_segment {
@@ -57,6 +59,7 @@ struct stepgen_status {
   uint16_t queue_size;
   uint8_t  fault;
   uint8_t  running;
+  uint8_t  stopping;                 /* спира по рампа */
   uint32_t exec_id;                  /* сегментът, който се изпълнява */
   uint32_t blocks;                   /* попълнени половини на буфера */
   uint32_t fill_cycles_max;          /* най-дълго попълване, тактове на процесора */
@@ -66,6 +69,10 @@ void stepgen_init(void);
 
 /* Настройка на ос; само когато генераторът стои. Връща 0 или -1. */
 int stepgen_configure(unsigned axis, const struct stepgen_axis_config *cfg);
+int stepgen_get_config(unsigned axis, struct stepgen_axis_config *cfg);
+
+/* Грешка отвън (връзка, авариен стоп): спиране по рампа и изчистване на опашката. */
+void stepgen_fault(uint8_t code);
 
 /* Добавя сегмент. Връща 0, -1 (опашката е пълна), -2 (активна грешка или спиране), -3 (грешни данни). */
 int stepgen_push(const struct stepgen_segment *seg);

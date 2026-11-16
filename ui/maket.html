@@ -1062,6 +1062,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
         <li><b>Работа</b>: „Цикъл старт“ пуска демо програмата. Следи реда, траекторията и следящата грешка до всяка ос.</li>
         <li><b>Ръчно</b> и <b>MDI</b>: движение със стъпка или непрекъснато, нулиране на G54, команди като <code>G0 X10 Y10</code>.</li>
         <li><b>Инструменти</b>: избери ред и „Смени“. Ще видиш последователността на смяната.</li>
+        <li><b>Тестова платка STM32</b> (само в макета, Edge или Chrome): натисни „MCU“ горе и избери порта на платката, после RESET. Макетът праща движенията си (програма, MDI, ръчно, реферирване) като сегменти по протокола от <code>docs/spi-protokol.md</code>, като Linux по SPI. В „Диагностика“ се виждат истинските входове на STM32 (LIM, HOME, пробник, авариен стоп), буферът и връзката. Скоростите са истински (симулацията не е ускорена). В LVGL това няма: там горното ниво е <code>core/</code> в Linux, а връзката е по SPI.</li>
         <li><b>Няколко детайла</b>: в „Офсети“ отметни G55, засечи я (или въведи координатите) и пусни програмата: изработват се G54 и G55, по инструмент. С flanets_d80.nc (T4 и T2) се вижда, че всеки инструмент минава по всички детайли.</li>
         <li><b>Офсети</b>: първо зареди T10, после пусни цикъл. Пробникът (PRB1) и toolsetter-ът (PRB2) са отделни входове. В картата „Офсети“ G54 е основната нула, а отметнатите G55–G59 са допълнителни детайли.</li>
       </ul>
@@ -1091,7 +1092,7 @@ p.txt{margin:0;font:500 .9em/1.4 var(--f-txt);color:var(--dim)}
 (()=>{
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const AX=['X','Y','Z','A','B','C'], ROT={A:1,B:1,C:1};
-const RAPID=6000, SIMX=2.5, FERR_LIM=50, SAFE_Z=5;
+const RAPID=6000, FERR_LIM=50, SAFE_Z=5;let SIMX=2.5;   /* SIMX: симулацията върви 2,5 пъти по-бързо; с платката 1 */
 const TS={X:-20,Y:-20,TOP:-180};
 const PRB={get fast(){return S.cfg.prb.prFast},get slow(){return S.cfg.prb.prSlow},get back(){return S.cfg.prb.prBack},get ball(){return S.cfg.prb.prDia}};
 /* „истината“ в симулацията: реален ефективен диаметър и офсет, които калибрирането открива */
@@ -1987,7 +1988,7 @@ function updDiag(){
  const ess=$('#esS'),k=Math.abs(sa-sc)>300?'off':'ok';
  if(ess.dataset.k!==k){ess.dataset.k=k;ess.innerHTML=`<span class="st ${k}">${k==='ok'?'ОК':'РАМПА'}</span>`}
  const now=performance.now(),home=a=>Math.abs(S.mach[a])<0.5;
- const io=[
+ const io=HW.on?hwIo():[
   ['Лимити X/Y/Z (NC)','IN0–2',S.state==='estop'?'off':'on'],['Home X','IN3',home('X')?'hot':''],['Home Y','IN4',home('Y')?'hot':''],['Home Z','IN5',home('Z')?'hot':''],
   ['3D пробник','PRB1',now-S.flash.prb<300?'hot':''],['Toolsetter','PRB2',now-S.flash.ts<300?'hot':''],
   ['Инструмент затегнат','IN8',S.clamped?'on':''],['Магазин в позиция','IN9',S.magMoving?'':'on'],
@@ -1997,6 +1998,7 @@ function updDiag(){
  ];
  const html=io.map(([n,p,s])=>`<div><i class="led ${s}"></i><span>${n}</span><code>${p}</code></div>`).join('');
  if(ioBox._h!==html){ioBox._h=html;ioBox.innerHTML=html}
+ if(HW.on){hwNoIo();return}
  updGio();updAio();
  set($('#lkBuf'),(S.state==='run'&&S.cur&&S.cur.type!=='act'?Math.round(82+Math.random()*12):0)+' %');
  set($('#lkWd'),S.state==='estop'?'СПРЯН':'ОК · 1 ms');
@@ -2424,6 +2426,7 @@ S.cfg.net={host:'cnc-01',mode:'dhcp',ip:'192.168.1.50',mask:'255.255.255.0',gw:'
 S.netOk=false;
 S.draft=clone(S.cfg);
 function homeOps(axes){
+ if(HW.on)return hwHomeOps(axes);   /* с платката реферира STM32 по истинските входове HOME */
  const seqs=[...new Set(axes.map(a=>S.cfg[a].hseq))].sort((x,y)=>x-y),ops=[];
  seqs.forEach(q=>{
   const g=axes.filter(a=>S.cfg[a].hseq===q),n=g.join(' ');
@@ -2663,7 +2666,7 @@ function updLz(now){
  $('#lzAirBtn').classList.toggle('on',!!S.airBlast);
  const b=PINFO.bounds;set($('#lzBox'),(b.x1-b.x0).toFixed(1)+' × '+(b.y1-b.y0).toFixed(1)+' мм');
  set($('#lzFz'),S.lzFocus!=null?f3(S.lzFocus).trim():'не е зададен');
- const il=[['Капакът е затворен','IN11',S.state==='estop'?'bad':'on'],['Охлаждане на тръбата: поток 2.1 л/мин','IN14','on'],['Температура на водата: 22 °C','AIN0','on'],['Обдухване','OUT5',S.airBlast?'hot':''],['Аспирация','OUT6',p>0?'hot':'on']];
+ const il=HW.on?[['Капакът е затворен','IN11',''],['Охлаждане на тръбата','IN14',''],['Температура на водата','AIN0',''],['Обдухване','OUT5',S.airBlast?'hot':''],['Аспирация','OUT6','']]:[['Капакът е затворен','IN11',S.state==='estop'?'bad':'on'],['Охлаждане на тръбата: поток 2.1 л/мин','IN14','on'],['Температура на водата: 22 °C','AIN0','on'],['Обдухване','OUT5',S.airBlast?'hot':''],['Аспирация','OUT6',p>0?'hot':'on']];
  const h=il.map(([n,c,st])=>`<div><i class="led ${st}"></i><span>${n}</span><code>${c}</code></div>`).join('');const el=$('#lzIl');if(el._h!==h){el._h=h;el.innerHTML=h}
 }
 function updPl(){
@@ -2689,7 +2692,8 @@ const AOUT_F=[['none','Не се използва'],['spindle','Обороти �
 const SIG=[['010','0–10 V'],['05','0–5 V'],['420','4–20 mA']];
 const AACT=[['none','Нищо'],['warn','Предупреждение'],['alarm','Аларма']];
 S.aiV=[0,0,0,0];S.aOut=[0,0,0];S.airDrop=false;S.aiAl=[0,0,0,0];
-function aiTrue(i){const c=S.cfg.aio.in[i];const n=(Math.random()-.5);
+function aiTrue(i){if(HW.on)return S.cfg.aio.in[i].lo;   /* от платката: още не се чете, т.е. 0 V */
+ const c=S.cfg.aio.in[i];const n=(Math.random()-.5);
  switch(c.f){case'airP':return(S.airDrop?4.6:6.2)+n*.06;case'oilP':return performance.now()<S.lu.until?14+n*.4:0;
   case'temp':return 24+S.sp.act/Math.max(1,S.cfg.sp.spMax)*30+n*.2;case'load':return S.sp.on?22+S.F/200+n*2:0;
   case'flow':return S.coolant?3.2+n*.1:0;case'user':return c.lo;default:return 0}}
@@ -2723,6 +2727,7 @@ function outFn(f){
 }
 function outVal(i){if(S.ioForce[i]!=null)return S.ioForce[i];const o=S.cfg.io.out[i];if(!S.enabled)return o.f==='lred';if(S.state==='estop'&&o.safe==='off')return false;return o.f==='user'?!!S.uOut[i+1]:outFn(o.f)}
 function inVal(i){
+ if(HW.on)return!!(HW.st&&(HW.st.inputs>>>i&1));   /* от платката: без сигнал = неактивен */
  const f=S.cfg.io.in[i].f;
  switch(f){case'oil':return!S.oilLow;case'lubeP':return performance.now()<S.lu.until;case'door':case'air':case'pallet':return true;case'start':case'hold':case'chip':return false;
   case'clamp':return S.cfg.io.out.some((o,k)=>o.f==='clamp'&&outVal(k));case'vac':return S.cfg.io.out.some((o,k)=>(o.f==='vac1'||o.f==='vac2')&&outVal(k));
@@ -3340,11 +3345,207 @@ function updTick(dt){
 /* в макета: проверката „намира“ нова версия 5 s след пускане */
 setTimeout(()=>{if(S.cfg.upd.upAuto&&!S.upd.avail&&S.upd.cur==='0.5')updFound('0.6',false)},5000);
 
+/* ---------- Тестова платка STM32 по USB (само в макета) ----------
+ Web Serial (Edge/Chrome). Пакетите са по протокола от docs/spi-protokol.md (256 B, CRC-32): същите
+ като от Linux по SPI, само че по USB. Макетът е горното ниво: симулацията му (програма, MDI, ръчно,
+ реферирване) се праща като сегменти по 4 ms с абсолютна позиция, а буферът в STM32 се държи около
+ 100 ms. Грешките, буферът и собствените входове на STM32 идват от платката.
+ В LVGL това няма: там горното ниво е core/ в Linux, а връзката е по SPI. */
+const HW={on:false,port:null,wr:null,rd:null,rx:new Uint8Array(0),st:null,base:null,t0:0,p0:null,genT:0,
+ segId:0,lastQ:null,lastStat:true,sendQ:[],ctrlQ:[],pktSegs:{},inflight:0,qFree:256,ack:0,seq:0,flags:0,resetN:0,
+ resync:false,faultSeen:false,pendBtn:null,pk:0,pkT:0,pkRate:0,crcErr:0,
+ home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0};
+const HW_SEG_MS=4,HW_DEPTH=25;   /* 25 сегмента × 4 ms = 100 ms напред */
+const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',
+ 6:'авариен стоп',7:'поисканата скорост е над възможното за генератора (OVERSPEED)',8:'невалидна настройка (BAD_CONFIG)',9:'различна версия на протокола'};
+const HW_IN=[['LIM 1','PG8'],['LIM 2','PG9'],['LIM 3','PG10'],['LIM 4','PG11'],['LIM 5','PG12'],['LIM 6','PG13'],
+ ['HOME 1','PG14'],['HOME 2','PG15'],['HOME 3','PF6'],['HOME 4','PF7'],['HOME 5','PF8'],['HOME 6','PF9'],
+ ['3D пробник','PA7'],['Toolsetter','PB1'],['Авариен стоп (наблюдение)','PC13'],['Аларма драйвер','PE3']];
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=(u,n)=>{let c=0xFFFFFFFF;for(let i=0;i<n;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+const hwChip=$('#sbLinkLed').parentElement,hwLed=$('#sbLinkLed'),hwTxt=hwChip.lastChild;
+hwChip.style.cursor='pointer';
+hwChip.title='Натиснете: връзка с тестовата платка STM32 по USB (Edge или Chrome)';
+
+/* записи */
+const recSeg=s=>{const r=new Uint8Array(58),v=new DataView(r.buffer);r[0]=0x01;r[1]=56;v.setUint32(2,s.id,true);
+ v.setUint16(6,HW_SEG_MS*1000,true);v.setUint16(8,s.f,true);s.q.forEach((x,k)=>v.setBigInt64(10+8*k,x,true));return r};
+const recCfg=(axis,param,val)=>{const r=new Uint8Array(10),v=new DataView(r.buffer);r[0]=0x07;r[1]=8;r[2]=axis;r[3]=param;v.setInt32(6,val,true);return r};
+const recCtrl=c=>{const r=new Uint8Array(6);r[0]=0x08;r[1]=4;r[2]=c;return r};
+const toQ=p=>AX.map(a=>BigInt(Math.round((p[a]-HW.base[a])*S.cfg[a].spm*65536)));
+
+function hwPacket(recs){
+ const b=new Uint8Array(256),v=new DataView(b.buffer);let o=12;
+ for(const r of recs){b.set(r,o);o+=r.length}
+ let f=HW.flags;if(HW.resetN>0){f|=2;HW.resetN--}
+ v.setUint16(0,0x4E43,true);b[2]=1;b[3]=f;HW.seq=(HW.seq+1)&0xFFFF;
+ v.setUint16(4,HW.seq,true);v.setUint16(6,HW.ack,true);v.setUint16(8,o-12,true);v.setUint32(252,crc32(b,252),true);
+ return b;
+}
+/* праща чакащите записи; поне един пакет на кадър (служи и за heartbeat) */
+function hwFlush(){
+ if(!HW.wr)return;
+ for(let n=0;n<4;n++){
+  const recs=[];let size=0,segs=0,room=HW.qFree-HW.inflight;
+  while(HW.ctrlQ.length&&size+HW.ctrlQ[0].length<=240){const r=HW.ctrlQ.shift();recs.push(r);size+=r.length}
+  while(HW.sendQ.length&&size+58<=240&&room>8){recs.push(recSeg(HW.sendQ.shift()));size+=58;segs++;room--}
+  const pk=hwPacket(recs);if(segs){HW.pktSegs[HW.seq]=segs;HW.inflight+=segs}
+  HW.wr.write(pk).catch(()=>{});
+  if(!HW.ctrlQ.length&&!(HW.sendQ.length&&HW.qFree-HW.inflight>8))break;
+ }
+}
+function hwSeg(p,force){
+ const q=toQ(p),stat=!!HW.lastQ&&q.every((x,k)=>x===HW.lastQ[k]);
+ if(stat&&!force&&(256-HW.qFree)+HW.inflight+HW.sendQ.length>40)return;   /* в покой буферът не расте */
+ HW.sendQ.push({id:++HW.segId,q,f:stat?1:0});HW.lastQ=q;HW.lastStat=stat;
+}
+function hwPad(n){const p={...S.mach};HW.lastQ=toQ(p);for(let i=0;i<n;i++)hwSeg(p,true)}
+
+async function hwConnect(){
+ if(!('serial' in navigator)){toast('Браузърът няма Web Serial. Отворете макета в Edge или Chrome.',6000);return}
+ let p;
+ try{p=await navigator.serial.requestPort({filters:[{usbVendorId:0x0483}]})}catch(e){return}  /* отказан избор */
+ try{await p.open({baudRate:115200,bufferSize:65536})}catch(e){toast('Портът не се отвори: '+e.message+' (затворете другите програми с този порт)',7000);return}
+ try{await p.setSignals({dataTerminalReady:true,requestToSend:true})}catch(e){}
+ halt();if(S.state==='run'||S.state==='hold')S.state='idle';
+ Object.assign(HW,{on:true,port:p,wr:p.writable.getWriter(),rx:new Uint8Array(0),st:null,base:null,sendQ:[],ctrlQ:[],pktSegs:{},
+  inflight:0,qFree:256,flags:0,resetN:5,resync:true,faultSeen:false,pendBtn:null,lastQ:null,pk:0,pkT:performance.now(),crcErr:0});
+ SIMX=1;   /* истински скорости */
+ AX.forEach((a,k)=>HW.ctrlQ.push(recCfg(k,6,Math.round(S.cfg[a].acc*S.cfg[a].spm))));   /* MAX_ACC за спирането по рампа */
+ hwRead();
+ toast('Свързано с платката по протокола. Натиснете RESET.',6000);
+}
+async function hwClose(msg){
+ if(!HW.on)return;HW.on=false;SIMX=2.5;const p=HW.port;
+ try{if(HW.rd)await HW.rd.cancel()}catch(e){}
+ try{if(HW.wr)HW.wr.releaseLock()}catch(e){}
+ try{if(p)await p.close()}catch(e){}
+ Object.assign(HW,{port:null,wr:null,rd:null,st:null,base:null,sendQ:[],ctrlQ:[]});
+ if(S.state==='run'||S.state==='hold'){halt();S.state='idle'}
+ if(msg)toast(msg,6000);
+}
+async function hwRead(){
+ try{HW.rd=HW.port.readable.getReader();
+  for(;;){const{value,done}=await HW.rd.read();if(done)break;hwRx(value)}
+ }catch(e){}
+ try{HW.rd&&HW.rd.releaseLock()}catch(e){}
+ if(HW.on)hwClose('Връзката с платката прекъсна');
+}
+/* потокът съдържа и текст на конзолата: пакетът се търси по „CN“, версия 1 и CRC */
+function hwRx(chunk){
+ const b=new Uint8Array(HW.rx.length+chunk.length);b.set(HW.rx);b.set(chunk,HW.rx.length);
+ let i=0;
+ while(b.length-i>=256){
+  if(b[i]!==0x43||b[i+1]!==0x4E||b[i+2]!==1){i++;continue}
+  const pk=b.subarray(i,i+256),v=new DataView(b.buffer,b.byteOffset+i,256);
+  if(crc32(pk,252)!==v.getUint32(252,true)){HW.crcErr++;i++;continue}
+  hwStatus(pk,v);i+=256;
+ }
+ HW.rx=b.slice(i);if(HW.rx.length>8192)HW.rx=new Uint8Array(0);
+}
+function hwStatus(pk,v){
+ const len=v.getUint16(8,true);let st=null,fault=0,hd=null;
+ HW.ack=v.getUint16(4,true);
+ const myAck=v.getUint16(6,true);
+ for(let o=12;o+2<=12+len;){const t=pk[o],sz=pk[o+1];if(!t)break;
+  if(t===0x81&&sz>=120){const s=o+2;st={state:pk[s],qFree:v.getUint16(s+2,true),exec:v.getUint32(s+4,true),lastRx:v.getUint32(s+8,true),
+   cmd:AX.map((a,k)=>v.getInt32(s+16+4*k,true)),inputs:v.getUint32(s+88,true),local:v.getUint32(s+96,true),rxErr:v.getUint32(s+104,true)}}
+  if(t===0x83&&sz>=1)fault=pk[o+2];
+  if(t===0x84&&sz>=12)hd={req:v.getUint32(o+2,true),axis:pk[o+6],result:pk[o+7],pos:v.getInt32(o+10,true)};
+  o+=2+sz}
+ if(!st)return;
+ st.fault=fault;HW.st=st;HW.homeDone=hd;HW.qFree=st.qFree;HW.pk++;
+ for(const k of Object.keys(HW.pktSegs))if(((myAck-k)&0xFFFF)<0x8000)delete HW.pktSegs[k];
+ HW.inflight=Object.values(HW.pktSegs).reduce((x,y)=>x+y,0);
+ if(!HW.base){HW.base={};AX.forEach((a,k)=>HW.base[a]=S.mach[a]-st.cmd[k]/S.cfg[a].spm);HW.segId=st.lastRx}
+}
+/* вика се на всеки кадър след симулацията */
+function hwApply(now){
+ const st=HW.st,txt=HW.on?'MCU USB':'MCU 1 kHz',cls=!HW.on?'led on':!st?'led hot':(st.state>=6?'led bad':'led on');
+ if(hwTxt.textContent!==txt)hwTxt.textContent=txt;if(hwLed.className!==cls)hwLed.className=cls;
+ if(!HW.on)return;
+ if(now-HW.pkT>=1000){HW.pkRate=HW.pk*1000/(now-HW.pkT);HW.pk=0;HW.pkT=now}
+ if(!st||!HW.base){hwFlush();return}
+ const faulted=st.state===6||st.state===7;
+ if(faulted&&!HW.faultSeen){HW.faultSeen=true;HW.resync=true;if(HW.home){HW.homeFail='грешка '+st.fault;HW.home=null}
+  if(st.fault!==6&&S.state!=='estop'){halt();S.state='alarm';S.alarm='Платката спря: '+(HW_FAULT[st.fault]||'грешка '+st.fault)+'. Натиснете RESET.'}}
+ if(!faulted){HW.faultSeen=false;if(HW.pendBtn){const b=HW.pendBtn;HW.pendBtn=null;b.click()}}
+ if(HW.home&&!faulted){hwHomeTick(st);hwFlush();return}
+ /* след спиране или грешка позицията на симулацията се изравнява с платката */
+ if(HW.resync||faulted){
+  HW.sendQ=[];
+  AX.forEach((a,k)=>S.mach[a]=HW.base[a]+st.cmd[k]/S.cfg[a].spm);
+  if(!faulted&&st.state===2&&st.qFree===256&&!HW.inflight){HW.resync=false;HW.genT=now;HW.t0=now;HW.p0={...S.mach};hwPad(HW_DEPTH)}
+  hwFlush();return;
+ }
+ if(now-HW.genT>500)HW.genT=now-100;   /* раздел във фона: старото се изпуска */
+ /* скок по-бърз от възможното = нова координата (напр. край на реферирването), а не движение */
+ const dt=Math.max(1e-3,(now-HW.t0)/1000);
+ AX.forEach(a=>{const d=S.mach[a]-HW.p0[a],lim=Math.max(S.cfg[a].vmax,RAPID)/60*dt*2+1;if(Math.abs(d)>lim){HW.base[a]+=d;HW.p0[a]+=d}});
+ const p1={...S.mach},span=Math.max(1e-6,now-HW.t0);
+ while(HW.genT+HW_SEG_MS<=now){
+  const t=HW.genT+HW_SEG_MS,fr=Math.max(0,Math.min(1,(t-HW.t0)/span)),p={};
+  AX.forEach(a=>p[a]=HW.p0[a]+(p1[a]-HW.p0[a])*fr);
+  hwSeg(p,false);HW.genT=t;
+ }
+ HW.t0=now;HW.p0=p1;
+ const used=(256-HW.qFree)+HW.inflight+HW.sendQ.length;
+ if(HW.lastStat&&used<20)hwPad(HW_DEPTH-used);   /* в покой: буферът се попълва до 100 ms */
+ hwFlush();
+}
+/* Диагностика: собствените входове на STM32 от платката */
+const hwIo=()=>{const L=HW.st?HW.st.local:0;return HW_IN.map(([n,p],i)=>[n,p,HW.st?(L>>>i&1?'hot':''):''])};
+function hwNoIo(){
+ updGio();updAio();   /* входовете идват от платката (inVal, aiTrue) */
+ const st=HW.st;
+ set($('#lkCyc'),HW.pkRate.toFixed(0)+' пакета/s (USB)');
+ set($('#lkBuf'),st?Math.round((256-st.qFree)/256*100)+' % ('+(256-st.qFree)+' сегм.)':'—');
+ set($('#lkWd'),!st?'чака':st.state>=6?'ГРЕШКА '+st.fault:'ОК · 300 ms');
+}
+/* Реферирване в STM32: HOME_START за всяка ос по реда (hseq), HOME_DONE дава позицията на докосването.
+ Машинната координата в този момент е „Позиция на датчика“; после оста отива на „Позиция след Home“. */
+const recHome=(req,k,a)=>{const c=S.cfg[a],sp=c.spm,r=new Uint8Array(26),v=new DataView(r.buffer);r[0]=0x05;r[1]=24;
+ v.setUint32(2,req,true);r[6]=k;v.setInt8(7,c.hdir>0?1:-1);r[8]=k;
+ const range=ROT[a]?720:Math.abs(c.max-c.min)*1.5+10;   /* по-далеч → „датчикът не сработи“ */
+ v.setUint32(10,Math.max(1,Math.round(c.hvs/60*sp)),true);v.setUint32(14,Math.max(1,Math.round(c.hvl/60*sp)),true);
+ v.setUint32(18,Math.round(range*sp),true);v.setUint32(22,Math.max(1,Math.round(c.hpull*sp)),true);return r};
+function hwHomeOps(axes){
+ const order=[];[...new Set(axes.map(a=>S.cfg[a].hseq))].sort((x,y)=>x-y).forEach(q=>axes.filter(a=>S.cfg[a].hseq===q).forEach(a=>order.push(a)));
+ const ops=[{type:'act',dur:1e9,label:'Home '+order.join(' ')+': STM32 търси датчиците',fn:()=>{HW.homeFail='';HW.home={axes:[...order],cur:null,req:0}},until:()=>!HW.home},
+  {type:'act',dur:0,fn:()=>{if(HW.homeFail){halt();S.state='alarm';S.alarm='Реферирането не мина: '+HW.homeFail+'. Проверете датчика и натиснете RESET.'}}}];
+ order.forEach(a=>ops.push({type:'line',tgtFn:()=>({[a]:S.cfg[a].hpos-S.off[a]}),rapid:true,label:'Home '+a+': към позицията след Home'}));
+ return ops;
+}
+function hwHomeTick(st){
+ const H=HW.home;HW.sendQ=[];
+ AX.forEach((a,k)=>S.mach[a]=HW.base[a]+st.cmd[k]/S.cfg[a].spm);   /* движи STM32 */
+ if(!H.cur){
+  if(!H.axes.length){HW.home=null;HW.resync=true;return}
+  if(st.state===2&&st.qFree===256&&!HW.inflight){H.cur=H.axes.shift();H.req=HW.homeReq=(HW.homeReq+1)>>>0;HW.ctrlQ.push(recHome(H.req,AX.indexOf(H.cur),H.cur));S.actLabel='Home '+H.cur+': търсене на датчика'}
+  return}
+ const d=HW.homeDone;
+ if(d&&d.req===H.req){const a=H.cur,c=S.cfg[a];
+  if(d.result===0){HW.base[a]=c.hswp-d.pos/c.spm;S.homed[a]='sensor';AX.forEach((x,k)=>S.mach[x]=HW.base[x]+st.cmd[k]/S.cfg[x].spm)}
+  else{HW.homeFail=a+': '+(d.result===1?'датчикът HOME не сработи в рамките на хода':'реферирането е прекъснато');H.axes=[]}
+  H.cur=null}
+}
+hwChip.addEventListener('click',()=>{if(HW.on)hwClose('Връзката с платката е прекъсната');else hwConnect()});
+/* Стоп, Авариен стоп и RESET към платката (Пауза спира като симулацията) */
+document.addEventListener('click',e=>{
+ if(!HW.on)return;const b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;const k=b.dataset.act;
+ if(k==='stop'&&(S.state==='run'||S.state==='hold')){HW.ctrlQ.push(recCtrl(3));HW.resync=true;if(HW.home){HW.home=null;HW.homeFail='спряно'}}
+ else if(k==='estop'){HW.flags|=1;HW.resync=true;if(HW.home){HW.home=null;HW.homeFail='авариен стоп'}}
+ else if(k==='mreset'||k==='reset'){
+  HW.flags&=~1;HW.resetN=5;
+  if(HW.st&&HW.st.state>=6){e.stopImmediatePropagation();HW.pendBtn=b}   /* продължава, щом платката изчисти грешката */
+ }
+},true);
+
 /* ---------- Цикъл ---------- */
 loadProgram(FILES.mem[0]);applyType(false);renderTools();renderMdi();renderPrb();renderSet();renderTsPos();renderCycs();fit();
 let last=performance.now(),acc=0;
 function frame(now){
- const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);acc+=dt;
+ const dt=Math.min(.05,(now-last)/1000);last=now;tick(dt);hwApply(now);acc+=dt;
  updDro();updStatus(now);updTick(dt);
  if(S.screen==='run')updGc();
  if(S.screen==='run'||S.screen==='jog'||S.screen==='mdi')draw();

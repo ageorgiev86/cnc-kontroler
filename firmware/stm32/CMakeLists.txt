@@ -59,6 +59,9 @@ set(OWN_SOURCES
   Core/Src/console.c
   Core/Src/stepgen.c
   Core/Src/resume.c
+  Core/Src/inputs.c
+  Core/Src/link.c
+  Core/Src/homing.c
 )
 
 set(APP_SOURCES

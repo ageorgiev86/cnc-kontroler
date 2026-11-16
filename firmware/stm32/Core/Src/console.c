@@ -7,6 +7,8 @@
 #include "usb_cdc.h"
 #include "stepgen.h"
 #include "resume.h"
+#include "link.h"
+#include "inputs.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -75,6 +77,19 @@ static void cmd_status(int argc, char **argv)
   console_printf("DMA: буфери %lu, най-дълго попълване %lu такта (%lu ns от 250000)\r\n",
                  (unsigned long)st.blocks, (unsigned long)st.fill_cycles_max,
                  (unsigned long)(st.fill_cycles_max * 1000u / (HAL_RCC_GetSysClockFreq() / 1000000u)));
+  {
+    static const char *const in_names[16] = { "LIM1", "LIM2", "LIM3", "LIM4", "LIM5", "LIM6",
+                                              "HOME1", "HOME2", "HOME3", "HOME4", "HOME5", "HOME6",
+                                              "PROBE", "TOOLSET", "ESTOP", "DRV_ALM" };
+    uint32_t in = inputs_read();
+    console_printf("активни входове:");
+    for (unsigned i = 0; i < 16u; i++) {
+      if (in & (1u << i)) {
+        console_printf(" %s", in_names[i]);
+      }
+    }
+    console_printf("%s\r\nвръзка: %s\r\n", in ? "" : " няма", link_active() ? "активна (пакети)" : "няма");
+  }
 }
 
 /* move x=<стъпки> y=... c=... f=<стъпки/s> [acc=<стъпки/s2>]: права линия по осите */
@@ -218,6 +233,8 @@ static void execute(char *s)
   console_printf("непозната команда „%s“ (виж help)\r\n", argv[0]);
 }
 
+static void console_feed(const char *buf, size_t n);
+
 void console_poll(void)
 {
   char buf[32];
@@ -230,9 +247,21 @@ void console_poll(void)
   }
   was_connected = connected;
 
-  n = usb_cdc_read(buf, sizeof(buf));
+  /* до 16 × 32 байта на извикване: пакетите на връзката са по 256 байта */
+  for (int k = 0; k < 16 && (n = usb_cdc_read(buf, sizeof(buf))) > 0; k++) {
+    console_feed(buf, n);
+  }
+}
+
+static void console_feed(const char *buf, size_t n)
+{
   for (size_t i = 0; i < n; i++) {
     char c = buf[i];
+    /* пакет на връзката (docs/spi-protokol.md): започва с „CN“ в началото на ред */
+    if (link_usb_capturing() || (line_len == 0 && (uint8_t)c == (uint8_t)(LINK_MAGIC & 0xFFu))) {
+      link_usb_byte((uint8_t)c);
+      continue;
+    }
     char prev = last_c;
     last_c = c;
     if (c == '\n' && prev == '\r') {

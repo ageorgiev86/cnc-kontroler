@@ -15,6 +15,9 @@
 #include "resume.h"
 #include "stepgen.h"
 #include "usb_cdc.h"
+#include "inputs.h"
+#include "link.h"
+#include "homing.h"
 
 static void MPU_Config(void);
 static void SystemClock_Config(void);
@@ -33,11 +36,14 @@ int main(void)
   resume_init();
   usb_cdc_init();
   stepgen_init();
+  inputs_init();
 
   uint32_t led_time = HAL_GetTick();
   int on = 0;
   for (;;) {
     console_poll();
+    link_poll();
+    homing_service();
     stepgen_service();
 
     /* светодиодът мига 2 пъти в секунда: главният цикъл не е забил */
