@@ -210,6 +210,7 @@ static void measure_ops(int t)
 
 void machine_measure_tool(uint32_t now)
 {
+    if (!machine_sim()) { machine_toast("С истинската машина пробникът и toolsetter-ът идват с PROBE_ARM във firmware-а. Сега само в симулация.", now, 5000); return; }
     if (!machine_can_move(now)) return;
     if (!M.tool) { machine_toast("В шпиндела няма инструмент", now, 3000); return; }
     if (M.tool == 10) { machine_toast("3D пробникът не се мери с toolsetter-а", now, 3500); return; }

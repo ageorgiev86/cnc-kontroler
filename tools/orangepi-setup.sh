@@ -42,6 +42,33 @@ else
   echo "Пропуснато: скриптът не е пуснат със sudo от обикновен потребител"
 fi
 
+step "2а. SPI към STM32 (/dev/spidev0.0)"
+# Armbian: overlay spi-spidev на SPI0 (пинове 19 MOSI, 21 MISO, 23 SCLK, 24 CE0); Raspberry Pi: dtparam=spi=on
+if [ -f /boot/armbianEnv.txt ]; then
+  E=/boot/armbianEnv.txt
+  [ -f "$E.cnc-backup" ] || cp "$E" "$E.cnc-backup"
+  if grep -q '^overlays=' "$E"; then
+    grep -q '^overlays=.*\bspi-spidev\b' "$E" || sed -i 's/^overlays=.*/& spi-spidev/' "$E"
+  else
+    echo "overlays=spi-spidev" >> "$E"
+  fi
+  if grep -q '^param_spidev_spi_bus=' "$E"; then sed -i 's/^param_spidev_spi_bus=.*/param_spidev_spi_bus=0/' "$E"
+  else echo "param_spidev_spi_bus=0" >> "$E"; fi
+  echo "ОК: $(grep -E '^(overlays|param_spidev_spi_bus)=' "$E" | tr '\n' ' ')"
+else
+  for C in /boot/firmware/config.txt /boot/config.txt; do
+    [ -f "$C" ] || continue
+    grep -q '^dtparam=spi=on' "$C" || echo "dtparam=spi=on" >> "$C"
+    echo "ОК: dtparam=spi=on в $C"
+    break
+  done
+fi
+# правата: група spi за /dev/spidev* (иначе само root)
+getent group spi >/dev/null || groupadd -r spi
+echo 'SUBSYSTEM=="spidev", GROUP="spi", MODE="0660"' > /etc/udev/rules.d/90-cnc-spi.rules
+[ -n "$USR" ] && [ "$USR" != "root" ] && usermod -aG spi "$USR" && echo "ОК: $USR е в група spi"
+echo "SPI се появява след рестарт: ls -l /dev/spidev0.0"
+
 step "3. Конзолата да не пречи на интерфейса"
 ENV=/boot/armbianEnv.txt
 ARGS="consoleblank=0 vt.global_cursor_default=0"

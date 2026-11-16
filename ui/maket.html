@@ -2344,7 +2344,14 @@ const P_UPD=[
  {k:'upAuto',n:'Проверявай автоматично',t:'bool',on:'Да',off:'Не',h:'При пускане и на всеки 6 часа машината проверява дали има нова версия. Ако има, в горната лента светва „Обновяване“. Без интернет не показва грешка.'},
 ];
 P_UPD.forEach(p=>{if(p.k)PDEF[p.k]=p});
-const FORMS={upd:P_UPD,disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
+const isSpi=D=>D.lnk==='spi';
+const P_MCU=[
+ {k:'lnk',n:'Връзка',t:'enum',opts:[['spi','SPI (STM32)'],['sim','Симулация (без платка)']],h:'SPI: истинската машина, STM32 на SPI0 на Linux платката. Симулация: виртуален STM32 в програмата, за проба на интерфейса без платка (движенията не излизат никъде). Сменя се при спряна машина; връзката се отваря наново.'},
+ {k:'lnkDev',n:'Устройство',t:'text',show:isSpi,h:'SPI устройството в Linux: /dev/spidev0.0 е SPI0 с CE0 (пинове 19, 21, 23, 24). На Armbian се включва с overlay spi-spidev (armbian-config или overlays= в /boot/armbianEnv.txt).'},
+ {k:'lnkHz',n:'Такт',t:'enum',opts:[['1000000','1 MHz'],['2000000','2 MHz'],['4000000','4 MHz'],['8000000','8 MHz'],['16000000','16 MHz']],show:isSpi,h:'Пакетът е 256 байта на всяка 1 ms. При 4 MHz отнема 0,5 ms. По-висок такт иска къси проводници с маса до тях; при грешки в CRC (броячът долу) тактът се намалява.'},
+];
+P_MCU.forEach(p=>{if(p.k)PDEF[p.k]=p});
+const FORMS={mcu:P_MCU,upd:P_UPD,disp:P_DISP,mag:P_MAG,ts:P_TS,net:P_NET,mach:P_MACH,sp:P_SP,prb:P_PRB,lube:P_LUBE};
 (()=>{const c='работни координати';[
  ['hmX0','Мин X',c,3,'Левият край на областта.'],['hmX1','Макс X',c,3,'Десният край. „По програмата“ взима областта от заредената програма.'],
  ['hmY0','Мин Y',c,3,'Предният край.'],['hmY1','Макс Y',c,3,'Задният край.'],
@@ -2409,7 +2416,7 @@ S.lu={t:0,d:0,until:0,count:0,last:null};S.oilLow=false;
 S.cfg.prb={prMount:'spindle',prDia:2,prOffX:0,prOffY:0,prOffZ:0,prDep:0,prDepT:1,prFast:300,prSlow:30,prBack:1,prRing:25,prRingX:-200,prRingY:-150};
 S.cfg.mag={mOn:1,atcOn:1,mWheels:1,mXOn:0,mX:0,mYOn:0,mY:0,mcX:-300,mcY:-60,mcZ:0,mcMeas:1,mtype:'carousel',mn:12,mz:-5,mor:0,msp:.15,m1x:-20,m1y:-390,maxis:'X',mpitch:-45};
 S.cfg.ts={tsx:-20,tsy:-20,tsz:-5,tstop:-180,tsmax:150,tsvs:300,tsvl:30};
-S.cfg.upd={upCh:'stable',upAuto:1};S.cfg.disp={dRes:'auto',dRot:'0',dScale:'auto'};
+S.cfg.upd={upCh:'stable',upAuto:1};S.cfg.mcu={lnk:'spi',lnkDev:'/dev/spidev0.0',lnkHz:'4000000'};S.cfg.disp={dRes:'auto',dRot:'0',dScale:'auto'};
 /* Макроси и логика (docs/makrosi-logika.md). В макета: макросите се изпълняват (G/M редовете), правилата само се настройват. */
 S.cfg.logic={
  macros:[
@@ -2441,9 +2448,7 @@ function homeOps(axes){
 const SEC_LVL={lube:1,prb:1,ts:1,net:1,disp:1,upd:1,logic:2};
 const LVN=['Оператор','Настройчик','Производител'];
 const SECS=[['mach','Машина'],['io','Входове/изходи'],['lube','Смазване'],['ax','Оси и мотори'],['home','Реферирване'],['enc','Енкодери'],['sp','Шпиндел'],['mag','Магазин'],['prb','3D пробник'],['ts','Toolsetter'],['mcu','Връзка с MCU'],['net','Мрежа'],['disp','Дисплей'],['upd','Обновяване'],['logic','Макроси и логика'],['acc','Достъп']];
-const STATIC={
- mcu:[['Интерфейс','SPI0 · 16 MHz'],['Цикъл','1 kHz'],['Пакет','128 B + CRC'],['Watchdog','20 ms'],['MCU','STM32H723']],
-};
+const STATIC={};
 $('#setNav').innerHTML=SECS.map(([k,n])=>`<button class="btn" data-act="setsec" data-v="${k}" type="button">${n}</button>`).join('');
 function fmtP(p,v){
  if(p.t==='bool')return v?p.on:p.off;

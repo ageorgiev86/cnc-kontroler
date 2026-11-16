@@ -51,6 +51,8 @@ WorkingDirectory=$REPO/ui/lvgl
 ExecStart=$BIN
 Restart=always
 RestartSec=3
+# нишката на движението (1 ms) е с приоритет на реално време (SCHED_FIFO)
+LimitRTPRIO=60
 
 [Install]
 WantedBy=multi-user.target

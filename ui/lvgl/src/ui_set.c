@@ -45,6 +45,7 @@ static const pdef_t *sec_form(int s, int *n)
     case S_NET: *n = P_NET_N; return P_NET;
     case S_DISP: *n = P_DISP_N; return P_DISP;
     case S_UPD: *n = P_UPD_N; return P_UPD;
+    case S_MCU: *n = P_MCU_N; return P_MCU;
     case S_AX: *n = P_AX_N; return P_AX;
     case S_HOME: *n = P_HOME_N; return P_HOME;
     case S_ENC: *n = P_ENC_N; return P_ENC;
@@ -471,6 +472,19 @@ static void upd_info(void)
     kv_list((const char *const (*)[2])kv, 4);
 }
 
+/* „Връзка с MCU“: състоянието в момента на отваряне */
+static void mcu_info(void)
+{
+    machine_link_t L;
+    machine_link_info(&L);
+    char r[40], e[60], q[40];
+    snprintf(r, sizeof r, "%.0f пакета/s", L.rate);
+    snprintf(e, sizeof e, "%u в STM32, %u тук", (unsigned)L.rx_errors, (unsigned)L.bad_rx);
+    snprintf(q, sizeof q, "%d ms напред", L.queue);
+    const char *kv[5][2] = {{"Свързано с", L.port[0] ? L.port : "—"}, {"Състояние", L.state}, {"Обмен", r}, {"Грешни пакети", e}, {"Буфер", q}};
+    kv_list((const char *const (*)[2])kv, 5);
+}
+
 static void kv_list(const char *const kv[][2], int n)
 {
     for (int i = 0; i < n; i++) {
@@ -614,7 +628,7 @@ static const char *sec_help(void)
     case S_MAG: return "Изберете типа и броя гнезда. При линеен магазин задайте и позицията на гнездо 1 и стъпката.";
     case S_UPD: return "Обновяването става от „Обновяване“ в горната лента или от „Диагностика“, без PIN. Тук се избира кои версии да следи машината и може да се върне предишната.";
     case S_DISP: return "Режимът на екрана, завъртането и мащабът. Прилагат се при следващото пускане на интерфейса.";
-    case S_MCU: return "Само за преглед: параметрите на връзката се задават във фърмуера на STM32.";
+    case S_MCU: return "Връзката със STM32: пакет от 256 байта на всяка 1 ms (docs/spi-protokol.md). Промяната важи веднага след „Запиши“, ако машината е спряна.";
     case S_LOGIC: return "Макросите M100–M199 и правилата се изпълняват от интерпретатора и PLC слоя, които идват след стабилната основа (docs/makrosi-logika.md). Тук е прегледът им.";
     case S_ACC: return "PIN кодовете се пазят на контролера. Дневникът се пази и след изключване и не може да се изтрие от екрана.";
     default: return "Натиснете име на параметър, за да видите какво прави.";
@@ -629,14 +643,10 @@ static void build(void)
     int n;
     const pdef_t *P = sec_form(sec, &n);
     if (sec_axis(sec)) build_axis();
-    else if (P) { if (sec == S_UPD) upd_info(); build_form(); teach_row(); }
+    else if (P) { if (sec == S_UPD) upd_info(); build_form(); if (sec == S_MCU) mcu_info(); teach_row(); }
     else if (sec == S_IO) build_io();
     else if (sec == S_LOGIC) build_logic();
     else if (sec == S_ACC) build_acc();
-    else if (sec == S_MCU) {
-        static const char *const KV[][2] = {{"Интерфейс", "SPI0 · 16 MHz"}, {"Цикъл", "1 kHz"}, {"Пакет", "128 B + CRC"}, {"Watchdog", "20 ms"}, {"MCU", "STM32H723"}};
-        kv_list(KV, 5);
-    }
     /* помощ: параметърът, който е натиснат, или общият текст на раздела */
     char h[900] = "";
     for (int i = 0; P && i < n; i++)

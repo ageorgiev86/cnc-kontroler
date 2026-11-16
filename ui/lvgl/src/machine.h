@@ -189,6 +189,18 @@ void machine_probe_cycle(const char *k, int corner, uint32_t now_ms);   /* corne
 extern bool prb_warn;
 void machine_skip_part(uint32_t now_ms);              /* пропуска текущия детайл (при пауза) */                                 /* цикълът иска T10 в шпиндела */
 
+/* връзката със STM32 (Настройки → Връзка с MCU, Диагностика) */
+typedef struct {
+    char port[64];
+    char state[96];
+    double rate;           /* пакета/s */
+    unsigned rx_errors, bad_rx;
+    int queue;             /* сегменти (ms) напред */
+    bool link, sim;
+} machine_link_t;
+void machine_link_info(machine_link_t *l);
+bool machine_sim(void);                               /* виртуален STM32 (симулатор или „Връзка: Симулация“) */
+
 double machine_work(int ax);
 bool machine_need_home(void);
 void machine_toast(const char *txt, uint32_t now_ms, uint32_t dur_ms);

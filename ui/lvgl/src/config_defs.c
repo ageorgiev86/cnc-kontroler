@@ -10,6 +10,8 @@ static const char *const O_net_mode[] = {"dhcp", "Автоматично (DHCP)"
 static const char *const O_net_shType[] = {"smb", "SMB (Windows)", "nfs", "NFS (Linux)", NULL};
 static const char *const O_mach_type[] = {"mill", "Фреза / рутер", "laser", "Лазер", "plasma", "Плазма", "lathe", "Струг", NULL};
 static const char *const O_mach_miAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", "6", "XYZ + A B C", NULL};
+static const char *const O_mcu_lnk[] = {"spi", "SPI (STM32)", "sim", "Симулация (без платка)", NULL};
+static const char *const O_mcu_lnkHz[] = {"1000000", "1 MHz", "2000000", "2 MHz", "4000000", "4 MHz", "8000000", "8 MHz", "16000000", "16 MHz", NULL};
 static const char *const O_mach_gDial[] = {"mach3", "Mach3", "haas", "Haas", NULL};
 static const char *const O_mach_lzAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", NULL};
 static const char *const O_mach_plAx[] = {"3", "XYZ", "4a", "XYZ + A", "5ac", "XYZ + A C", "5bc", "XYZ + B C", "5ab", "XYZ + A B", NULL};
@@ -250,4 +252,12 @@ const pdef_t P_UPD[] = {
     {"upAuto", "Проверявай автоматично", NULL, PT_BOOL, 0, 0, 0, "Да", "Не", 0, NULL, "При пускане и на всеки 6 часа машината проверява дали има нова версия. Ако има, в горната лента светва „Обновяване“. Без интернет не показва грешка.", NULL, NULL, "1", {NULL}},
 };
 const int P_UPD_N = sizeof P_UPD / sizeof P_UPD[0];
+
+static bool shSpi(void) { return DS_IS("mcu.lnk", "spi"); }
+const pdef_t P_MCU[] = {
+    {"lnk", "Връзка", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_mcu_lnk, "SPI: истинската машина, STM32 на SPI0 на Linux платката. Симулация: виртуален STM32 в програмата, за проба на интерфейса без платка (движенията не излизат никъде). Сменя се при спряна машина; връзката се отваря наново.", NULL, NULL, "spi", {NULL}},
+    {"lnkDev", "Устройство", NULL, PT_TEXT, 0, 0, 0, NULL, NULL, 0, NULL, "SPI устройството в Linux: /dev/spidev0.0 е SPI0 с CE0 (пинове 19, 21, 23, 24). На Armbian се включва с overlay spi-spidev (armbian-config или overlays= в /boot/armbianEnv.txt).", NULL, shSpi, "/dev/spidev0.0", {NULL}},
+    {"lnkHz", "Такт", NULL, PT_ENUM, 0, 0, 0, NULL, NULL, 0, O_mcu_lnkHz, "Пакетът е 256 байта на всяка 1 ms. При 4 MHz отнема 0,5 ms. По-висок такт иска къси проводници с маса до тях; при грешки в CRC (броячът долу) тактът се намалява.", NULL, shSpi, "4000000", {NULL}},
+};
+const int P_MCU_N = sizeof P_MCU / sizeof P_MCU[0];
 

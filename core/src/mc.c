@@ -33,7 +33,7 @@
 #define NOLINK_N 100         /* цикъла без валиден отговор → няма връзка */
 
 enum { C_RESET, C_ESTOP, C_HOME, C_JOG, C_JOG_STOP, C_MOVE, C_RUN, C_HOLD, C_STOP, C_CONT, C_OVR, C_SINGLE,
-       C_OUT, C_SPINDLE, C_SETPOS, C_CFG };
+       C_OUT, C_SPINDLE, C_SETPOS, C_CFG, C_TOOL };
 
 typedef struct {
     int k;
@@ -70,6 +70,7 @@ struct mc {
     bool estop_req;
     int reset_n;
     bool need_reset;          /* след свързване и след всяка грешка: само с RESET */
+    bool ever_link;
     struct { uint8_t type, size; uint8_t d[24]; } ctrl[32];
     int nctrl;
     bool cfg_sent;
@@ -169,6 +170,7 @@ void mc_override(mc_t *m, double feed, double rapid) { simple(m, C_OVR, 0, feed,
 void mc_single(mc_t *m, bool on) { simple(m, C_SINGLE, on, 0, 0); }
 void mc_spindle(mc_t *m, int dir, double rpm) { simple(m, C_SPINDLE, dir, rpm, 0); }
 void mc_set_pos(mc_t *m, int ax, double mach) { simple(m, C_SETPOS, ax, mach, 0); }
+void mc_set_tool(mc_t *m, int tool) { simple(m, C_TOOL, tool, 0, 0); }
 
 void mc_outputs(mc_t *m, uint32_t value, uint32_t mask)
 {
@@ -699,6 +701,9 @@ static void handle(mc_t *m, cmd_t *c, const lk_rx_t *r)
     case C_SPINDLE:
         spindle_out(m, c->i, c->f);
         break;
+    case C_TOOL:
+        m->s.tool = c->i;
+        break;
     case C_SETPOS:
         if (c->i >= 0 && c->i < MC_AXES && m->s.state == MC_IDLE && r->ok) {
             m->base[c->i] = c->f - (double)r->cmd[c->i] / m->cfg.ax[c->i].spm;
@@ -865,7 +870,8 @@ void mc_cycle(mc_t *m)
             m->cfg_sent = false;
             m->need_reset = true;
             if (m->s.state == MC_NOLINK) m->s.state = MC_FAULT;
-            if (!m->s.alarm[0] || m->s.state == MC_FAULT) snprintf(m->s.alarm, sizeof m->s.alarm, "Връзката със STM32 е възстановена: натиснете RESET");
+            snprintf(m->s.alarm, sizeof m->s.alarm, "%s със STM32 (%s): натиснете RESET", m->ever_link ? "Връзката е възстановена" : "Свързано", m->port->name);
+            m->ever_link = true;
             m->seg_id = r.last_rx_id > m->seg_id ? r.last_rx_id : m->seg_id;
             m->send_next = m->seg_id + 1;
             m->mcu_exec = r.exec_id;
@@ -925,8 +931,8 @@ void mc_cycle(mc_t *m)
         }
         /* грешка на интерпретатора: спиране, щом планерът стигне до нея */
         if (m->sess == S_RUN && m->ierr[0] && m->pl_done) {
-            msg(m, "Ред %d: %.180s", m->ierr_line + 1, m->ierr);
-            snprintf(m->s.alarm, sizeof m->s.alarm, "Ред %d: %.180s", m->ierr_line + 1, m->ierr);
+            msg(m, "Ред %d: %.170s", m->ierr_line + 1, m->ierr);
+            snprintf(m->s.alarm, sizeof m->s.alarm, "Ред %d: %.170s", m->ierr_line + 1, m->ierr);
         }
         /* краят на сесията */
         if (m->sess && m->pl_done && m->mcu_exec == m->end_id && m->send_next > m->end_id && m->mcu_qfree == 256) {

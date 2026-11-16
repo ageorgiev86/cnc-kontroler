@@ -200,6 +200,7 @@ static void done_cal(int a, uint32_t now)
 
 void machine_probe_cycle(const char *k, int corner, uint32_t now)
 {
+    if (!machine_sim()) { machine_toast("С истинската машина пробникът и toolsetter-ът идват с PROBE_ARM във firmware-а. Сега само в симулация.", now, 5000); return; }
     if (!machine_can_move(now)) return;
     bool fx = !strcmp(cfg_str("prb.prMount"), "fixed");
     if (!fx && M.tool != 10) { prb_warn = true; return; }

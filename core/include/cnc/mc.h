@@ -98,9 +98,9 @@ void mc_snapshot(mc_t *m, mc_snap_t *s);
 void mc_reset(mc_t *m);                          /* изчиства грешката, пуска връзката */
 void mc_estop(mc_t *m);                          /* програмен авариен стоп */
 int mc_home(mc_t *m, unsigned mask);             /* 0 = прието */
-int mc_jog(mc_t *m, int ax, int dir, double dist, double feed);   /* dist 0 = докато mc_jog_stop */
+int mc_jog(mc_t *m, int ax, int dir, double dist, double feed);   /* мм/мин; dist 0 = докато mc_jog_stop */
 void mc_jog_stop(mc_t *m);
-int mc_move(mc_t *m, const double tgt[MC_AXES], double feed);    /* NAN = без промяна; feed 0 = бърз ход */
+int mc_move(mc_t *m, const double tgt[MC_AXES], double feed);    /* NAN = без промяна; мм/мин, 0 = бърз ход */
 /* програма или MDI: текстът се копира; tab може да е NULL (празни таблици); job може да е NULL */
 int mc_run(mc_t *m, const char *text, const gc_config_t *gcfg, const gc_tables_t *tab, const gc_job_t *job);
 void mc_hold(mc_t *m, bool on);
@@ -111,6 +111,7 @@ void mc_single(mc_t *m, bool on);
 void mc_outputs(mc_t *m, uint32_t value, uint32_t mask);
 void mc_spindle(mc_t *m, int dir, double rpm);   /* ръчно: 0, 1, -1 */
 void mc_set_pos(mc_t *m, int ax, double mach);   /* ръчно задаване на машинната координата (без датчик) */
+void mc_set_tool(mc_t *m, int tool);             /* инструментът в шпиндела (M6 със същия T не чака) */
 
 #ifdef __cplusplus
 }

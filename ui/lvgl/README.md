@@ -9,6 +9,10 @@
 
 CMake строи всяка цел, за която има библиотеки. На Orange Pi няма SDL2, затова се строи само `cnc-ui`.
 
+## Връзка със STM32
+
+Интерфейсът управлява машината през ядрото (`core/src/mc.c`) по SPI: Настройки → Връзка с MCU (`/dev/spidev0.0`, 4 MHz). SPI на Orange Pi се включва от `tools/orangepi-setup.sh` (overlay `spi-spidev`, група `spi`) и иска рестарт. Свързването с тестовия модул FK723M1: `docs/spi-protokol.md`, раздел 7. Симулаторът (`cnc-ui-sim`) и „Връзка: Симулация“ ползват виртуален STM32 (`core/src/vmcu.c`) със същия протокол.
+
 ## Orange Pi (Armbian Minimal)
 
 Най-лесно е всичко наведнъж: `sudo bash tools/cnc-install.sh` (виж главния `README.md`). Същото на ръка, еднократно:

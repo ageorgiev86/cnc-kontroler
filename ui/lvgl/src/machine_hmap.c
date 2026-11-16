@@ -94,6 +94,7 @@ static bool refill(void)
 
 void hmap_scan(uint32_t now)
 {
+    if (!machine_sim()) { machine_toast("С истинската машина пробникът и toolsetter-ът идват с PROBE_ARM във firmware-а. Сега само в симулация.", now, 5000); return; }
     if (!machine_can_move(now)) return;
     if (!M.homed[AX_X] || !M.homed[AX_Y] || !M.homed[AX_Z]) { machine_toast("Осите X, Y, Z не са реферирани. Натиснете HOME.", now, 3500); return; }
     double z = machine_work(AX_Z);

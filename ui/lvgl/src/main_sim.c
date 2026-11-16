@@ -99,10 +99,10 @@ int main(int argc, char **argv)
             wheel_acc = 0;
         }
         if (run && M.ready && M.state == MS_IDLE) { machine_start(lv_tick_get()); run = 0; }
-        /* тестовите действия: по едно, когато машината е свободна (след реферирането, ако е пуснато с --reset) */
+        /* тестовите действия: по едно, когато машината не се движи (с --reset: след реферирането) */
         static int ai;
         static uint32_t at, wait_until;
-        if (ai < nact && (!press_reset || M.ready) && M.state == MS_IDLE && lv_tick_elaps(at) > 300 &&
+        if (ai < nact && (press_reset ? M.ready && M.state == MS_IDLE : M.state != MS_RUN) && lv_tick_elaps(at) > 300 &&
             (int32_t)(lv_tick_get() - wait_until) >= 0) {
             const char *a = act[ai++];
             at = lv_tick_get();
