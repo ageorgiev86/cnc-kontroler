@@ -3355,7 +3355,7 @@ const HW={on:false,port:null,wr:null,rd:null,rx:new Uint8Array(0),st:null,base:n
  segId:0,lastQ:null,lastStat:true,sendQ:[],ctrlQ:[],pktSegs:{},inflight:0,qFree:256,ack:0,seq:0,flags:0,resetN:0,
  resync:false,faultSeen:false,pendBtn:null,pk:0,pkT:0,pkRate:0,crcErr:0,
  home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0,
- us:HW_SEG_MS*1000,drift:null,clk0:null,ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
+ us:4000,drift:null,clk0:null,ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
 const HW_SEG_MS=4,HW_DEPTH=50;   /* 50 сегмента × 4 ms = 200 ms напред: браузърът понякога закъснява */
 const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',4:'сработи краен изключвател',
  6:'авариен стоп',7:'поисканата скорост е над възможното за генератора (OVERSPEED)',8:'невалидна настройка (BAD_CONFIG)',9:'различна версия на протокола'};
