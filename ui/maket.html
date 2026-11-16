@@ -3355,7 +3355,7 @@ const HW={on:false,port:null,wr:null,rd:null,rx:new Uint8Array(0),st:null,base:n
  segId:0,lastQ:null,lastStat:true,sendQ:[],ctrlQ:[],pktSegs:{},inflight:0,qFree:256,ack:0,seq:0,flags:0,resetN:0,
  resync:false,faultSeen:false,pendBtn:null,pk:0,pkT:0,pkRate:0,crcErr:0,
  home:null,homeDone:null,homeFail:'',homeReq:(Math.random()*1e9)>>>0,
- ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
+ us:HW_SEG_MS*1000,drift:null,clk0:null,ain:[0,0,0,0],lastOut:-1,lastSp:-1,ioT:0,pend:0,mpg:null,mpgRem:0,mpgPend:{X:0,Y:0,Z:0}};
 const HW_SEG_MS=4,HW_DEPTH=50;   /* 50 сегмента × 4 ms = 200 ms напред: браузърът понякога закъснява */
 const HW_FAULT={1:'връзката прекъсна (над 300 ms без пакети; макетът трябва да е видим на екрана)',2:'празна опашка (UNDERRUN)',4:'сработи краен изключвател',
  6:'авариен стоп',7:'поисканата скорост е над възможното за генератора (OVERSPEED)',8:'невалидна настройка (BAD_CONFIG)',9:'различна версия на протокола'};
@@ -3371,7 +3371,7 @@ hwChip.title='Натиснете: връзка с тестовата платк�
 
 /* записи */
 const recSeg=s=>{const r=new Uint8Array(58),v=new DataView(r.buffer);r[0]=0x01;r[1]=56;v.setUint32(2,s.id,true);
- v.setUint16(6,HW_SEG_MS*1000,true);v.setUint16(8,s.f,true);s.q.forEach((x,k)=>v.setBigInt64(10+8*k,x,true));return r};
+ v.setUint16(6,s.us,true);v.setUint16(8,s.f,true);s.q.forEach((x,k)=>v.setBigInt64(10+8*k,x,true));return r};
 const recCfg=(axis,param,val)=>{const r=new Uint8Array(10),v=new DataView(r.buffer);r[0]=0x07;r[1]=8;r[2]=axis;r[3]=param;v.setInt32(6,val,true);return r};
 const recCtrl=c=>{const r=new Uint8Array(6);r[0]=0x08;r[1]=4;r[2]=c;return r};
 const recIo=(val,mask)=>{const r=new Uint8Array(14),v=new DataView(r.buffer);r[0]=0x02;r[1]=12;v.setUint32(2,val,true);v.setUint32(6,mask,true);return r};
@@ -3401,7 +3401,7 @@ function hwFlush(){
 function hwSeg(p,force){
  const q=toQ(p),stat=!!HW.lastQ&&q.every((x,k)=>x===HW.lastQ[k]);
  if(stat&&!force&&(256-HW.qFree)+HW.inflight+HW.sendQ.length>HW_DEPTH+20)return;   /* в покой буферът не расте */
- HW.sendQ.push({id:++HW.segId,q,f:stat?1:0});HW.lastQ=q;HW.lastStat=stat;
+ HW.sendQ.push({id:++HW.segId,q,f:stat?1:0,us:HW.us});HW.lastQ=q;HW.lastStat=stat;
 }
 function hwPad(n){const p={...S.mach};HW.lastQ=toQ(p);for(let i=0;i<n;i++)hwSeg(p,true)}
 
@@ -3413,7 +3413,7 @@ async function hwConnect(){
  try{await p.setSignals({dataTerminalReady:true,requestToSend:true})}catch(e){}
  halt();if(S.state==='run'||S.state==='hold')S.state='idle';
  Object.assign(HW,{on:true,port:p,wr:p.writable.getWriter(),rx:new Uint8Array(0),st:null,base:null,sendQ:[],ctrlQ:[],pktSegs:{},
-  inflight:0,qFree:256,flags:0,resetN:5,resync:true,faultSeen:false,pendBtn:null,lastQ:null,pk:0,pkT:performance.now(),crcErr:0});
+  inflight:0,qFree:256,flags:0,resetN:5,resync:true,faultSeen:false,pendBtn:null,lastQ:null,clk0:null,drift:null,us:HW_SEG_MS*1000,mpg:null,mpgRem:0,pk:0,pkT:performance.now(),crcErr:0});
  SIMX=1;   /* истински скорости */
  AX.forEach((a,k)=>HW.ctrlQ.push(recCfg(k,6,Math.round(S.cfg[a].acc*S.cfg[a].spm))));   /* MAX_ACC за спирането по рампа */
  hwRead();
@@ -3452,7 +3452,7 @@ function hwStatus(pk,v){
  HW.ack=v.getUint16(4,true);
  const myAck=v.getUint16(6,true);
  for(let o=12;o+2<=12+len;){const t=pk[o],sz=pk[o+1];if(!t)break;
-  if(t===0x81&&sz>=120){const s=o+2;st={state:pk[s],qFree:v.getUint16(s+2,true),exec:v.getUint32(s+4,true),lastRx:v.getUint32(s+8,true),
+  if(t===0x81&&sz>=120){const s=o+2;st={state:pk[s],qFree:v.getUint16(s+2,true),exec:v.getUint32(s+4,true),lastRx:v.getUint32(s+8,true),tUs:v.getUint32(s+12,true),
    cmd:AX.map((a,k)=>v.getInt32(s+16+4*k,true)),inputs:v.getUint32(s+88,true),local:v.getUint32(s+96,true),out:v.getUint32(s+100,true),rxErr:v.getUint32(s+104,true),
    pend:v.getUint32(s+112,true),mpg:v.getInt32(s+116,true)}}
   if(t===0x83&&sz>=1)fault=pk[o+2];
@@ -3460,7 +3460,9 @@ function hwStatus(pk,v){
   if(t===0x84&&sz>=12)hd={req:v.getUint32(o+2,true),axis:pk[o+6],result:pk[o+7],pos:v.getInt32(o+10,true)};
   o+=2+sz}
  if(!st)return;
- st.fault=fault;HW.st=st;HW.homeDone=hd;HW.qFree=st.qFree;HW.pk++;
+ st.fault=fault;HW.st=st;HW.homeDone=hd;
+ {const t=performance.now();if(!HW.clk0)HW.clk0={pc:t,mcu:st.tUs};
+  else if(t-HW.clk0.pc>5000){HW.drift=((st.tUs-HW.clk0.mcu)>>>0)/1000/(t-HW.clk0.pc)-1}}   /* > 0: часовникът на STM32 бърза */HW.qFree=st.qFree;HW.pk++;
  for(const k of Object.keys(HW.pktSegs))if(((myAck-k)&0xFFFF)<0x8000)delete HW.pktSegs[k];
  HW.inflight=Object.values(HW.pktSegs).reduce((x,y)=>x+y,0);
  if(!HW.base){HW.base={};AX.forEach((a,k)=>HW.base[a]=S.mach[a]-st.cmd[k]/S.cfg[a].spm);HW.segId=st.lastRx}
@@ -3486,6 +3488,8 @@ function hwApply(now){
   hwFlush();return;
  }
  if(now-HW.genT>500)HW.genT=now-100;   /* раздел във фона: старото се изпуска */
+ {const used0=(256-HW.qFree)+HW.inflight+HW.sendQ.length;   /* часовниците на компютъра и на STM32 се разминават: буферът се държи около HW_DEPTH */
+  HW.us=Math.round(HW_SEG_MS*1000*Math.max(0.97,Math.min(1.03,1+0.002*(HW_DEPTH-used0))))}
  hwMpgMove((now-HW.t0)/1000);
  /* скок по-бърз от възможното = нова координата (напр. край на реферирването), а не движение */
  const dt=Math.max(1e-3,(now-HW.t0)/1000);
@@ -3529,7 +3533,7 @@ const hwIo=()=>{const L=HW.st?HW.st.local:0;return HW_IN.map(([n,p],i)=>[n,p,HW.
 function hwNoIo(){
  updGio();updAio();   /* входовете идват от платката (inVal, aiTrue) */
  const st=HW.st;
- set($('#lkCyc'),HW.pkRate.toFixed(0)+' пакета/s (USB)');
+ set($('#lkCyc'),HW.pkRate.toFixed(0)+' пакета/s (USB)'+(HW.drift!=null?', часовник на STM32 '+(HW.drift>=0?'+':'')+(HW.drift*100).toFixed(2)+' %':''));
  set($('#lkBuf'),st?Math.round((256-st.qFree)/256*100)+' % ('+(256-st.qFree)+' сегм.)':'—');
  set($('#lkWd'),!st?'чака':st.state>=6?'ГРЕШКА '+st.fault:'ОК · 300 ms');
 }
