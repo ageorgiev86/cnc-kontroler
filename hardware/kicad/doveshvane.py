@@ -164,7 +164,14 @@ def one_pass(pcb, exe, rip, final=False, only=None):
         jobs.append((math.hypot(pa['x'] - pc['x'], pa['y'] - pc['y']), i, a.GetNetCode(), cls, a, c, a.GetNetname()))
     if only is not None:
         jobs = [j for j in jobs if j[6] in only]
-    jobs.sort(key=lambda j: j[0])
+    order = os.environ.get('DOVESHVANE_ORDER', 'short')     # short | long | seed:N
+    if order == 'long':
+        jobs.sort(key=lambda j: -j[0])
+    elif order.startswith('seed:'):
+        import random
+        random.Random(int(order[5:])).shuffle(jobs)
+    else:
+        jobs.sort(key=lambda j: j[0])
     body = []
     for dist, i, net, cls, a, c, name in jobs:
         vd, _ = VIA.get(cls, (1.2, 0.6))
@@ -323,6 +330,44 @@ def greedy(args):
     print(f'край: несвързани {cur} → {out}')
 
 
+def region(args):
+    """Маха разкъсваемите трасета около U1 (± REGION мм) и трасира всичко наново в няколко реда;
+    пази най-добрия резултат без грешки, ако е по-добър от входа."""
+    pcb = os.path.abspath(args[0])
+    out = os.path.abspath(args[1]) if len(args) > 1 else pcb
+    exe = build(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doveshvane.c'))
+    base = os.path.join(os.path.dirname(out), '_region')
+    work, trial = base + '.kicad_pcb', base + '_t.kicad_pcb'
+    copy_board(pcb, work)
+    fix_uuids(work)
+    cur, errs = count(work)
+    print(f'начало: несвързани {cur}, други грешки {errs}', flush=True)
+    board = pcbnew.LoadBoard(work)
+    bb = board.FindFootprintByReference(FINE).GetBoundingBox()
+    del board
+    pad = float(os.environ.get('DOVESHVANE_REGION', '12'))
+    box = [tomm(bb.GetLeft()) - pad, tomm(bb.GetTop()) - pad, tomm(bb.GetRight()) + pad, tomm(bb.GetBottom()) + pad]
+    orders = os.environ.get('DOVESHVANE_ORDERS', 'long,short,seed:1,seed:2,seed:3').split(',')
+    for order in orders:
+        copy_board(work, trial)
+        subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--strip'] + [f'{v:.3f}' for v in box] + [trial],
+                       check=True)
+        env = dict(os.environ, DOVESHVANE_ORDER=order)
+        for k in range(2):                  # втори пас: каквото е останало
+            lst = trial + '.nets.json'
+            if os.path.exists(lst):
+                os.remove(lst)
+            subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--pass', '0', trial, exe],
+                           check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        n, e = evaluate(trial, exe)
+        print(f'  ред {order}: несвързани {n}, грешки {e}', flush=True)
+        if e == 0 and n < cur:
+            cur = n
+            shutil.copy(trial[:-len('.kicad_pcb')] + '_c.kicad_pcb', out)
+            print(f'приет: ред {order} → несвързани {cur}', flush=True)
+    print(f'край: несвързани {cur}')
+
+
 def main():
     args = sys.argv[1:]
     if args and args[0] == '--pass':            # един кръг в отделен процес (pcbnew не обича много Delete)
@@ -331,6 +376,19 @@ def main():
         only = set(json.load(open(args[4], encoding='utf-8'))) if len(args) > 4 else None
         one_pass(args[2], args[3], r, only=only)
         return
+    if args and args[0] == '--strip':           # --strip x1 y1 x2 y2 <платка>: маха разкъсваемите трасета в зоната
+        x1, y1, x2, y2 = map(float, args[1:5])
+        board = pcbnew.LoadBoard(args[5])
+        box = pcbnew.BOX2I(pcbnew.VECTOR2I(mm(x1), mm(y1)), pcbnew.VECTOR2L(mm(x2 - x1), mm(y2 - y1)))
+        dead = [t for t in board.GetTracks() if soft(t) and t.GetBoundingBox().Intersects(box)]
+        for t in dead:
+            board.Delete(t)
+        board.Save(args[5])
+        print('  махнати в зоната:', len(dead))
+        return
+    if '--region' in args:
+        args.remove('--region')
+        return region(args)
     if '--greedy' in args:
         args.remove('--greedy')
         return greedy(args)
