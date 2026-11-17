@@ -193,6 +193,7 @@ static void link_open(uint32_t now)
     lk_port_t *port;
     if (link_sim) {
         VM = vmcu_new();
+        vmcu_spi_lag(VM, true);   /* отговорът закъснява с един пакет, както по SPI */
         for (int a = 0; a < AX_N; a++) {   /* датчиците: машината тръгва от SIM_START */
             double sp = c.ax[a].spm;
             vmcu_set_home_switch(VM, a, (int32_t)(vmcu_pos_q(VM, a) / 65536 + llround((c.ax[a].home_sw_pos - SIM_START[a]) * sp)));
@@ -220,6 +221,7 @@ void machine_link_info(machine_link_t *l)
     snprintf(l->port, sizeof l->port, "%s", SN.port);
     l->link = SN.link;
     l->rate = SN.pkt_rate;
+    l->max_gap_ms = SN.max_gap_ms;
     l->rx_errors = SN.rx_errors;
     l->bad_rx = SN.bad_rx;
     l->queue = SN.queue;

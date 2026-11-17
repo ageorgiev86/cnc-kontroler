@@ -17,6 +17,8 @@ void vmcu_free(vmcu_t *v);
 /* времето: с часовника на системата (за симулатора) или ръчно (за тестовете) */
 void vmcu_manual_time(vmcu_t *v, bool on);
 void vmcu_advance(vmcu_t *v, uint32_t us);
+/* като по SPI: отговорът в транзакция N е на пакет N−1 */
+void vmcu_spi_lag(vmcu_t *v, bool on);
 /* един пакет: tx от Linux, отговорът в rx (отговорът е на същия пакет) */
 int vmcu_xfer(vmcu_t *v, const uint8_t tx[LK_PKT], uint8_t rx[LK_PKT]);
 /* пренос за mc.c */

@@ -477,8 +477,8 @@ static void mcu_info(void)
 {
     machine_link_t L;
     machine_link_info(&L);
-    char r[40], e[60], q[40];
-    snprintf(r, sizeof r, "%.0f пакета/s", L.rate);
+    char r[80], e[60], q[40];
+    snprintf(r, sizeof r, "%.0f пакета/s, най-дълъг цикъл %.1f ms", L.rate, L.max_gap_ms);
     snprintf(e, sizeof e, "%u в STM32, %u тук", (unsigned)L.rx_errors, (unsigned)L.bad_rx);
     snprintf(q, sizeof q, "%d ms напред", L.queue);
     const char *kv[5][2] = {{"Свързано с", L.port[0] ? L.port : "—"}, {"Състояние", L.state}, {"Обмен", r}, {"Грешни пакети", e}, {"Буфер", q}};

@@ -38,7 +38,18 @@ static bool settle(int max) { cyc(5); return until(MC_IDLE, max); }
 
 static double vpos(int a) { return (double)vmcu_pos_q(V, a) / 65536.0 / 400.0; }   /* стъпки → мм отн. на включването */
 
+static int run_all(bool lag);
+
 int main(void)
+{
+    int r = run_all(false);
+    printf("--- същото със закъснение на отговора с един пакет (като по SPI) ---\n");
+    r |= run_all(true);
+    printf("%d проверки, %d неуспешни\n", total, fails);
+    return r || fails ? 1 : 0;
+}
+
+static int run_all(bool lag)
 {
     mc_cfg_t c;
     memset(&c, 0, sizeof c);
@@ -58,6 +69,7 @@ int main(void)
 
     V = vmcu_new();
     vmcu_manual_time(V, true);
+    vmcu_spi_lag(V, lag);
     M = mc_new(vmcu_port(V), &c);
 
     /* 1. връзка → чака RESET → готова */
@@ -166,6 +178,5 @@ int main(void)
     (void)vpos;
     mc_free(M);
     vmcu_free(V);
-    printf("%d проверки, %d неуспешни\n", total, fails);
-    return fails ? 1 : 0;
+    return 0;
 }

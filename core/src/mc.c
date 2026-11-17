@@ -130,6 +130,8 @@ struct mc {
     /* брояч на пакетите */
     int pkts;
     uint64_t pkt_t0;
+    uint64_t last_t, gap_t0;
+    double gap_max;
 };
 
 static uint64_t now_us(void)
@@ -818,6 +820,13 @@ void mc_cycle(mc_t *m)
 {
     uint64_t t = now_us();
     m->cyc++;
+    if (m->last_t) {   /* закъснения на цикъла */
+        double g = (double)(t - m->last_t) / 1000.0;
+        if (g > m->gap_max) m->gap_max = g;
+        if (t - m->gap_t0 >= 5000000) { m->s.max_gap_ms = m->gap_max; m->gap_max = 0; m->gap_t0 = t; }
+        else if (m->gap_max > m->s.max_gap_ms) m->s.max_gap_ms = m->gap_max;
+    }
+    m->last_t = t;
     /* командите */
     cmd_t cmds[64];
     int nc = 0;

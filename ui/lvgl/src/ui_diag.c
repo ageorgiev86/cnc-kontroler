@@ -489,12 +489,12 @@ void diag_update(uint32_t now)
     if (L.sim) snprintf(b, sizeof b, "симулация");
     else snprintf(b, sizeof b, "%.0f kHz", cfg_num("mcu.lnkHz") / 1000);
     ui_set_text(lk_v[0], b);
-    snprintf(b, sizeof b, "%.0f /s", L.rate);
+    snprintf(b, sizeof b, "%.0f/s, до %.0f ms", L.rate, L.max_gap_ms);
     ui_set_text(lk_v[1], b);
     snprintf(b, sizeof b, "%d ms", L.queue);
     ui_set_text(lk_v[2], b);
     snprintf(b, sizeof b, "%u / %u", L.rx_errors, L.bad_rx);
     ui_set_text(lk_v[3], b);
-    ui_set_text(lk_v[4], !L.link ? "НЯМА" : M.state == MS_ESTOP ? "СПРЯН" : M.state == MS_ALARM ? "ГРЕШКА" : "ОК");
+    ui_set_text(lk_v[4], !L.link ? "НЯМА" : M.state == MS_ESTOP ? "СПРЯН" : M.state == MS_ALARM ? "RESET" : "ОК");
     lv_obj_set_style_text_color(lk_v[4], !L.link || M.state == MS_ALARM || M.state == MS_ESTOP ? C_BAD : C_OK, 0);
 }

@@ -201,6 +201,7 @@ typedef struct {
     char port[64];
     char state[96];
     double rate;           /* пакета/s */
+    double max_gap_ms;     /* най-дългият цикъл за 5 s */
     unsigned rx_errors, bad_rx;
     int queue;             /* сегменти (ms) напред */
     bool link, sim;

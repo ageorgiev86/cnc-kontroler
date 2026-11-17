@@ -8,7 +8,7 @@
 #include <time.h>
 
 #define QN 256
-#define TIMEOUT_US 10000u
+#define TIMEOUT_US 30000u   /* като firmware-а (LINK_SPI_TIMEOUT_MS) */
 
 typedef struct { uint32_t id; uint32_t us; uint16_t flags; int64_t q[LK_AXES]; } seg_t;
 
@@ -41,6 +41,9 @@ struct vmcu {
     int32_t sw[LK_AXES];
     bool sw_set[LK_AXES];
     lk_port_t port;
+    bool lag;
+    uint8_t prev[LK_PKT];
+    bool have_prev;
 };
 
 static uint16_t get16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
@@ -60,6 +63,7 @@ vmcu_t *vmcu_new(void)
 
 void vmcu_free(vmcu_t *v) { free(v); }
 void vmcu_manual_time(vmcu_t *v, bool on) { v->manual = on; }
+void vmcu_spi_lag(vmcu_t *v, bool on) { v->lag = on; v->have_prev = false; }
 void vmcu_set_inputs(vmcu_t *v, uint32_t set, uint32_t clear) { v->local_in = (v->local_in | set) & ~clear; }
 void vmcu_set_home_switch(vmcu_t *v, int a, int32_t steps) { v->sw[a] = steps; v->sw_set[a] = true; }
 int64_t vmcu_pos_q(const vmcu_t *v, int a) { return v->pos[a]; }
@@ -254,7 +258,12 @@ int vmcu_xfer(vmcu_t *v, const uint8_t tx[LK_PKT], uint8_t rx[LK_PKT])
     if (get16(tx) == LK_MAGIC && get16(tx + 8) <= LK_BODY && lk_crc32(tx, LK_PKT - 4) == get32(tx + LK_PKT - 4)) {
         if (tx[2] == LK_VERSION) process(v, tx);
     } else v->rx_errors++;
-    reply(v, rx);
+    if (!v->lag) { reply(v, rx); return 0; }
+    /* SPI: отговорът е подготвен преди транзакцията (на предишния пакет) */
+    if (v->have_prev) memcpy(rx, v->prev, LK_PKT);
+    else memset(rx, 0, LK_PKT);
+    reply(v, v->prev);
+    v->have_prev = true;
     return 0;
 }
 

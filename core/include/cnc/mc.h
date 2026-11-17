@@ -81,6 +81,7 @@ typedef struct {
     uint16_t ain_mv[4];
     int queue;                     /* сегменти в STM32 и на път */
     double pkt_rate;               /* пакета/s */
+    double max_gap_ms;             /* най-дългият цикъл за последните 5 s (Linux без реално време: закъснения) */
     uint32_t rx_errors, bad_rx;    /* отхвърлени в STM32 / тук */
     char msg[200];                 /* последното съобщение (напр. грешка в програмата) */
     int msg_seq;
