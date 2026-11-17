@@ -64,6 +64,13 @@ typedef struct {
 
     bool mcu_link;
     int mcu_rate_hz;
+    /* от STATUS на STM32 (docs/spi-protokol.md, 5.1) */
+    uint32_t local_in;     /* собствените входове: LIM 1–6, HOME 1–6, пробник, toolsetter, авариен стоп, аларма, бутоните и MPG на тестовата машина */
+    uint64_t inputs;       /* входовете 8 + 8 и разширителните модули */
+    uint32_t outputs;      /* изходите, както са в STM32 (бит 30/31 шпиндел) */
+    uint32_t pendant;
+    int32_t mpg;           /* броячът на колелото */
+    uint16_t ain_mv[4];    /* аналоговите входове: напрежение на датчика, mV */
 
     bool coord_mach;       /* позициите се показват в машинни координати */
 

@@ -113,6 +113,7 @@ bool io_out(int i)
 
 bool io_in(int i)
 {
+    if (!machine_sim()) return (M.inputs >> i & 1) != (cn("io.in%d.%s", i, "inv") != 0);   /* от STM32: без сигнал = неактивен */
     const char *f = cs("io.in%d.%s", i, "f");
     if (!strcmp(f, "oil") || !strcmp(f, "door") || !strcmp(f, "pallet")) return true;
     if (!strcmp(f, "air")) return !air_drop;
@@ -129,6 +130,12 @@ bool io_in(int i)
 
 static double ai_true(int i)
 {
+    if (!machine_sim()) {   /* от STM32: напрежението на датчика → мерни единици по сигнала */
+        double V = M.ain_mv[i] / 1000.0, lo = cn("io.ain%d.%s", i, "lo"), hi = cn("io.ain%d.%s", i, "hi");
+        const char *sg = cs("io.ain%d.%s", i, "sig");
+        double fr = !strcmp(sg, "05") ? V / 5 : !strcmp(sg, "420") ? 0 : V / 10;
+        return lo + (hi - lo) * fmax(0, fmin(1.2, fr));
+    }
     const char *f = cs("io.ain%d.%s", i, "f");
     double n = (double)rand() / RAND_MAX - 0.5, spmax = cfg_num("sp.spMax");
     if (!strcmp(f, "airP")) return (air_drop ? 4.6 : 6.2) + n * 0.06;

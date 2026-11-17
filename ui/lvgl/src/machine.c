@@ -229,6 +229,55 @@ void machine_link_info(machine_link_t *l)
 
 bool machine_sim(void) { return link_sim; }
 
+/* ---------- бутоните и колелото на пулта (тестовата машина: на пинове на STM32) ---------- */
+static uint32_t pend_was;
+static bool mpg_init;
+static int32_t mpg_was, mpg_rem;
+static double mpg_pend[AX_N];
+
+static void pendant_tick(uint32_t now)
+{
+    uint32_t p = M.pendant;
+#define RISE(b) ((p >> (b) & 1) && !(pend_was >> (b) & 1))
+    if (RISE(6)) machine_start(now);
+    if (RISE(8)) machine_stop(now);
+#undef RISE
+    pend_was = p;
+    /* колелото: 4 импулса на щрак; ос X/Y/Z и ×1/×10/×100 от превключвателите */
+    if (!mpg_init) { mpg_init = true; mpg_was = M.mpg; return; }
+    int32_t d = M.mpg - mpg_was;
+    mpg_was = M.mpg;
+    mpg_rem += d;
+    int det = mpg_rem / 4;
+    mpg_rem -= det * 4;
+    int ax = (int)(p & 7) - 1;
+    static const double INC[4] = {0, 0.001, 0.01, 0.1};
+    double inc = INC[(p >> 3) & 3];
+    bool can = ax >= 0 && ax < 3 && inc > 0 && M.state == MS_IDLE && M.enabled && M.active[ax] && !mq_busy();
+    if (!can) { for (int a = 0; a < AX_N; a++) mpg_pend[a] = 0; return; }
+    if (det) mpg_pend[ax] += det * inc;
+    if (fabs(mpg_pend[ax]) > 50 * inc) mpg_pend[ax] = copysign(50 * inc, mpg_pend[ax]);   /* без натрупване */
+    if (SN.state == MC_IDLE && fabs(mpg_pend[ax]) >= 0.0005) {
+        mc_jog(MC, ax, mpg_pend[ax] > 0 ? 1 : -1, fabs(mpg_pend[ax]), axc(ax, "vmax") * 0.5);
+        mpg_pend[ax] = 0;
+        M.run_kind = RK_JOG;
+    }
+}
+
+/* изходите от функциите и форсирането в Диагностика → STM32 (при промяна) */
+static uint32_t out_was = 0xFFFFFFFFu;
+static void outputs_tick(uint32_t now)
+{
+    uint32_t v = 0;
+    for (int i = 0; i < 30 && i < IO_N; i++) {
+        char k[24];
+        snprintf(k, sizeof k, "io.out%d.inv", i + 1);
+        if (io_out(i) != (cfg_num(k) != 0)) v |= 1u << i;   /* „Инвертиран“: 1 на изхода = изключено */
+    }
+    if (v != out_was) { mc_outputs(MC, v, 0x3FFFFFFFu); out_was = v; }
+    (void)now;
+}
+
 /* ---------- снимката на mc → M ---------- */
 static homed_t homed_of(int a) { return !SN.homed[a] ? HOMED_NO : manual_ref[a] ? HOMED_MANUAL : HOMED_SENSOR; }
 
@@ -249,6 +298,12 @@ static void from_snap(uint32_t now, float dt)
     mc_snapshot(MC, &SN);
     M.mcu_link = SN.link;
     M.mcu_rate_hz = (int)lround(SN.pkt_rate);
+    M.local_in = SN.local_in;
+    M.inputs = SN.inputs;
+    M.outputs = SN.outputs;
+    M.pendant = SN.pendant;
+    M.mpg = SN.mpg;
+    memcpy(M.ain_mv, SN.ain_mv, sizeof M.ain_mv);
     for (int a = 0; a < AX_N; a++) {
         M.mach[a] = SN.mach[a];
         M.homed[a] = homed_of(a);
@@ -537,6 +592,8 @@ void machine_tick(uint32_t now_ms, uint32_t dt_ms)
         snprintf(M.alarm, sizeof M.alarm, "Няма връзка със STM32: %.150s", link_err[0] ? link_err : "?");
     } else {
         from_snap(now_ms, dt);
+        pendant_tick(now_ms);
+        outputs_tick(now_ms);
     }
     mq_tick(now_ms);
     machine_mag_tick(dt);

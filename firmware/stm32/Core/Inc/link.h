@@ -99,7 +99,7 @@ int link_via_spi(void);
 
 /* --- пренос по SPI4 (slave, link_spi.c) --- */
 
-#define LINK_SPI_TIMEOUT_MS 10u   /* docs/spi-protokol.md, раздел 6 */
+#define LINK_SPI_TIMEOUT_MS 30u   /* docs/spi-protokol.md, раздел 6 (3–100 ms); 10 ms след ядрото с PREEMPT_RT */
 
 void link_spi_init(void);
 /* от главния цикъл: обработва приетия пакет и подготвя отговора за следващата транзакция */

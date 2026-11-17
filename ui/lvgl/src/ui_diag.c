@@ -13,8 +13,8 @@
 
 #define ENC_ROWS (AX_N + 1)
 static lv_obj_t *enc_row[ENC_ROWS][7], *enc_st[ENC_ROWS], *enc_line[ENC_ROWS];
-static lv_obj_t *sys_led[14], *ai_box[AIN_N + AOUT_N], *ai_nm[6], *ai_v[6], *ai_tag[6], *ai_bar[6], *ai_mk[6][2], *ai_ft[6][3], *ai_empty;
-static lv_obj_t *gio[2][IO_N], *gio_led[2][IO_N], *gio_nm[2][IO_N], *gio_cnt[2], *air_btn, *lk_buf, *lk_wd;
+static lv_obj_t *sys_led[24], *ai_box[AIN_N + AOUT_N], *ai_nm[6], *ai_v[6], *ai_tag[6], *ai_bar[6], *ai_mk[6][2], *ai_ft[6][3], *ai_empty;
+static lv_obj_t *gio[2][IO_N], *gio_led[2][IO_N], *gio_nm[2][IO_N], *gio_cnt[2], *air_btn, *sim_al_btn, *lk_v[5];
 static int st_was[ENC_ROWS];
 
 static void on_alarm(lv_event_t *e)
@@ -72,7 +72,8 @@ static lv_obj_t *enc_card(lv_obj_t *scr)
 {
     lv_obj_t *hr;
     lv_obj_t *c = ui_card(scr, "ЕНКОДЕРИ И СЛЕДЯЩА ГРЕШКА", &hr);
-    lv_obj_add_event_cb(ui_btn(hr, "СИМУЛИРАЙ АЛАРМА ПО Y", BTN_NORMAL, true), on_alarm, LV_EVENT_CLICKED, NULL);
+    sim_al_btn = ui_btn(hr, "СИМУЛИРАЙ АЛАРМА ПО Y", BTN_NORMAL, true);
+    lv_obj_add_event_cb(sim_al_btn, on_alarm, LV_EVENT_CLICKED, NULL);
     static int32_t cols[8], rows[ENC_ROWS + 2];
     cols[0] = EM(2.2f); cols[1] = LV_GRID_FR(10); cols[2] = LV_GRID_FR(12); cols[3] = LV_GRID_FR(12); cols[4] = LV_GRID_FR(9);
     cols[5] = LV_GRID_FR(11); cols[6] = LV_GRID_CONTENT; cols[7] = LV_GRID_TEMPLATE_LAST;
@@ -113,23 +114,27 @@ static lv_obj_t *enc_card(lv_obj_t *scr)
     return c;
 }
 
-static const char *const SYS_N[14] = {"Лимити X/Y/Z (NC)", "Home X", "Home Y", "Home Z", "3D пробник", "Toolsetter", "Инструмент затегнат",
-    "Магазин в позиция", "Авариен стоп верига", "Аларма драйвер Y", "Enable драйвери", "Drawbar (освобождаване)", "Мотор магазин", "Ориентация шпиндел"};
-static const char *const SYS_P[14] = {"IN0–2", "IN3", "IN4", "IN5", "PRB1", "PRB2", "IN8", "IN9", "IN12", "IN13", "OUT0", "OUT1", "OUT2", "OUT3"};
+/* собствените входове на STM32 (STATUS.local_in, бит i): имената и пиновете както в макета */
+#define SYS_NN 24
+static const char *const SYS_N[SYS_NN] = {"LIM 1", "LIM 2", "LIM 3", "LIM 4", "LIM 5", "LIM 6", "HOME 1", "HOME 2", "HOME 3", "HOME 4",
+    "HOME 5", "HOME 6", "3D пробник", "Toolsetter", "Авариен стоп", "Аларма драйвер", "Бутон Старт", "Бутон Стоп",
+    "MPG ос X", "MPG ос Y", "MPG ос Z", "MPG ×1", "MPG ×10", "MPG ×100"};
+static const char *const SYS_P[SYS_NN] = {"PG8", "PG9", "PG10", "PG11", "PG12", "PG13", "PG14", "PG15", "PE10", "PF7", "PF8", "PF9",
+    "PA7", "PB1", "PC13", "PE3", "PG0", "PG1", "PG2", "PG3", "PG4", "PF2", "PF3", "PF4"};
 
 static lv_obj_t *sys_card(lv_obj_t *scr)
 {
-    lv_obj_t *c = ui_card(scr, "СИСТЕМНИ ВХОДОВЕ И ИЗХОДИ (STM32)", NULL);
-    static int32_t cols[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}, rows[8];
-    for (int i = 0; i < 7; i++) rows[i] = EM(1.95f);
-    rows[7] = LV_GRID_TEMPLATE_LAST;
+    lv_obj_t *c = ui_card(scr, "СОБСТВЕНИ ВХОДОВЕ НА STM32", NULL);
+    static int32_t cols[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST}, rows[SYS_NN / 2 + 1];
+    for (int i = 0; i < SYS_NN / 2; i++) rows[i] = EM(1.95f);
+    rows[SYS_NN / 2] = LV_GRID_TEMPLATE_LAST;
     lv_obj_t *g = ui_box(c);
     lv_obj_set_width(g, LV_PCT(100));
     lv_obj_set_style_pad_all(g, EM(0.5f), 0);
     lv_obj_set_style_pad_hor(g, EM(0.7f), 0);
     ui_grid(g, cols, rows, 0);
     lv_obj_set_style_pad_column(g, EM(1), 0);
-    for (int i = 0; i < 14; i++) {
+    for (int i = 0; i < SYS_NN; i++) {
         lv_obj_t *r = ui_box(g);
         ui_flex(r, LV_FLEX_FLOW_ROW, 0.45f);
         lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
@@ -276,9 +281,7 @@ static lv_obj_t *link_row(lv_obj_t *scr)
         lv_obj_set_style_pad_all(c, EM(0.6f), 0);
         lv_obj_set_style_pad_gap(c, EM(0.2f), 0);
         ui_lab(c, N[i]);
-        lv_obj_t *v = ui_label(c, F.num_pg, C_FG, V[i]);
-        if (i == 2) lk_buf = v;
-        if (i == 4) lk_wd = v;
+        lk_v[i] = ui_label(c, F.num_pg, C_FG, V[i]);
     }
     return r;
 }
@@ -403,14 +406,11 @@ void diag_update(uint32_t now)
         }
     }
 
-    /* системни: 0 изкл., 1 вкл. (зелено), 2 активно (жълто), 3 авария */
-    bool home[3];
-    for (int a = 0; a < 3; a++) home[a] = fabs(M.mach[a] - cfg_num(a == 0 ? "X.hpos" : a == 1 ? "Y.hpos" : "Z.hpos")) < 0.5;
-    int s[14] = {M.state == MS_ESTOP ? 0 : 1, home[0] ? 2 : 0, home[1] ? 2 : 0, home[2] ? 2 : 0,
-                 now - M.prb_flash < 300 && M.prb_flash ? 2 : 0, now - M.ts_flash < 300 && M.ts_flash ? 2 : 0,
-                 M.clamped ? 1 : 0, M.mag_moving ? 0 : 1, M.state == MS_ESTOP ? 3 : 1, M.state == MS_ALARM && M.ferr[AX_Y] > M.ferr_lim[AX_Y] ? 3 : 0,
-                 M.state == MS_ESTOP ? 0 : 1, M.clamped ? 0 : 2, M.mag_moving ? 2 : 0, M.orient ? 2 : 0};
-    for (int i = 0; i < 14; i++) ui_led_set(sys_led[i], s[i] == 3 ? C_BAD : s[i] == 2 ? C_AMB : C_OK, s[i] != 0);
+    /* собствените входове: активен = жълто, авариен стоп и аларма = червено; без връзка всички изключени */
+    for (int i = 0; i < SYS_NN; i++) {
+        bool on = M.mcu_link && (M.local_in >> i & 1);
+        ui_led_set(sys_led[i], i == 14 || i == 15 ? C_BAD : C_AMB, on);
+    }
 
     /* аналогови */
     int shown = 0;
@@ -480,7 +480,21 @@ void diag_update(uint32_t now)
         snprintf(b, sizeof b, "%d вкл. от 32", on_n);
         ui_set_text(gio_cnt[out], b);
     }
-    snprintf(b, sizeof b, "%d %%", M.state == MS_RUN && M.feed_act > 0 ? 82 + (int)(now / 97 % 12) : 0);
-    ui_set_text(lk_buf, b);
-    ui_set_text(lk_wd, M.state == MS_ESTOP ? "СПРЯН" : "ОК · 1 ms");
+    /* симулираните аварии само без истинска машина */
+    lv_obj_set_hidden(sim_al_btn, !machine_sim());
+    lv_obj_set_hidden(air_btn, !machine_sim());
+    /* връзката със STM32 (mc) */
+    machine_link_t L;
+    machine_link_info(&L);
+    if (L.sim) snprintf(b, sizeof b, "симулация");
+    else snprintf(b, sizeof b, "%.0f kHz", cfg_num("mcu.lnkHz") / 1000);
+    ui_set_text(lk_v[0], b);
+    snprintf(b, sizeof b, "%.0f /s", L.rate);
+    ui_set_text(lk_v[1], b);
+    snprintf(b, sizeof b, "%d ms", L.queue);
+    ui_set_text(lk_v[2], b);
+    snprintf(b, sizeof b, "%u / %u", L.rx_errors, L.bad_rx);
+    ui_set_text(lk_v[3], b);
+    ui_set_text(lk_v[4], !L.link ? "НЯМА" : M.state == MS_ESTOP ? "СПРЯН" : M.state == MS_ALARM ? "ГРЕШКА" : "ОК");
+    lv_obj_set_style_text_color(lk_v[4], !L.link || M.state == MS_ALARM || M.state == MS_ESTOP ? C_BAD : C_OK, 0);
 }
