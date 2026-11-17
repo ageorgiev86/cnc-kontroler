@@ -334,9 +334,17 @@ void link_poll(void)
     rx_errors++;
   }
   if (active && now - last_ok_ms > timeout_ms) {
+    struct stepgen_status st;
     active  = 0;
     via_spi = 0;
-    stepgen_fault(STEPGEN_FAULT_LINK);            /* спиране по рампа */
+    stepgen_get_status(&st);
+    if (st.running || st.queue_used || homing_active()) {
+      homing_abort();
+      stepgen_fault(STEPGEN_FAULT_LINK);          /* в движение: спиране по рампа и грешка */
+    } else {
+      machio_set_outputs(0, 0xFFFFFFFFu);         /* в покой: само изходите в безопасно състояние, без грешка */
+      machio_spindle(0);
+    }
   }
 }
 

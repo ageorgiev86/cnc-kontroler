@@ -119,7 +119,11 @@ static void home_step(vmcu_t *v, uint32_t us)
 void vmcu_advance(vmcu_t *v, uint32_t us)
 {
     v->now_us += us;
-    if (v->active && v->now_us - v->last_pkt_us > TIMEOUT_US) { v->active = false; set_fault(v, LK_FAULT_LINK); }
+    if (v->active && v->now_us - v->last_pkt_us > TIMEOUT_US) {   /* като firmware-а: грешка само в движение */
+        v->active = false;
+        if (v->n || v->homing) set_fault(v, LK_FAULT_LINK);
+        else v->outputs = 0;
+    }
     if ((v->local_in & LK_IN_ESTOP) && v->fault != LK_FAULT_ESTOP) { v->fault = 0; set_fault(v, LK_FAULT_ESTOP); }
     if (v->fault) return;
     if (v->homing) { home_step(v, us); return; }

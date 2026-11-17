@@ -175,6 +175,20 @@ static int run_all(bool lag)
     CHECK(strstr(S.alarm, "Ред 2") != NULL, "грешката: %s", S.alarm);
 
     CHECK(vmcu_fault(V) == 0 || vmcu_fault(V) == LK_FAULT_ESTOP, "STM32: грешка %d", vmcu_fault(V));
+
+    /* 12. прекъсната връзка: в покой без грешка, в движение грешка */
+    mc_reset(M);
+    CHECK(settle(500), "преди проверката на връзката: %d", S.state);
+    vmcu_advance(V, 100000);   /* 100 ms без пакети, машината стои */
+    CHECK(vmcu_fault(V) == 0, "в покой прекъснатата връзка дава грешка %d", vmcu_fault(V));
+    cyc(20);
+    CHECK(S.state == MC_IDLE, "след тишина в покой: %d (%s)", S.state, S.alarm);
+    mc_jog(M, 0, 1, 20, 1200);
+    cyc(100);
+    vmcu_advance(V, 100000);   /* 100 ms без пакети в движение */
+    CHECK(vmcu_fault(V) == LK_FAULT_LINK, "в движение: грешка %d вместо LINK", vmcu_fault(V));
+    cyc(5);
+    CHECK(S.state == MC_FAULT, "в движение: състояние %d", S.state);
     (void)vpos;
     mc_free(M);
     vmcu_free(V);
