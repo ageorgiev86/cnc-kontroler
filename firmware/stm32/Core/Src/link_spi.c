@@ -29,6 +29,7 @@ static volatile int done;
 static volatile int failed;
 static int armed;
 static uint32_t partial_ms;                      /* от кога NSS е горе при недовършен пакет */
+static struct link_spi_stats st;
 
 static void gpio_af(GPIO_TypeDef *port, uint32_t pin, uint32_t pull)
 {
@@ -133,6 +134,7 @@ void link_spi_init(void)
 static void restart(void)
 {
   (void)HAL_SPI_Abort(&hspi);
+  st.partial++;
   link_rx_error();
   link_idle_reply(tx_buf);
   arm();
@@ -145,16 +147,24 @@ void link_spi_poll(void)
     return;
   }
   if (failed) {
+    st.hal_err++;
+    st.partial--;                                 /* restart() брои прекъсната; тази е грешка на SPI/DMA */
     restart();
     return;
   }
   if (done) {
     ready(0);
     memcpy(pkt, rx_buf, LINK_PKT_SIZE);
+    st.xfers++;
+    memcpy(st.last_hdr, pkt, sizeof st.last_hdr);
     if (link_check(pkt) == 0) {
+      st.good++;
+      st.last_ok_ms = HAL_GetTick();
+      st.last_seq = (uint16_t)(pkt[4] | (pkt[5] << 8));
       link_process(pkt, tx_buf);
       link_rx_ok(1, LINK_SPI_TIMEOUT_MS);
     } else {
+      st.bad++;
       link_rx_error();
       link_idle_reply(tx_buf);
     }
@@ -173,6 +183,18 @@ void link_spi_poll(void)
   } else {
     partial_ms = 0;
   }
+}
+
+void link_spi_stats(struct link_spi_stats *s)
+{
+  *s = st;
+  s->nss_low = HAL_GPIO_ReadPin(BOARD_LINK_NSS) == GPIO_PIN_RESET;
+  s->armed = armed;
+}
+
+void link_spi_clear_stats(void)
+{
+  memset(&st, 0, sizeof st);
 }
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *h)

@@ -41,6 +41,11 @@ target_include_directories(gcsim PRIVATE tools)
 target_compile_options(gcsim PRIVATE ${CORE_WARNINGS})
 target_link_libraries(gcsim PRIVATE cnc-core)
 
+# проверка на връзката със STM32 по SPI, без движение (docs/test-masina-3osi.md)
+add_executable(cnc-linktest tools/linktest.c)
+target_compile_options(cnc-linktest PRIVATE ${CORE_WARNINGS})
+target_link_libraries(cnc-linktest PRIVATE cnc-core)
+
 enable_testing()
 add_executable(test_golden tests/test_golden.c)
 target_include_directories(test_golden PRIVATE tools)

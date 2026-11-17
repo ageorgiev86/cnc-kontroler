@@ -105,4 +105,20 @@ void link_spi_init(void);
 /* от главния цикъл: обработва приетия пакет и подготвя отговора за следващата транзакция */
 void link_spi_poll(void);
 
+/* броячи за конзолата (команда spi): проверка на връзката без движение */
+struct link_spi_stats {
+  uint32_t xfers;        /* завършени транзакции от 256 байта */
+  uint32_t good;         /* валидни пакети (magic, дължина, CRC) */
+  uint32_t bad;          /* с грешен magic, дължина или CRC */
+  uint32_t partial;      /* прекъснати (NSS горе преди 256 байта) */
+  uint32_t hal_err;      /* грешки на SPI/DMA */
+  uint32_t last_ok_ms;   /* кога е последният валиден */
+  uint16_t last_seq;     /* seq от последния валиден пакет */
+  uint8_t  last_hdr[16]; /* първите байтове на последния приет пакет (валиден или не) */
+  int      nss_low;      /* NSS в момента: 1 = избран */
+  int      armed;        /* DMA чака транзакция */
+};
+void link_spi_stats(struct link_spi_stats *s);
+void link_spi_clear_stats(void);
+
 #endif /* LINK_H */

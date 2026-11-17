@@ -96,6 +96,34 @@ static void cmd_status(int argc, char **argv)
   }
 }
 
+/* spi [clr]: броячите на връзката по SPI4 (проверка без движение) */
+static void cmd_spi(int argc, char **argv)
+{
+  struct link_spi_stats s;
+
+  if (argc > 1 && !strcmp(argv[1], "clr")) {
+    link_spi_clear_stats();
+    console_printf("броячите са нулирани\r\n");
+    return;
+  }
+  link_spi_stats(&s);
+  console_printf("SPI4: транзакции %lu, валидни %lu, грешни %lu, прекъснати %lu, грешки SPI/DMA %lu\r\n",
+                 (unsigned long)s.xfers, (unsigned long)s.good, (unsigned long)s.bad,
+                 (unsigned long)s.partial, (unsigned long)s.hal_err);
+  if (s.good) {
+    console_printf("последен валиден: seq %u, преди %lu ms\r\n", s.last_seq,
+                   (unsigned long)(HAL_GetTick() - s.last_ok_ms));
+  } else {
+    console_printf("още няма валиден пакет\r\n");
+  }
+  console_printf("последно приети байтове:");
+  for (unsigned i = 0; i < sizeof s.last_hdr; i++) {
+    console_printf(" %02X", s.last_hdr[i]);
+  }
+  console_printf("\r\n(очаква се 43 4E 01 ...)\r\nNSS %s, DMA %s, връзка %s\r\n", s.nss_low ? "долу (избран)" : "горе",
+                 s.armed ? "чака" : "НЕ чака", link_via_spi() ? "по SPI" : link_active() ? "по USB" : "няма");
+}
+
 /* move x=<стъпки> y=... c=... f=<стъпки/s> [acc=<стъпки/s2>]: права линия по осите */
 static void cmd_move(int argc, char **argv)
 {
@@ -201,6 +229,7 @@ static const struct command commands[] = {
   { "help",   cmd_help,   "този списък" },
   { "info",   cmd_info,   "такт, чип, USB" },
   { "status", cmd_status, "състояние на генератора на стъпки" },
+  { "spi",    cmd_spi,    "spi [clr]: броячите на връзката по SPI" },
   { "move",   cmd_move,   "move x=3200 y=-1600 f=8000 [acc=50000]: права линия по осите" },
   { "stop",   cmd_stop,   "спиране по рампа" },
   { "reset",  cmd_reset,  "изчистване на грешка" },
